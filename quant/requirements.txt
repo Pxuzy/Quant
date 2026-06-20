@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+pytest
+httpx
+pandas
+pyarrow
+duckdb
+akshare
+baostock
+adata
+tushare
+openpyxl>=3.1.5

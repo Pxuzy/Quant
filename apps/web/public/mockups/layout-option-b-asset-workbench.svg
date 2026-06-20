@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">方案 B：数据资产工作台</title>
+  <desc id="desc">股票数据库管理系统桌面后台数据资产工作台布局方案，采用主表和右侧检查器，适合高频查询和单条记录溯源。</desc>
+  <defs>
+    <style>
+      .bg { fill: #f6f8fb; }
+      .sider { fill: #ffffff; stroke: #dfe8f4; }
+      .card { fill: #ffffff; stroke: #dfe8f4; stroke-width: 1; }
+      .soft { fill: #f8fbff; stroke: #e5edf7; }
+      .navActive { fill: #edf5ff; stroke: #bcd8ff; }
+      .ink { fill: #172033; font-family: "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif; }
+      .muted { fill: #667085; font-family: "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif; }
+      .blueText { fill: #1456b8; font-family: "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif; }
+      .label { font-size: 18px; font-weight: 800; }
+      .small { font-size: 13px; }
+      .tiny { font-size: 11px; }
+      .tag { font-size: 12px; font-weight: 700; }
+      .line { stroke: #dce6f2; stroke-width: 1; }
+      .pillBlue { fill: #e8f2ff; stroke: #b8d8ff; }
+      .pillGreen { fill: #eaf8f0; stroke: #bfe8cf; }
+      .pillAmber { fill: #fff7e6; stroke: #ffe0a3; }
+      .area { fill: url(#area); }
+      .chart { fill: none; stroke: #1f6feb; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+    </style>
+    <linearGradient id="area" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#1f6feb" stop-opacity=".22"/>
+      <stop offset="100%" stop-color="#1f6feb" stop-opacity=".03"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#122033" flood-opacity=".07"/>
+    </filter>
+  </defs>
+
+  <rect class="bg" width="1600" height="1000"/>
+  <rect class="sider" x="0" y="0" width="232" height="1000"/>
+  <rect x="24" y="24" width="40" height="40" rx="8" fill="#172033"/>
+  <text x="44" y="50" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, sans-serif" font-size="20" font-weight="800">Q</text>
+  <text class="ink" x="78" y="42" font-size="18" font-weight="800">Quant</text>
+  <text class="muted" x="78" y="61" font-size="12">数据系统</text>
+  <text class="muted" x="28" y="118" font-size="12">数据系统</text>
+  <rect class="navActive" x="18" y="138" width="196" height="42" rx="7"/>
+  <text class="blueText" x="48" y="164" font-size="14" font-weight="800">数据资产工作台</text>
+  <text class="muted" x="48" y="218" font-size="14">股票库</text>
+  <text class="muted" x="48" y="266" font-size="14">日线行情</text>
+  <text class="muted" x="48" y="314" font-size="14">交易日历</text>
+  <text class="muted" x="48" y="362" font-size="14">数据集目录</text>
+  <text class="muted" x="48" y="410" font-size="14">数据源</text>
+  <text class="muted" x="48" y="458" font-size="14">同步任务</text>
+  <text class="muted" x="48" y="506" font-size="14">数据质量</text>
+
+  <rect x="232" y="0" width="1368" height="72" fill="#ffffff" stroke="#e4ebf5"/>
+  <text class="muted" x="268" y="28" font-size="12">Quant 数据工作台 / 方案 B</text>
+  <text class="ink" x="268" y="55" font-size="23" font-weight="800">数据资产工作台</text>
+  <text class="muted" x="1268" y="44" font-size="13">只通过 API 查询，服务端分页</text>
+
+  <g filter="url(#shadow)">
+    <rect class="card" x="260" y="102" width="944" height="836" rx="8"/>
+    <rect class="card" x="1228" y="102" width="328" height="836" rx="8"/>
+  </g>
+
+  <text class="ink label" x="286" y="140">主数据表</text>
+  <text class="muted small" x="286" y="164">股票库、日线行情、交易日历、数据集目录统一在主工作区切换</text>
+  <rect class="pillBlue" x="286" y="190" width="94" height="32" rx="16"/>
+  <text class="blueText tag" x="333" y="211" text-anchor="middle">股票库</text>
+  <rect class="soft" x="390" y="190" width="104" height="32" rx="16"/>
+  <text class="muted tag" x="442" y="211" text-anchor="middle">日线行情</text>
+  <rect class="soft" x="504" y="190" width="104" height="32" rx="16"/>
+  <text class="muted tag" x="556" y="211" text-anchor="middle">交易日历</text>
+  <rect class="soft" x="618" y="190" width="116" height="32" rx="16"/>
+  <text class="muted tag" x="676" y="211" text-anchor="middle">数据集目录</text>
+  <rect class="soft" x="286" y="246" width="890" height="56" rx="8"/>
+  <rect x="310" y="262" width="180" height="24" rx="6" fill="#ffffff" stroke="#d8e3f0"/>
+  <text class="muted tiny" x="400" y="278" text-anchor="middle">代码 / 名称 / 拼音</text>
+  <rect x="506" y="262" width="118" height="24" rx="6" fill="#ffffff" stroke="#d8e3f0"/>
+  <text class="muted tiny" x="565" y="278" text-anchor="middle">市场 中国 A 股</text>
+  <rect x="640" y="262" width="118" height="24" rx="6" fill="#ffffff" stroke="#d8e3f0"/>
+  <text class="muted tiny" x="699" y="278" text-anchor="middle">状态 已上市</text>
+  <rect x="1038" y="260" width="110" height="28" rx="6" fill="#1f6feb"/>
+  <text fill="#ffffff" x="1093" y="279" text-anchor="middle" font-family="Microsoft YaHei, sans-serif" font-size="12" font-weight="700">查询</text>
+
+  <line class="line" x1="286" y1="334" x2="1176" y2="334"/>
+  <text class="muted small" x="306" y="359">代码</text>
+  <text class="muted small" x="434" y="359">名称</text>
+  <text class="muted small" x="580" y="359">市场/交易所</text>
+  <text class="muted small" x="746" y="359">行业</text>
+  <text class="muted small" x="894" y="359">来源</text>
+  <text class="muted small" x="1020" y="359">质量</text>
+  <g class="small">
+    <rect x="286" y="379" width="890" height="52" fill="#f4f9ff"/>
+    <text class="ink" x="306" y="410" font-weight="800">600519</text>
+    <text class="ink" x="434" y="410">贵州茅台</text>
+    <text class="muted" x="580" y="410">中国 A 股 / 上交所</text>
+    <text class="muted" x="746" y="410">白酒</text>
+    <text class="ink" x="894" y="410">AKShare</text>
+    <rect class="pillGreen" x="1020" y="392" width="62" height="24" rx="12"/><text x="1051" y="409" text-anchor="middle" fill="#1f8f59">通过</text>
+    <line class="line" x1="286" y1="431" x2="1176" y2="431"/>
+    <text class="ink" x="306" y="466" font-weight="800">000001</text>
+    <text class="ink" x="434" y="466">平安银行</text>
+    <text class="muted" x="580" y="466">中国 A 股 / 深交所</text>
+    <text class="muted" x="746" y="466">银行</text>
+    <text class="ink" x="894" y="466">BaoStock</text>
+    <rect class="pillAmber" x="1020" y="448" width="62" height="24" rx="12"/><text x="1051" y="465" text-anchor="middle" fill="#ad6800">警告</text>
+    <line class="line" x1="286" y1="487" x2="1176" y2="487"/>
+    <text class="ink" x="306" y="522" font-weight="800">300750</text>
+    <text class="ink" x="434" y="522">宁德时代</text>
+    <text class="muted" x="580" y="522">中国 A 股 / 深交所</text>
+    <text class="muted" x="746" y="522">电池</text>
+    <text class="ink" x="894" y="522">Tushare</text>
+    <rect class="pillGreen" x="1020" y="504" width="62" height="24" rx="12"/><text x="1051" y="521" text-anchor="middle" fill="#1f8f59">通过</text>
+    <line class="line" x1="286" y1="543" x2="1176" y2="543"/>
+    <text class="ink" x="306" y="578" font-weight="800">601318</text>
+    <text class="ink" x="434" y="578">中国平安</text>
+    <text class="muted" x="580" y="578">中国 A 股 / 上交所</text>
+    <text class="muted" x="746" y="578">保险</text>
+    <text class="ink" x="894" y="578">BaoStock</text>
+    <rect class="pillGreen" x="1020" y="560" width="62" height="24" rx="12"/><text x="1051" y="577" text-anchor="middle" fill="#1f8f59">通过</text>
+  </g>
+
+  <rect class="soft" x="286" y="640" width="890" height="258" rx="8"/>
+  <text class="ink label" x="312" y="676">选中资产的日线预览</text>
+  <text class="muted small" x="312" y="699">切换主表行时刷新，不把 Parquet/DuckDB 路径暴露给前端</text>
+  <g transform="translate(326 728)">
+    <line class="line" x1="0" y1="40" x2="810" y2="40"/>
+    <line class="line" x1="0" y1="92" x2="810" y2="92"/>
+    <line class="line" x1="0" y1="144" x2="810" y2="144"/>
+    <path class="area" d="M0 135 L60 118 L120 126 L180 105 L240 95 L300 104 L360 76 L420 66 L480 73 L540 52 L600 58 L660 38 L720 46 L810 28 L810 170 L0 170 Z"/>
+    <path class="chart" d="M0 135 L60 118 L120 126 L180 105 L240 95 L300 104 L360 76 L420 66 L480 73 L540 52 L600 58 L660 38 L720 46 L810 28"/>
+  </g>
+
+  <text class="ink label" x="1254" y="140">右侧详情检查器</text>
+  <text class="muted small" x="1254" y="164">字段、来源、质量、任务链路</text>
+  <rect class="pillBlue" x="1254" y="190" width="122" height="30" rx="15"/>
+  <text class="blueText tag" x="1315" y="210" text-anchor="middle">600519</text>
+  <text class="ink" x="1254" y="250" font-size="24" font-weight="800">贵州茅台</text>
+  <text class="muted small" x="1254" y="276">中国 A 股 / 上交所 / 白酒</text>
+  <line class="line" x1="1254" y1="304" x2="1530" y2="304"/>
+  <text class="muted small" x="1254" y="336">数据来源</text>
+  <text class="ink small" x="1440" y="336" text-anchor="end" font-weight="800">AKShare</text>
+  <text class="muted small" x="1254" y="370">最新交易日</text>
+  <text class="ink small" x="1440" y="370" text-anchor="end" font-weight="800">2026-06-05</text>
+  <text class="muted small" x="1254" y="404">日线记录</text>
+  <text class="ink small" x="1440" y="404" text-anchor="end" font-weight="800">4,862</text>
+  <text class="muted small" x="1254" y="438">质量状态</text>
+  <rect class="pillGreen" x="1390" y="421" width="74" height="24" rx="12"/>
+  <text x="1427" y="438" text-anchor="middle" fill="#1f8f59" font-family="Microsoft YaHei, sans-serif" font-size="12" font-weight="800">通过</text>
+  <line class="line" x1="1254" y1="468" x2="1530" y2="468"/>
+
+  <text class="ink" x="1254" y="508" font-size="16" font-weight="800">关联任务</text>
+  <circle cx="1264" cy="546" r="5" fill="#1f8f59"/><text class="ink small" x="1282" y="551">股票列表同步成功</text><text class="muted tiny" x="1282" y="570">AKShare / 5,362 条</text>
+  <line x1="1264" y1="554" x2="1264" y2="602" stroke="#c8d6e8"/>
+  <circle cx="1264" cy="614" r="5" fill="#1f6feb"/><text class="ink small" x="1282" y="619">日线行情增量同步</text><text class="muted tiny" x="1282" y="638">BaoStock / 运行中</text>
+  <line class="line" x1="1254" y1="672" x2="1530" y2="672"/>
+
+  <text class="ink" x="1254" y="712" font-size="16" font-weight="800">数据源状态</text>
+  <rect class="pillGreen" x="1254" y="734" width="84" height="28" rx="14"/><text x="1296" y="753" text-anchor="middle" fill="#1f8f59" font-family="Microsoft YaHei, sans-serif" font-size="12" font-weight="800">AKShare</text>
+  <rect class="pillGreen" x="1348" y="734" width="90" height="28" rx="14"/><text x="1393" y="753" text-anchor="middle" fill="#1f8f59" font-family="Microsoft YaHei, sans-serif" font-size="12" font-weight="800">BaoStock</text>
+  <rect class="pillAmber" x="1254" y="774" width="84" height="28" rx="14"/><text x="1296" y="793" text-anchor="middle" fill="#ad6800" font-family="Microsoft YaHei, sans-serif" font-size="12" font-weight="800">Tushare</text>
+  <text class="muted tiny" x="1254" y="828">Tushare 需要 TUSHARE_TOKEN 后启用</text>
+  <rect x="1254" y="858" width="132" height="36" rx="6" fill="#172033"/>
+  <text fill="#ffffff" x="1320" y="881" text-anchor="middle" font-family="Microsoft YaHei, sans-serif" font-size="12" font-weight="800">查看完整详情</text>
+</svg>

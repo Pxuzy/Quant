@@ -1,0 +1,414 @@
+import { lazy } from 'react';
+import {
+  Navigate,
+  Outlet,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  parseSearchWith,
+  stringifySearchWith,
+  useSearch,
+} from '@tanstack/react-router';
+import { AppLayout } from '../layouts/AppLayout';
+
+const DataSystemOverviewPage = lazy(() =>
+  import('../pages/data-system/overview/DataSystemOverviewPage').then((module) => ({
+    default: module.DataSystemOverviewPage,
+  })),
+);
+const StocksWorkbenchPage = lazy(() =>
+  import('../pages/data-system/stocks/StocksWorkbenchPage').then((module) => ({
+    default: module.StocksWorkbenchPage,
+  })),
+);
+const StockDetailPage = lazy(() =>
+  import('../pages/data-system/stocks/StockDetailPage').then((module) => ({
+    default: module.StockDetailPage,
+  })),
+);
+const DataSourcesPage = lazy(() =>
+  import('../pages/data-system/data-sources/DataSourcesPage').then((module) => ({
+    default: module.DataSourcesPage,
+  })),
+);
+const NewsSummaryPage = lazy(() =>
+  import('../pages/data-system/news-summary/NewsSummaryPage').then((module) => ({
+    default: module.NewsSummaryPage,
+  })),
+);
+const NumericSummaryPage = lazy(() =>
+  import('../pages/data-system/numeric-summary/NumericSummaryPage').then((module) => ({
+    default: module.NumericSummaryPage,
+  })),
+);
+const DatabaseManagementPage = lazy(() =>
+  import('../pages/data-system/database/DatabaseManagementPage').then((module) => ({
+    default: module.DatabaseManagementPage,
+  })),
+);
+const SyncTasksPage = lazy(() =>
+  import('../pages/data-system/sync-tasks/SyncTasksPage').then((module) => ({
+    default: module.SyncTasksPage,
+  })),
+);
+
+export type StocksSearch = {
+  keyword?: string;
+  industry?: string;
+  market?: string;
+  status?: string;
+  syncSource?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type StockDetailSearch = {
+  market?: string;
+};
+
+export type SyncTasksSearch = {
+  status?: string;
+  source?: string;
+  taskType?: string;
+  focus?: string;
+  symbol?: string;
+  market?: string;
+  startDate?: string;
+  endDate?: string;
+  syncSource?: string;
+  maxSymbols?: number;
+  page?: number;
+  pageSize?: number;
+  taskId?: number;
+};
+
+export type DatabaseSearch = {
+  market?: string;
+  view?: string;
+  lineageBatchId?: number;
+  lineageDatasetName?: string;
+  lineageSymbol?: string;
+  lineageTradeDate?: string;
+  lineageSource?: string;
+  lineageStatus?: string;
+  lineagePage?: number;
+  lineagePageSize?: number;
+  qualityDatasetName?: string;
+  qualityStatus?: string;
+  qualitySeverity?: string;
+  qualityCheckedAt?: string;
+  qualityPage?: number;
+  qualityPageSize?: number;
+};
+
+export type DatasetsSearch = {
+  name?: string;
+  layer?: string;
+  storageType?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type MarketDataSearch = {
+  symbol?: string;
+  market?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type TradingCalendarSearch = {
+  market?: string;
+  startDate?: string;
+  endDate?: string;
+  openStatus?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type DataQualitySearch = {
+  datasetName?: string;
+  status?: string;
+  severity?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+function stringSearch(value: unknown) {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
+}
+
+function numberSearch(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function parseSearchValue(value: string) {
+  if (value === 'true') {
+    return true;
+  }
+  if (value === 'false') {
+    return false;
+  }
+  if (value !== '' && Number.isFinite(Number(value))) {
+    return Number(value);
+  }
+  return value;
+}
+
+function stringifySearchValue(value: unknown) {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
+const rootRoute = createRootRoute({
+  component: AppLayout,
+});
+
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  component: () => <Navigate to="/data-system/overview" replace />,
+});
+
+const overviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/overview',
+  component: DataSystemOverviewPage,
+});
+
+const dataSystemRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system',
+  component: () => <Navigate to="/data-system/overview" replace />,
+});
+
+const stocksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/stocks',
+  validateSearch: (search): StocksSearch => ({
+    keyword: stringSearch(search.keyword),
+    industry: stringSearch(search.industry),
+    market: stringSearch(search.market),
+    status: stringSearch(search.status),
+    syncSource: stringSearch(search.syncSource),
+    page: numberSearch(search.page),
+    pageSize: numberSearch(search.pageSize),
+  }),
+  component: StocksWorkbenchPage,
+});
+
+const stockDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/stocks/$symbol',
+  validateSearch: (search): StockDetailSearch => ({
+    market: stringSearch(search.market),
+  }),
+  component: StockDetailPage,
+});
+
+const dataSourcesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/data-sources',
+  component: DataSourcesPage,
+});
+
+const newsSummaryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/news-summary',
+  component: NewsSummaryPage,
+});
+
+const numericSummaryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/numeric-summary',
+  component: NumericSummaryPage,
+});
+
+const databaseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/database',
+  validateSearch: (search): DatabaseSearch => ({
+    market: stringSearch(search.market),
+    view: stringSearch(search.view),
+    lineageBatchId: numberSearch(search.lineageBatchId),
+    lineageDatasetName: stringSearch(search.lineageDatasetName),
+    lineageSymbol: stringSearch(search.lineageSymbol),
+    lineageTradeDate: stringSearch(search.lineageTradeDate),
+    lineageSource: stringSearch(search.lineageSource),
+    lineageStatus: stringSearch(search.lineageStatus),
+    lineagePage: numberSearch(search.lineagePage),
+    lineagePageSize: numberSearch(search.lineagePageSize),
+    qualityDatasetName: stringSearch(search.qualityDatasetName),
+    qualityStatus: stringSearch(search.qualityStatus),
+    qualitySeverity: stringSearch(search.qualitySeverity),
+    qualityCheckedAt: stringSearch(search.qualityCheckedAt),
+    qualityPage: numberSearch(search.qualityPage),
+    qualityPageSize: numberSearch(search.qualityPageSize),
+  }),
+  component: DatabaseManagementPage,
+});
+
+const datasetsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/datasets',
+  validateSearch: (search): DatasetsSearch => ({
+    name: stringSearch(search.name),
+    layer: stringSearch(search.layer),
+    storageType: stringSearch(search.storageType),
+    page: numberSearch(search.page),
+    pageSize: numberSearch(search.pageSize),
+  }),
+  component: () => <Navigate to="/data-system/database" replace />,
+});
+
+function LegacyMarketDataRedirect() {
+  const search = marketDataRoute.useSearch();
+  return search.symbol ? (
+    <Navigate
+      to="/data-system/stocks/$symbol"
+      params={{ symbol: search.symbol }}
+      search={{ market: search.market }}
+      replace
+    />
+  ) : (
+    <Navigate
+      to="/data-system/numeric-summary"
+      search={{
+        market: search.market,
+        startDate: search.startDate,
+        endDate: search.endDate,
+        page: search.page,
+        pageSize: search.pageSize,
+      }}
+      replace
+    />
+  );
+}
+
+const marketDataRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/market-data',
+  validateSearch: (search): MarketDataSearch => ({
+    symbol: stringSearch(search.symbol),
+    market: stringSearch(search.market),
+    startDate: stringSearch(search.startDate),
+    endDate: stringSearch(search.endDate),
+    page: numberSearch(search.page),
+    pageSize: numberSearch(search.pageSize),
+  }),
+  component: LegacyMarketDataRedirect,
+});
+
+const tradingCalendarsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/trading-calendars',
+  validateSearch: (search): TradingCalendarSearch => ({
+    market: stringSearch(search.market),
+    startDate: stringSearch(search.startDate),
+    endDate: stringSearch(search.endDate),
+    openStatus: stringSearch(search.openStatus),
+    page: numberSearch(search.page),
+    pageSize: numberSearch(search.pageSize),
+  }),
+  component: () => {
+    const search = tradingCalendarsRoute.useSearch();
+    return (
+      <Navigate
+        to="/data-system/database"
+        search={{ market: search.market, view: 'calendar' }}
+        replace
+      />
+    );
+  },
+});
+
+function LegacyDataQualityRedirect() {
+  const search = useSearch({ from: '/data-system/data-quality' });
+  return (
+    <Navigate
+      to="/data-system/database"
+      search={{
+        view: 'quality',
+        qualityDatasetName: search.datasetName,
+        qualityStatus: search.status,
+        qualitySeverity: search.severity,
+        qualityPage: search.page,
+        qualityPageSize: search.pageSize,
+      }}
+      replace
+    />
+  );
+}
+
+const dataQualityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/data-quality',
+  validateSearch: (search): DataQualitySearch => ({
+    datasetName: stringSearch(search.datasetName),
+    status: stringSearch(search.status),
+    severity: stringSearch(search.severity),
+    page: numberSearch(search.page),
+    pageSize: numberSearch(search.pageSize),
+  }),
+  component: LegacyDataQualityRedirect,
+});
+
+const syncTasksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/sync-tasks',
+  validateSearch: (search): SyncTasksSearch => ({
+    status: stringSearch(search.status),
+    source: stringSearch(search.source),
+    taskType: stringSearch(search.taskType),
+    focus: stringSearch(search.focus),
+    symbol: stringSearch(search.symbol),
+    market: stringSearch(search.market),
+    startDate: stringSearch(search.startDate),
+    endDate: stringSearch(search.endDate),
+    syncSource: stringSearch(search.syncSource),
+    maxSymbols: numberSearch(search.maxSymbols),
+    page: numberSearch(search.page),
+    pageSize: numberSearch(search.pageSize),
+    taskId: numberSearch(search.taskId),
+  }),
+  component: SyncTasksPage,
+});
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  dataSystemRoute,
+  overviewRoute,
+  stocksRoute,
+  stockDetailRoute,
+  dataSourcesRoute,
+  newsSummaryRoute,
+  numericSummaryRoute,
+  databaseRoute,
+  datasetsRoute,
+  tradingCalendarsRoute,
+  marketDataRoute,
+  dataQualityRoute,
+  syncTasksRoute,
+]);
+
+export const router = createRouter({
+  routeTree,
+  parseSearch: parseSearchWith(parseSearchValue),
+  stringifySearch: stringifySearchWith(stringifySearchValue),
+});
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router;
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "@quant/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --require ./scripts/vite-windows-spawn-fallback.cjs ./node_modules/vite/bin/vite.js --configLoader runner",
+    "build": "tsc -b && node --require ./scripts/vite-windows-spawn-fallback.cjs ./node_modules/vite/bin/vite.js build --configLoader runner",
+    "type-check": "tsc -b --pretty false",
+    "preview": "node --require ./scripts/vite-windows-spawn-fallback.cjs ./node_modules/vite/bin/vite.js preview"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.5.1",
+    "@ant-design/pro-components": "^2.8.6",
+    "@gsap/react": "^2.1.2",
+    "@tanstack/react-query": "^5.62.7",
+    "@tanstack/react-router": "^1.170.11",
+    "antd": "^5.22.3",
+    "dayjs": "^1.11.13",
+    "gsap": "^3.15.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "stock-sdk": "^2.0.0-beta.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}

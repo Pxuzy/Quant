@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific - data files
+*.db
+*.sqlite
+*.sqlite3
+*.parquet
+storage/
+tmp/
+tmp-*/
+outputs/
+.codegraph/
+.pytest_cache/
+.playwright-cli/
+.claude/
+
+# Node
+node_modules/
+apps/web/dist/
+apps/web/node_modules/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.local
+
+# Screenshots (keep only docs)
+qa-screenshots/
+*.png
+!docs/**/*.png
