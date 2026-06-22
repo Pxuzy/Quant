@@ -49,7 +49,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'pipeline', label: '数据链路', path: '/data-system/pipeline', icon: <SyncOutlined />, group: 'admin' },
   { key: 'alerts', label: '异常中心', path: '/data-system/alerts', icon: <WarningOutlined />, group: 'admin' },
   { key: 'stocks', label: '股票池', path: '/data-system/stocks', icon: <TableOutlined />, group: 'admin' },
-  { key: 'data-sources-admin', label: '数据源管理', path: '/data-system/data-sources', icon: <ApiOutlined />, group: 'admin' },
+  { key: 'data-sources-admin', label: '数据源(后台)', path: '/data-system/data-sources', icon: <ApiOutlined />, group: 'admin' },
   { key: 'sync-tasks', label: '同步调度', path: '/data-system/sync-tasks', icon: <CloudSyncOutlined />, group: 'admin' },
   { key: 'database', label: '数据库管理', path: '/data-system/database', icon: <AreaChartOutlined />, aliases: ['/data-system/data-quality', '/data-system/datasets', '/data-system/trading-calendars'], group: 'admin' },
 ];

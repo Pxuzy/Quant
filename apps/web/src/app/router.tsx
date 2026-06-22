@@ -444,11 +444,18 @@ const newsRoute = createRoute({
   component: NewsPage,
 });
 
+const dataSourcesWorkbenchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-sources',
+  component: DataSourcesPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   dashboardRoute,
   stockRoute,
   newsRoute,
+  dataSourcesWorkbenchRoute,
   overviewRoute,
   dataSystemRoute,
   legacyOverviewRoute,
