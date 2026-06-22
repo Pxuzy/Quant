@@ -16,6 +16,10 @@ const DataSystemOverviewPage = lazy(() =>
     default: module.DataSystemOverviewPage,
   })),
 );
+const NewsPage = lazy(() =>
+  import('../pages/news/NewsPage').then((m) => ({ default: m.NewsPage })),
+);
+
 const DashboardPage = lazy(() =>
   import('../pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
 );
@@ -430,10 +434,17 @@ const stockRoute = createRoute({
   component: StockPage,
 });
 
+const newsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/news',
+  component: NewsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   dashboardRoute,
   stockRoute,
+  newsRoute,
   overviewRoute,
   dataSystemRoute,
   legacyOverviewRoute,
