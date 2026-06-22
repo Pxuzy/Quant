@@ -34,6 +34,16 @@ DAILY_BAR_COLUMNS = [
     "ingested_at",
 ]
 
+# DuckDB query timeout in seconds
+DUCKDB_QUERY_TIMEOUT = 30
+
+
+def _duckdb_connect_with_timeout() -> duckdb.DuckDBPyConnection:
+    """Create a DuckDB connection with statement timeout."""
+    con = _duckdb_connect_with_timeout()
+    con.execute(f"SET statement_timeout='{DUCKDB_QUERY_TIMEOUT}s'")
+    return con
+
 
 class DailyBarRepository:
     def __init__(self, *, lake_root: str | Path | None = None, dataset_dir: str | Path | None = None) -> None:
@@ -88,7 +98,7 @@ class DailyBarRepository:
                     page_size=page_size,
                     sort_order=sort_order,
                 )
-            except duckdb.Error:
+            except (duckdb.Error, duckdb.IOException):
                 pass
 
         return self._list_daily_bars_pyarrow(
@@ -105,7 +115,7 @@ class DailyBarRepository:
         if self._can_query_with_duckdb():
             try:
                 return self._count_duckdb(market=market)
-            except duckdb.Error:
+            except (duckdb.Error, duckdb.IOException):
                 pass
 
         _, total = self.list_daily_bars(market=market, page=1, page_size=1)
@@ -115,7 +125,7 @@ class DailyBarRepository:
         if self._can_query_with_duckdb():
             try:
                 return self._latest_trade_date_duckdb(market=market)
-            except duckdb.Error:
+            except (duckdb.Error, duckdb.IOException):
                 pass
 
         rows = self._read_partition_rows(market=market)
@@ -131,7 +141,7 @@ class DailyBarRepository:
         if self._can_query_with_duckdb():
             try:
                 return self._summarize_symbols_duckdb(symbols=normalized_symbols, market=market)
-            except duckdb.Error:
+            except (duckdb.Error, duckdb.IOException):
                 pass
 
         return self._summarize_symbols_pyarrow(symbols=normalized_symbols, market=market)
@@ -140,7 +150,7 @@ class DailyBarRepository:
         if self._can_query_with_duckdb():
             try:
                 return self._market_trade_dates_duckdb(market=market)
-            except duckdb.Error:
+            except (duckdb.Error, duckdb.IOException):
                 pass
 
         rows = self._read_partition_rows(market=market)
@@ -154,7 +164,7 @@ class DailyBarRepository:
         if self._can_query_with_duckdb():
             try:
                 return self._symbol_trade_dates_duckdb(symbol=symbol, market=market)
-            except duckdb.Error:
+            except (duckdb.Error, duckdb.IOException):
                 pass
 
         rows = self._read_partition_rows(symbol=symbol, market=market)
@@ -168,7 +178,7 @@ class DailyBarRepository:
         if self._can_query_with_duckdb():
             try:
                 return self._symbol_daily_bars_duckdb(symbol=symbol, market=market)
-            except duckdb.Error:
+            except (duckdb.Error, duckdb.IOException):
                 pass
 
         rows = self._read_partition_rows(symbol=symbol, market=market)
@@ -181,7 +191,7 @@ class DailyBarRepository:
         if self._can_query_with_duckdb():
             try:
                 return self._market_symbol_trade_date_pairs_duckdb(market=market)
-            except duckdb.Error:
+            except (duckdb.Error, duckdb.IOException):
                 pass
 
         rows = self._read_partition_rows(market=market)
@@ -287,7 +297,7 @@ class DailyBarRepository:
             end_date=end_date,
         )
         direction = "desc" if sort_order == "desc" else "asc"
-        con = duckdb.connect(database=":memory:")
+        con = _duckdb_connect_with_timeout()
         try:
             total = con.execute(
                 f"select count(*) from {self._duckdb_scan()} {where_clause}",
@@ -337,7 +347,7 @@ class DailyBarRepository:
             conditions.append("market = ?")
             params.append(market)
 
-        con = duckdb.connect(database=":memory:")
+        con = _duckdb_connect_with_timeout()
         try:
             rows = con.execute(
                 f"""
@@ -373,7 +383,7 @@ class DailyBarRepository:
                 if isinstance(row.get("trade_date"), date)
             }
 
-        con = duckdb.connect(database=":memory:")
+        con = _duckdb_connect_with_timeout()
         try:
             rows = con.execute(
                 f"""
@@ -396,7 +406,7 @@ class DailyBarRepository:
                 if isinstance(row.get("trade_date"), date)
             }
 
-        con = duckdb.connect(database=":memory:")
+        con = _duckdb_connect_with_timeout()
         try:
             rows = con.execute(
                 f"""
@@ -418,7 +428,7 @@ class DailyBarRepository:
                 key=lambda row: (row["trade_date"], row.get("adjust_type") or "none"),
             )
 
-        con = duckdb.connect(database=":memory:")
+        con = _duckdb_connect_with_timeout()
         try:
             rows = con.execute(
                 f"""
@@ -442,7 +452,7 @@ class DailyBarRepository:
                 if row.get("symbol") and isinstance(row.get("trade_date"), date)
             }
 
-        con = duckdb.connect(database=":memory:")
+        con = _duckdb_connect_with_timeout()
         try:
             rows = con.execute(
                 f"""
@@ -467,7 +477,7 @@ class DailyBarRepository:
             start_date=None,
             end_date=None,
         )
-        con = duckdb.connect(database=":memory:")
+        con = _duckdb_connect_with_timeout()
         try:
             return int(
                 con.execute(
@@ -489,7 +499,7 @@ class DailyBarRepository:
             start_date=None,
             end_date=None,
         )
-        con = duckdb.connect(database=":memory:")
+        con = _duckdb_connect_with_timeout()
         try:
             result = con.execute(
                 f"select max(trade_date) from {self._duckdb_scan()} {where_clause}",

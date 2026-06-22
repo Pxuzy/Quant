@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,8 @@ from apps.api.services.normalized_data_validation import validate_stock_records
 
 
 AUTO_SOURCE_CODE = "auto"
+# Idempotency window: skip creating duplicate tasks within this window
+IDEMPOTENCY_WINDOW_MINUTES = 5
 
 
 class StockSyncService:
@@ -31,6 +33,27 @@ class StockSyncService:
 
     def create_stock_sync_task(self, *, source: str = AUTO_SOURCE_CODE, market: str = "A_SHARE") -> SyncTask:
         source_code = source.strip().lower()
+        
+        # Idempotency check: skip if a recent running/pending task exists
+        existing_task = _find_recent_similar_task(
+            task_repo=self.task_repo,
+            task_type="stock_list",
+            source=source_code,
+            market=market,
+        )
+        if existing_task is not None:
+            # If the task is still pending/running, return it — caller should use it as-is
+            if existing_task.status in ("pending", "running"):
+                self.task_repo.add_log(
+                    existing_task,
+                    level="info",
+                    message="Duplicate sync task request skipped (idempotent).",
+                    payload={"source": source_code, "market": market},
+                )
+                self.db.commit()
+                return existing_task
+            # If the task is already completed/failed, create a new one
+        
         if source_code == AUTO_SOURCE_CODE:
             candidates = self._enabled_adapters_for_capability("stock_list")
             if not candidates:
@@ -279,3 +302,25 @@ def _listed_common_stock_records(records: list[NormalizedStock]) -> list[Normali
         for record in records
         if record.status == "LISTED" and is_common_stock_symbol(record.symbol, record.exchange, record.market)
     ]
+
+
+def _find_recent_similar_task(
+    task_repo: SyncTaskRepository,
+    task_type: str,
+    source: str,
+    market: str,
+    window_minutes: int = IDEMPOTENCY_WINDOW_MINUTES,
+) -> SyncTask | None:
+    """Find a recent running/pending task with the same type/source/market.
+    
+    Returns the existing task if found within the idempotency window,
+    None otherwise.
+    """
+    cutoff = datetime.utcnow() - timedelta(minutes=window_minutes)
+    return task_repo.find_recent_task(
+        task_type=task_type,
+        source=source,
+        market=market,
+        statuses=["pending", "running"],
+        created_after=cutoff,
+    )

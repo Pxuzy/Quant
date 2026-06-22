@@ -200,3 +200,34 @@ class SyncTaskRepository:
 
     def latest_task(self) -> SyncTask | None:
         return self.db.scalar(select(SyncTask).order_by(SyncTask.created_at.desc(), SyncTask.id.desc()).limit(1))
+
+    def find_recent_task(
+        self,
+        *,
+        task_type: str,
+        source: str,
+        market: str | None = None,
+        statuses: list[str],
+        created_after: datetime,
+    ) -> SyncTask | None:
+        """Find a recent task matching the given criteria.
+        
+        Used for idempotency checks — returns the most recent task that:
+        - matches task_type, source, market
+        - has one of the given statuses
+        - was created after the given timestamp
+        """
+        stmt = (
+            select(SyncTask)
+            .where(
+                SyncTask.task_type == task_type,
+                SyncTask.source == source,
+                SyncTask.status.in_(statuses),
+                SyncTask.created_at >= created_after,
+            )
+            .order_by(SyncTask.created_at.desc(), SyncTask.id.desc())
+            .limit(1)
+        )
+        if market:
+            stmt = stmt.where(SyncTask.market == market)
+        return self.db.scalar(stmt)

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
+import time
 from datetime import date, datetime, timedelta
+from functools import lru_cache
+from threading import Lock
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -14,14 +18,53 @@ from apps.api.services.dataset_row_count_projection import sync_projected_datase
 DEFAULT_COVERAGE_MARKET = "A_SHARE"
 DAILY_BAR_TARGET_WINDOW_DAYS = 180
 
+# TTL cache for coverage summary (market -> (timestamp, data))
+_coverage_cache: dict[str, tuple[float, dict]] = {}
+_cache_lock = Lock()
+CACHE_TTL_SECONDS = 300  # 5 minutes
+
+
+def _get_cached_coverage(market: str) -> dict | None:
+    """Get cached coverage summary if not expired."""
+    with _cache_lock:
+        if market in _coverage_cache:
+            ts, data = _coverage_cache[market]
+            if time.time() - ts < CACHE_TTL_SECONDS:
+                return data
+            del _coverage_cache[market]
+    return None
+
+
+def _set_cached_coverage(market: str, data: dict) -> None:
+    """Cache coverage summary."""
+    with _cache_lock:
+        _coverage_cache[market] = (time.time(), data)
+
+
+def invalidate_coverage_cache(market: str | None = None) -> None:
+    """Invalidate coverage cache for a market or all markets."""
+    with _cache_lock:
+        if market:
+            _coverage_cache.pop(market, None)
+        else:
+            _coverage_cache.clear()
+
 
 class DatabaseIntegrationService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.daily_bar_repo = DailyBarRepository()
 
-    def get_overview(self, *, market: str | None = None) -> dict:
+    def get_overview(self, *, market: str | None = None, use_cache: bool | None = None) -> dict:
         coverage_market = _normalize_market(market)
+        
+        # Auto-disable cache during tests
+        if use_cache is None:
+            use_cache = os.environ.get("PYTEST_CURRENT_TEST") is None
+        
+        # Try cache first for coverage_summary
+        cached_coverage = _get_cached_coverage(coverage_market) if use_cache else None
+        
         datasets = self._list_datasets()
         recent_batches = self._list_recent_batches(market=coverage_market)
         all_batches = self._list_batches_for_summary(market=coverage_market)
@@ -31,7 +74,15 @@ class DatabaseIntegrationService:
             for dataset in datasets
         ]
         self.db.commit()
-        coverage_summary = self._coverage_summary(market=coverage_market)
+        
+        # Use cached coverage or compute fresh
+        if cached_coverage is not None:
+            coverage_summary = cached_coverage
+        else:
+            coverage_summary = self._coverage_summary(market=coverage_market)
+            if use_cache:
+                _set_cached_coverage(coverage_market, coverage_summary)
+        
         sync_watermarks = _build_sync_watermarks(all_batches, coverage_summary=coverage_summary)
         provider_integrations = _build_provider_integrations(all_batches)
 

@@ -16,6 +16,19 @@ const DataSystemOverviewPage = lazy(() =>
     default: module.DataSystemOverviewPage,
   })),
 );
+const DashboardPage = lazy(() =>
+  import('../pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+);
+const PipelinePage = lazy(() =>
+  import('../pages/data-system/pipeline/PipelinePage').then((module) => ({
+    default: module.PipelinePage,
+  })),
+);
+const AlertsPage = lazy(() =>
+  import('../pages/data-system/alerts/AlertsPage').then((module) => ({
+    default: module.AlertsPage,
+  })),
+);
 const StocksWorkbenchPage = lazy(() =>
   import('../pages/data-system/stocks/StocksWorkbenchPage').then((module) => ({
     default: module.StocksWorkbenchPage,
@@ -50,6 +63,9 @@ const SyncTasksPage = lazy(() =>
   import('../pages/data-system/sync-tasks/SyncTasksPage').then((module) => ({
     default: module.SyncTasksPage,
   })),
+);
+const StockPage = lazy(() =>
+  import('../pages/stock/StockPage').then((m) => ({ default: m.StockPage })),
 );
 
 export type StocksSearch = {
@@ -177,19 +193,43 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: () => <Navigate to="/data-system/overview" replace />,
+  component: () => <Navigate to="/dashboard" replace />,
+});
+
+const dashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dashboard',
+  component: DashboardPage,
 });
 
 const overviewRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/data-system/overview',
+  path: '/data-system',
   component: DataSystemOverviewPage,
+});
+
+const legacyOverviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/overview',
+  component: () => <Navigate to="/data-system" replace />,
+});
+
+const pipelineRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/pipeline',
+  component: PipelinePage,
+});
+
+const alertsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/data-system/alerts',
+  component: AlertsPage,
 });
 
 const dataSystemRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/data-system',
-  component: () => <Navigate to="/data-system/overview" replace />,
+  path: '/data-system/legacy',
+  component: () => <Navigate to="/data-system" replace />,
 });
 
 const stocksRoute = createRoute({
@@ -384,10 +424,21 @@ const syncTasksRoute = createRoute({
   component: SyncTasksPage,
 });
 
+const stockRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/stock/$code',
+  component: StockPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  dataSystemRoute,
+  dashboardRoute,
+  stockRoute,
   overviewRoute,
+  dataSystemRoute,
+  legacyOverviewRoute,
+  pipelineRoute,
+  alertsRoute,
   stocksRoute,
   stockDetailRoute,
   dataSourcesRoute,

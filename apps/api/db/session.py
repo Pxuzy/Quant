@@ -43,6 +43,19 @@ def get_engine() -> Engine:
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     _engine = create_engine(database_url, connect_args=connect_args, future=True)
     _engine_url = database_url
+    
+    # Set SQLite busy timeout to 30 seconds (30000ms)
+    # This prevents "database is locked" errors during concurrent writes
+    if database_url.startswith("sqlite"):
+        from sqlalchemy import event
+
+        @event.listens_for(_engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.close()
+    
     SessionLocal.configure(bind=_engine)
     return _engine
 
