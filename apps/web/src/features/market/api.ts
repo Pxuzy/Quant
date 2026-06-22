@@ -68,8 +68,8 @@ export function fetchKline(
   return apiRequest<KLine[]>(`/api/market/kline?code=${code}&period=${period}&count=${count}`, undefined, { signal });
 }
 
-export function fetchNews(keyword: string = 'A股', limit: number = 10, signal?: AbortSignal): Promise<NewsItem[]> {
-  return apiRequest<NewsItem[]>(`/api/market/news?keyword=${encodeURIComponent(keyword)}&limit=${limit}`, undefined, { signal });
+export function fetchNews(keyword: string = 'A股', limit: number = 10, signal?: AbortSignal, page: number = 1): Promise<NewsItem[]> {
+  return apiRequest<NewsItem[]>(`/api/market/news?keyword=${encodeURIComponent(keyword)}&limit=${limit}&page=${page}`, undefined, { signal });
 }
 
 export function searchStocks(keyword: string, signal?: AbortSignal): Promise<Array<{code: string; name: string; market: string}>> {

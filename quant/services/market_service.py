@@ -188,12 +188,13 @@ def get_history_kline(
     return results
 
 
-def get_news(keyword: str = "A股", limit: int = 20) -> List[Dict]:
+def get_news(keyword: str = "A股", limit: int = 20, page: int = 1) -> List[Dict]:
     """获取新浪财经新闻（API直连）
 
     Args:
         keyword: 搜索关键词
         limit: 返回条数
+        page: 页码
 
     Returns:
         [
@@ -211,7 +212,7 @@ def get_news(keyword: str = "A股", limit: int = 20) -> List[Dict]:
         "lid": "2516",
         "k": keyword,
         "num": str(min(limit, 50)),
-        "page": "1",
+        "page": str(page),
     })
     url = f"https://feed.mix.sina.com.cn/api/roll/get?{params}"
 

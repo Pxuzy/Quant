@@ -19,11 +19,8 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'news', label: '新闻', path: '/news', icon: <Icons.ReadOutlined />, group: 'workbench' },
   { key: 'data-sources', label: '数据源', path: '/data-sources', icon: <Icons.ApiOutlined />, group: 'workbench' },
   // 数据后台
-  { key: 'overview', label: '状态总览', path: '/data-system', icon: <Icons.DashboardOutlined />, group: 'admin' },
-  { key: 'pipeline', label: '数据链路', path: '/data-system/pipeline', icon: <Icons.SyncOutlined />, group: 'admin' },
   { key: 'alerts', label: '异常中心', path: '/data-system/alerts', icon: <Icons.WarningOutlined />, group: 'admin' },
   { key: 'stocks', label: '股票池', path: '/data-system/stocks', icon: <Icons.TableOutlined />, group: 'admin' },
-  { key: 'data-sources-admin', label: '数据源(后台)', path: '/data-system/data-sources', icon: <Icons.ApiOutlined />, group: 'admin' },
   { key: 'sync-tasks', label: '同步调度', path: '/data-system/sync-tasks', icon: <Icons.CloudSyncOutlined />, group: 'admin' },
   { key: 'database', label: '数据库', path: '/data-system/database', icon: <Icons.AreaChartOutlined />, aliases: ['/data-system/data-quality', '/data-system/datasets', '/data-system/trading-calendars'], group: 'admin' },
 ];

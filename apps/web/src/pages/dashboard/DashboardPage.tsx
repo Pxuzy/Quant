@@ -22,9 +22,7 @@ import {
   CloudSyncOutlined,
   DatabaseOutlined,
   DeleteOutlined,
-  PlusOutlined,
   ReloadOutlined,
-  StarFilled,
   SyncOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
@@ -258,13 +256,29 @@ export function DashboardPage() {
       dataIndex: 'code',
       key: 'code',
       width: 100,
-      render: (code: string) => <Typography.Text code>{code}</Typography.Text>,
+      render: (code: string) => (
+        <Typography.Text
+          code
+          style={{ cursor: 'pointer', color: '#1677ff' }}
+          onClick={() => navigate({ to: '/stock/$code', params: { code } })}
+        >
+          {code}
+        </Typography.Text>
+      ),
     },
     {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
       width: 100,
+      render: (name: string, record: Quote) => (
+        <Typography.Text
+          style={{ cursor: 'pointer', color: '#1677ff' }}
+          onClick={() => navigate({ to: '/stock/$code', params: { code: record.code } })}
+        >
+          {name}
+        </Typography.Text>
+      ),
     },
     {
       title: '最新价',
@@ -446,10 +460,9 @@ export function DashboardPage() {
                     {searchResults.map((r) => (
                       <Tag
                         key={r.code}
-                        style={{ cursor: 'pointer' }}
                         color={favorites.includes(r.code) ? 'default' : 'blue'}
-                        icon={favorites.includes(r.code) ? <StarFilled /> : <PlusOutlined />}
-                        onClick={() => addFavorite(r.code)}
+                        onClick={() => navigate({ to: '/stock/$code', params: { code: r.code } })}
+                        style={{ cursor: 'pointer' }}
                       >
                         {r.name} ({r.code})
                       </Tag>

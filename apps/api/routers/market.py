@@ -44,8 +44,9 @@ def get_kline(
 def get_news_list(
     keyword: str = Query("A股", description="搜索关键词"),
     limit: int = Query(20, description="条数"),
+    page: int = Query(1, description="页码"),
 ):
-    return get_news(keyword, limit)
+    return get_news(keyword, limit, page)
 
 
 @router.get("/search")
