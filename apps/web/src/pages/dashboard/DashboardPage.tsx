@@ -24,6 +24,7 @@ import {
   DeleteOutlined,
   PlusOutlined,
   ReloadOutlined,
+  StarFilled,
   SyncOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
