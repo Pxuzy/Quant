@@ -73,6 +73,7 @@ function formatAmount(v: number): string {
 }
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
 

@@ -47,7 +47,7 @@ const StockDetailPage = lazy(() =>
     default: module.StockDetailPage,
   })),
 );
-const DataSourcesPage = lazy(() =>
+const DataSourcesWorkbenchPage = lazy(() =>
   import('../pages/data-system/data-sources/DataSourcesPage').then((module) => ({
     default: module.DataSourcesPage,
   })),
@@ -267,7 +267,7 @@ const stockDetailRoute = createRoute({
 const dataSourcesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/data-system/data-sources',
-  component: DataSourcesPage,
+  component: DataSourcesWorkbenchPage,
 });
 
 const newsSummaryRoute = createRoute({
