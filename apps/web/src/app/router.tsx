@@ -16,6 +16,10 @@ const DataSystemOverviewPage = lazy(() =>
     default: module.DataSystemOverviewPage,
   })),
 );
+const DataSourcesPage = lazy(() =>
+  import('../pages/data-sources/DataSourcesPage').then((m) => ({ default: m.DataSourcesPage })),
+);
+
 const NewsPage = lazy(() =>
   import('../pages/news/NewsPage').then((m) => ({ default: m.NewsPage })),
 );

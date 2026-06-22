@@ -21,6 +21,7 @@ import {
   ApiOutlined,
   CloudSyncOutlined,
   DatabaseOutlined,
+  DeleteOutlined,
   PlusOutlined,
   ReloadOutlined,
   SyncOutlined,
@@ -487,9 +488,9 @@ export function DashboardPage() {
             <Col>
               <Button
                 icon={<ApiOutlined />}
-                onClick={() => navigate({ to: '/data-system/data-sources' })}
+                onClick={() => navigate({ to: '/data-sources' })}
               >
-                数据源管理
+                数据源
               </Button>
             </Col>
             <Col>
