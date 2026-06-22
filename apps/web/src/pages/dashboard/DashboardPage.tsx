@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   App as AntApp,
   Button,
@@ -10,12 +12,20 @@ import {
   Select,
   Space,
   Spin,
+  Statistic,
   Table,
   Tag,
   Typography,
 } from 'antd';
-import { PlusOutlined, ReloadOutlined, StarFilled, StarOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ApiOutlined,
+  CloudSyncOutlined,
+  DatabaseOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SyncOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
 import {
   fetchIndexQuotes,
   fetchNews,
@@ -173,13 +183,29 @@ export function DashboardPage() {
       dataIndex: 'code',
       key: 'code',
       width: 100,
-      render: (code: string) => <Typography.Text code>{code}</Typography.Text>,
+      render: (code: string) => (
+        <Typography.Text
+          code
+          style={{ cursor: 'pointer', color: '#1677ff' }}
+          onClick={() => navigate({ to: '/stock/$code', params: { code } })}
+        >
+          {code}
+        </Typography.Text>
+      ),
     },
     {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
       width: 100,
+      render: (_: string, record: Quote) => (
+        <Typography.Text
+          style={{ cursor: 'pointer', color: '#1677ff' }}
+          onClick={() => navigate({ to: '/stock/$code', params: { code: record.code } })}
+        >
+          {record.name}
+        </Typography.Text>
+      ),
     },
     {
       title: '最新价',
@@ -453,6 +479,52 @@ export function DashboardPage() {
             pagination={{ pageSize: 10, size: 'small' }}
             loading={newsQuery.isLoading}
           />
+        </Card>
+
+        {/* Data Admin Quick Access */}
+        <Card size="small" title="数据后台" style={{ marginBottom: 16 }}>
+          <Row gutter={[12, 12]}>
+            <Col>
+              <Button
+                icon={<ApiOutlined />}
+                onClick={() => navigate({ to: '/data-system/data-sources' })}
+              >
+                数据源管理
+              </Button>
+            </Col>
+            <Col>
+              <Button
+                icon={<SyncOutlined />}
+                onClick={() => navigate({ to: '/data-system/pipeline' })}
+              >
+                数据链路
+              </Button>
+            </Col>
+            <Col>
+              <Button
+                icon={<CloudSyncOutlined />}
+                onClick={() => navigate({ to: '/data-system/sync-tasks' })}
+              >
+                同步调度
+              </Button>
+            </Col>
+            <Col>
+              <Button
+                icon={<DatabaseOutlined />}
+                onClick={() => navigate({ to: '/data-system/database' })}
+              >
+                数据库管理
+              </Button>
+            </Col>
+            <Col>
+              <Button
+                icon={<WarningOutlined />}
+                onClick={() => navigate({ to: '/data-system/alerts' })}
+              >
+                异常中心
+              </Button>
+            </Col>
+          </Row>
         </Card>
       </Spin>
     </div>
