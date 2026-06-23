@@ -188,3 +188,26 @@ def test_auto_calendar_sync_falls_back_and_updates_catalog(client):
         and log.payload_json["selected_source"] == "success_calendar"
         for log in logs
     )
+
+
+def test_auto_calendar_sync_reports_all_failures(client):
+    registry = AdapterRegistry()
+    registry.register(FailingCalendarAdapter())
+
+    db = SessionLocal()
+    try:
+        service = TradingCalendarService(db, registry)
+        task = service.run_calendar_sync(
+            source="auto",
+            market="A_SHARE",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 6),
+        )
+        logs = list(task.logs)
+    finally:
+        db.close()
+
+    assert task.status == "failed"
+    assert task.error_message == "All calendar data sources failed: failing_calendar: calendar fetch failed"
+    assert any(log.message == "Provider attempt failed." for log in logs)
+    assert any(log.message == "Trading calendar sync failed." for log in logs)

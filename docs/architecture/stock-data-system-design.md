@@ -1,6 +1,8 @@
-# Stock Data System Architecture Design
+﻿# Stock Data System Architecture Design
 
 日期：2026-06-05
+
+> 说明：本文是历史技术架构参考。当前产品定位与首读路径请以 [个人股票研究工作台产品方向](../product/personal-stock-workbench.md) 和 [项目总览](../overview/project-overview.md) 为准。若与这些新文档冲突，以新文档为准。
 
 ## 1. 目标
 

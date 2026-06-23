@@ -17,7 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   // 工作台
   { key: 'dashboard', label: '仪表盘', path: '/dashboard', icon: <Icons.DashboardOutlined />, group: 'workbench' },
   { key: 'news', label: '新闻', path: '/news', icon: <Icons.ReadOutlined />, group: 'workbench' },
-  { key: 'data-sources', label: '数据源', path: '/data-sources', icon: <Icons.ApiOutlined />, group: 'workbench' },
+  { key: 'data-sources', label: '数据源', path: '/data-system/data-sources', icon: <Icons.ApiOutlined />, group: 'workbench' },
   // 数据后台
   { key: 'alerts', label: '异常中心', path: '/data-system/alerts', icon: <Icons.WarningOutlined />, group: 'admin' },
   { key: 'stocks', label: '股票池', path: '/data-system/stocks', icon: <Icons.TableOutlined />, group: 'admin' },

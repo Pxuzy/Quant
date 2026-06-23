@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from datetime import date
 from inspect import signature
 from importlib import import_module
 from time import sleep
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from apps.api.adapters.base import (
     AdapterCapability,
@@ -215,6 +218,7 @@ def _try_fetch(candidates: list[tuple[str, Any]], *, attempts: int = 2) -> list[
                 return fetcher()
             except Exception as exc:
                 # 记录每次失败的信息，方便调试
+                logger.debug("AKShare %s attempt %d failed: %s", name, attempt, exc)
                 errors.append(f"{name} attempt {attempt}: {exc}")
                 if attempt < attempts:
                     # 重试前等 1 秒，避免短时间内反复冲击服务器
@@ -365,16 +369,17 @@ class AkShareAdapter(StockDataSourceAdapter):
                     message="AKShare is installed, but supported A-share stock-list"
                             " or daily-bars functions were not found.",
                 )
-        except ModuleNotFoundError:
+        except ModuleNotFoundError as exc:
             # 最外层没装 akshare 包
+            logger.warning("AKShare not installed: %s", exc)
             return HealthCheckResult(
                 healthy=False,
                 status="unavailable",
-                message="AKShare is not installed. Install the optional akshare"
-                        " package to enable this source.",
+                message=str(exc),
             )
         except Exception as exc:
             # 其他未知错误（网络问题、版本不兼容等）
+            logger.warning("AKShare health check failed: %s", exc)
             return HealthCheckResult(
                 healthy=False, status="unhealthy", message=str(exc)
             )
@@ -436,6 +441,7 @@ class AkShareAdapter(StockDataSourceAdapter):
             return _try_fetch(candidates)
         except RuntimeError as exc:
             # 包装一下错误信息，让调用方知道是 AKShare 股票列表获取失败
+            logger.warning("AKShare stock-list fetch failed: %s", exc)
             raise RuntimeError(f"AKShare stock-list fetch failed: {exc}") from exc
 
     def normalize_stock_list(

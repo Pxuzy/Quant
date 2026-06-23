@@ -17,6 +17,7 @@ from apps.api.repositories.ingest_batches import IngestBatchRepository
 from apps.api.repositories.stocks import StockRepository
 from apps.api.repositories.sync_tasks import SyncTaskRepository
 from apps.api.repositories.trading_calendars import TradingCalendarRepository
+from apps.api.services.database_integration_service import invalidate_coverage_cache
 from apps.api.services.normalized_data_validation import validate_daily_bar_records
 from apps.api.services.stock_sync_service import AUTO_SOURCE_CODE
 
@@ -856,6 +857,7 @@ class MarketDataSyncService:
         except Exception as exc:
             self.ingest_batch_repo.fail_batch(batch, message=str(exc))
             raise
+        invalidate_coverage_cache((task.market or "A_SHARE").strip().upper())
         return records_read, records_written
 
     def _has_daily_bar_batch(
@@ -943,4 +945,3 @@ class MarketDataSyncService:
             "start_date": task.start_date.isoformat() if task.start_date else None,
             "end_date": task.end_date.isoformat() if task.end_date else None,
         }
-

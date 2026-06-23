@@ -1,4 +1,4 @@
-# Quant
+﻿# Quant
 
 Quant is a local-first personal stock research workbench. It uses a stock data management layer to support daily research workflows: watch stocks, inspect price data, read related news, and check whether the local data is fresh and trustworthy.
 

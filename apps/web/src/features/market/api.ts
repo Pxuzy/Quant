@@ -45,6 +45,7 @@ export interface NewsItem {
   summary: string;
   source: string;
   created_at: string;
+  category?: string;
 }
 
 export function fetchQuotes(codes: string[], signal?: AbortSignal): Promise<Quote[]> {

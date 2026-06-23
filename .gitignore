@@ -56,3 +56,4 @@ apps/web/node_modules/
 qa-screenshots/
 *.png
 !docs/**/*.png
+.gstack/

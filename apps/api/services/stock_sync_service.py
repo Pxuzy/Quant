@@ -13,6 +13,7 @@ from apps.api.repositories.datasets import DatasetRepository
 from apps.api.repositories.ingest_batches import IngestBatchRepository
 from apps.api.repositories.stocks import StockRepository
 from apps.api.repositories.sync_tasks import SyncTaskRepository
+from apps.api.services.database_integration_service import invalidate_coverage_cache
 from apps.api.services.normalized_data_validation import validate_stock_records
 
 
@@ -33,13 +34,13 @@ class StockSyncService:
 
     def create_stock_sync_task(self, *, source: str = AUTO_SOURCE_CODE, market: str = "A_SHARE") -> SyncTask:
         source_code = source.strip().lower()
-        
+        market_code = market.strip().upper()
         # Idempotency check: skip if a recent running/pending task exists
         existing_task = _find_recent_similar_task(
             task_repo=self.task_repo,
             task_type="stock_list",
             source=source_code,
-            market=market,
+            market=market_code,
         )
         if existing_task is not None:
             # If the task is still pending/running, return it — caller should use it as-is
@@ -48,25 +49,25 @@ class StockSyncService:
                     existing_task,
                     level="info",
                     message="Duplicate sync task request skipped (idempotent).",
-                    payload={"source": source_code, "market": market},
+                    payload={"source": source_code, "market": market_code},
                 )
                 self.db.commit()
                 return existing_task
             # If the task is already completed/failed, create a new one
-        
+
         if source_code == AUTO_SOURCE_CODE:
             candidates = self._enabled_adapters_for_capability("stock_list")
             if not candidates:
                 self.db.rollback()
                 raise ValueError("No enabled data source supports stock_list.")
-            task = self.task_repo.create_task(task_type="stock_list", source=AUTO_SOURCE_CODE, market=market)
+            task = self.task_repo.create_task(task_type="stock_list", source=AUTO_SOURCE_CODE, market=market_code)
             self.task_repo.add_log(
                 task,
                 level="info",
                 message="Stock list sync task created.",
                 payload={
                     "source": AUTO_SOURCE_CODE,
-                    "market": market,
+                    "market": market_code,
                     "candidate_sources": [adapter.code for adapter in candidates],
                 },
             )
@@ -79,12 +80,12 @@ class StockSyncService:
         if not data_source.enabled:
             self.db.rollback()
             raise ValueError(f"Data source '{source_code}' is disabled.")
-        task = self.task_repo.create_task(task_type="stock_list", source=source_code, market=market)
+        task = self.task_repo.create_task(task_type="stock_list", source=source_code, market=market_code)
         self.task_repo.add_log(
             task,
             level="info",
             message="Stock list sync task created.",
-            payload={"source": source_code, "market": market},
+            payload={"source": source_code, "market": market_code},
         )
         self.db.commit()
         self.db.refresh(task)
@@ -106,7 +107,7 @@ class StockSyncService:
             raise ValueError(f"Sync task {task_id} is {task.status}, expected pending.")
 
         source = task.source
-        market = task.market or "A_SHARE"
+        market = (task.market or "A_SHARE").strip().upper()
         if source == AUTO_SOURCE_CODE:
             return self._run_auto_stock_sync_task(task, market=market)
 
@@ -137,6 +138,7 @@ class StockSyncService:
             )
             self.db.commit()
             self.db.refresh(task)
+            invalidate_coverage_cache(market)
             return task
         except Exception as exc:
             self.data_source_repo.update_health(
@@ -234,6 +236,7 @@ class StockSyncService:
                 )
                 self.db.commit()
                 self.db.refresh(task)
+                invalidate_coverage_cache(market)
                 return task
 
             raise RuntimeError(f"All stock-list data sources failed: {'; '.join(errors)}")

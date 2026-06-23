@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from apps.api.adapters.base import (
     AdapterCapability,
@@ -538,6 +541,7 @@ class _NodeStockSdkClient:
             )
         except FileNotFoundError as exc:
             # Node.js 没装
+            logger.warning("Node.js not found: %s", exc)
             raise ModuleNotFoundError(
                 "Node.js is required to use stock-sdk."
             ) from exc
@@ -661,10 +665,12 @@ class StockSdkAdapter(StockDataSourceAdapter):
                         message="stock-sdk client does not expose codes.cn and kline.cn.",
                     )
         except ModuleNotFoundError as exc:
+            logger.warning("stock-sdk health check failed (unavailable): %s", exc)
             return HealthCheckResult(
                 healthy=False, status="unavailable", message=str(exc)
             )
         except Exception as exc:
+            logger.warning("stock-sdk health check failed: %s", exc)
             return HealthCheckResult(
                 healthy=False, status="unhealthy", message=str(exc)
             )

@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">方案 D：个人股票工作台</title>
+  <desc id="desc">股票数据管理与研究工作台布局方案，融合工作台层、控制面和接口面，突出股票池、新闻、数值和数据治理。</desc>
+  <defs>
+    <style>
+      .bg { fill: #f3f6fa; }
+      .sider { fill: #0f1b2d; }
+      .header { fill: #ffffff; }
+      .card { fill: #ffffff; stroke: #dce6f2; stroke-width: 1; }
+      .soft { fill: #f8fbff; stroke: #e5edf7; stroke-width: 1; }
+      .ink { fill: #172033; font-family: "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif; }
+      .muted { fill: #667085; font-family: "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif; }
+      .white { fill: #ffffff; font-family: "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif; }
+      .blue { fill: #e8f2ff; stroke: #b8d8ff; }
+      .green { fill: #eaf8f0; stroke: #bfe8cf; }
+      .amber { fill: #fff7e6; stroke: #ffe0a3; }
+      .red { fill: #fff0f0; stroke: #ffc4c4; }
+      .chip { font-size: 12px; font-weight: 800; }
+      .label { font-size: 18px; font-weight: 800; }
+      .small { font-size: 13px; }
+      .tiny { font-size: 11px; }
+      .num { font-size: 24px; font-weight: 800; }
+      .nav { fill: #cbd5e1; font-size: 14px; }
+      .navActiveBg { fill: #1f6feb; }
+      .line { stroke: #d7e1ee; stroke-width: 1; }
+      .axis { stroke: #d9e4f1; stroke-width: 1; }
+      .up { stroke: #1f6feb; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .area { fill: rgba(31, 111, 235, 0.12); }
+      .tagGreen { fill: #eaf8f0; }
+      .tagAmber { fill: #fff7e6; }
+      .tagGray { fill: #eef2f6; }
+    </style>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#1f6feb"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="12" markerHeight="12" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#98a2b3"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#122033" flood-opacity=".08"/>
+    </filter>
+  </defs>
+
+  <rect class="bg" width="1600" height="1000"/>
+
+  <rect class="sider" x="0" y="0" width="232" height="1000"/>
+  <rect x="24" y="24" width="40" height="40" rx="8" fill="#2b7fff"/>
+  <text class="white" x="44" y="50" text-anchor="middle" font-size="20" font-weight="800">Q</text>
+  <text class="white" x="78" y="42" font-size="18" font-weight="800">Quant</text>
+  <text class="nav" x="78" y="61">股票工作台</text>
+  <text class="nav" x="28" y="118">工作台层</text>
+  <rect class="navActiveBg" x="18" y="138" width="196" height="42" rx="7"/>
+  <text class="white" x="48" y="164" font-size="14" font-weight="700">总控台</text>
+  <text class="nav" x="48" y="218">股票池</text>
+  <text class="nav" x="48" y="266">新闻汇总</text>
+  <text class="nav" x="48" y="314">数值数据</text>
+  <text class="nav" x="28" y="384">控制面</text>
+  <text class="nav" x="48" y="434">数据源管理</text>
+  <text class="nav" x="48" y="482">同步调度</text>
+  <text class="nav" x="48" y="530">数据库管理</text>
+  <rect x="24" y="882" width="184" height="74" rx="10" fill="#15243a" stroke="#243955"/>
+  <text class="white" x="42" y="912" font-size="13" font-weight="700">第一阶段范围</text>
+  <text class="nav" x="42" y="938">A 股 / 本地优先</text>
+
+  <rect class="header" x="232" y="0" width="1368" height="72"/>
+  <text class="muted" x="268" y="28">Quant 个人股票工作台 / 方案 D</text>
+  <text class="ink" x="268" y="55" font-size="23" font-weight="800">工作台层 + 控制面 + 接口面</text>
+  <text class="muted" x="1238" y="43" font-size="13">只通过 API 查询，研究入口与数据治理分离</text>
+
+  <g filter="url(#shadow)">
+    <rect class="card" x="260" y="102" width="244" height="116" rx="8"/>
+    <text class="muted" x="282" y="132">股票池</text>
+    <text class="ink num" x="282" y="173">5,362</text>
+    <text class="muted small" x="282" y="197">A 股基础股票</text>
+
+    <rect class="card" x="526" y="102" width="244" height="116" rx="8"/>
+    <text class="muted" x="548" y="132">最新交易日</text>
+    <text class="ink num" x="548" y="173">2026-06-05</text>
+    <text class="muted small" x="548" y="197">交易日历已对齐</text>
+
+    <rect class="card" x="792" y="102" width="244" height="116" rx="8"/>
+    <text class="muted" x="814" y="132">数据源健康</text>
+    <text class="ink num" x="814" y="173">4 / 5</text>
+    <text class="muted small" x="814" y="197">Tushare 待启用</text>
+
+    <rect class="card" x="1058" y="102" width="244" height="116" rx="8"/>
+    <text class="muted" x="1080" y="132">质量风险</text>
+    <text class="ink num" x="1080" y="173">3</text>
+    <text class="muted small" x="1080" y="197">缺失 / 重复 / 边界</text>
+
+    <rect class="card" x="1324" y="102" width="232" height="116" rx="8"/>
+    <text class="muted" x="1346" y="132">最近批次</text>
+    <text class="ink num" x="1346" y="173">12</text>
+    <text class="muted small" x="1346" y="197">同步任务可追溯</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="card" x="260" y="246" width="1280" height="56" rx="8"/>
+  </g>
+  <text class="muted small" x="286" y="279">接口面</text>
+  <rect x="350" y="258" width="166" height="28" rx="14" fill="#edf5ff" stroke="#bcd8ff"/>
+  <text class="ink chip" x="433" y="277" text-anchor="middle" fill="#1456b8">provider registry</text>
+  <path d="M526 272 L560 272" stroke="#98a2b3" stroke-width="2" marker-end="url(#arrowGray)"/>
+  <rect x="572" y="258" width="128" height="28" rx="14" fill="#edf8f2" stroke="#bfe8cf"/>
+  <text class="ink chip" x="636" y="277" text-anchor="middle" fill="#1f8f59">normalize</text>
+  <path d="M700 272 L734 272" stroke="#98a2b3" stroke-width="2" marker-end="url(#arrowGray)"/>
+  <rect x="746" y="258" width="140" height="28" rx="14" fill="#fff7e6" stroke="#ffe0a3"/>
+  <text class="ink chip" x="816" y="277" text-anchor="middle" fill="#ad6800">schema 校验</text>
+  <path d="M886 272 L920 272" stroke="#98a2b3" stroke-width="2" marker-end="url(#arrowGray)"/>
+  <rect x="932" y="258" width="138" height="28" rx="14" fill="#edf5ff" stroke="#bcd8ff"/>
+  <text class="ink chip" x="1001" y="277" text-anchor="middle" fill="#1456b8">ingest batch</text>
+  <path d="M1070 272 L1104 272" stroke="#98a2b3" stroke-width="2" marker-end="url(#arrowGray)"/>
+  <rect x="1116" y="258" width="126" height="28" rx="14" fill="#edf8f2" stroke="#bfe8cf"/>
+  <text class="ink chip" x="1179" y="277" text-anchor="middle" fill="#1f8f59">数据库</text>
+  <path d="M1242 272 L1276 272" stroke="#98a2b3" stroke-width="2" marker-end="url(#arrowGray)"/>
+  <rect x="1288" y="258" width="112" height="28" rx="14" fill="#eef2f6" stroke="#d7e1ee"/>
+  <text class="ink chip" x="1344" y="277" text-anchor="middle" fill="#475467">工作台</text>
+
+  <g filter="url(#shadow)">
+    <rect class="card" x="260" y="320" width="860" height="604" rx="8"/>
+    <rect class="card" x="1144" y="320" width="396" height="290" rx="8"/>
+    <rect class="card" x="1144" y="634" width="396" height="290" rx="8"/>
+  </g>
+
+  <text class="ink label" x="286" y="356">工作台层</text>
+  <text class="muted small" x="286" y="379">股票池、新闻汇总、数值数据统一在一个研究入口里切换</text>
+
+  <rect class="blue" x="286" y="396" width="92" height="30" rx="15"/>
+  <text class="ink chip" x="332" y="415" text-anchor="middle" fill="#1456b8">总控台</text>
+  <rect class="soft" x="388" y="396" width="92" height="30" rx="15"/>
+  <text class="muted chip" x="434" y="415" text-anchor="middle">股票池</text>
+  <rect class="soft" x="490" y="396" width="104" height="30" rx="15"/>
+  <text class="muted chip" x="542" y="415" text-anchor="middle">新闻汇总</text>
+  <rect class="soft" x="604" y="396" width="92" height="30" rx="15"/>
+  <text class="muted chip" x="650" y="415" text-anchor="middle">数值数据</text>
+
+  <rect class="soft" x="286" y="444" width="808" height="50" rx="8"/>
+  <rect x="308" y="457" width="180" height="24" rx="6" fill="#ffffff" stroke="#d9e3f0"/>
+  <text class="muted tiny" x="398" y="473" text-anchor="middle">代码 / 名称 / 拼音</text>
+  <rect x="504" y="457" width="116" height="24" rx="6" fill="#ffffff" stroke="#d9e3f0"/>
+  <text class="muted tiny" x="562" y="473" text-anchor="middle">市场 A 股</text>
+  <rect x="636" y="457" width="116" height="24" rx="6" fill="#ffffff" stroke="#d9e3f0"/>
+  <text class="muted tiny" x="694" y="473" text-anchor="middle">新闻 未接入</text>
+  <rect x="936" y="455" width="120" height="28" rx="6" fill="#1f6feb"/>
+  <text class="white chip" x="996" y="474" text-anchor="middle">查询</text>
+
+  <line class="line" x1="286" y1="522" x2="1074" y2="522"/>
+  <text class="muted small" x="306" y="548">代码</text>
+  <text class="muted small" x="422" y="548">名称</text>
+  <text class="muted small" x="556" y="548">新闻</text>
+  <text class="muted small" x="646" y="548">数值</text>
+  <text class="muted small" x="760" y="548">最新收盘</text>
+  <text class="muted small" x="900" y="548">完整度</text>
+
+  <g class="small">
+    <text class="ink" x="306" y="588" font-weight="800">600519</text>
+    <text class="ink" x="422" y="588">贵州茅台</text>
+    <text class="muted" x="556" y="588">待接入</text>
+    <text class="ink" x="646" y="588">128</text>
+    <text class="ink" x="760" y="588">1,426.20</text>
+    <rect class="green" x="900" y="570" width="68" height="24" rx="12"/><text x="934" y="587" text-anchor="middle" fill="#1f8f59" font-size="12" font-weight="800">98%</text>
+    <line class="line" x1="286" y1="607" x2="1074" y2="607"/>
+    <text class="ink" x="306" y="642" font-weight="800">000001</text>
+    <text class="ink" x="422" y="642">平安银行</text>
+    <text class="muted" x="556" y="642">待接入</text>
+    <text class="ink" x="646" y="642">96</text>
+    <text class="ink" x="760" y="642">11.24</text>
+    <rect class="amber" x="900" y="624" width="68" height="24" rx="12"/><text x="934" y="641" text-anchor="middle" fill="#ad6800" font-size="12" font-weight="800">89%</text>
+    <line class="line" x1="286" y1="661" x2="1074" y2="661"/>
+    <text class="ink" x="306" y="696" font-weight="800">300750</text>
+    <text class="ink" x="422" y="696">宁德时代</text>
+    <text class="muted" x="556" y="696">待接入</text>
+    <text class="ink" x="646" y="696">142</text>
+    <text class="ink" x="760" y="696">188.42</text>
+    <rect class="green" x="900" y="678" width="68" height="24" rx="12"/><text x="934" y="695" text-anchor="middle" fill="#1f8f59" font-size="12" font-weight="800">97%</text>
+  </g>
+
+  <text class="ink label" x="286" y="744">选中股票详情</text>
+  <text class="muted small" x="286" y="767">股票详情是研究主页面，后续会承接新闻和数值的细分卡片</text>
+  <rect x="286" y="786" width="536" height="112" rx="8" fill="#f8fbff" stroke="#e5edf7"/>
+  <text class="muted small" x="308" y="814">日线预览</text>
+  <g transform="translate(308 826)">
+    <line class="axis" x1="0" y1="18" x2="472" y2="18"/>
+    <line class="axis" x1="0" y1="54" x2="472" y2="54"/>
+    <line class="axis" x1="0" y1="90" x2="472" y2="90"/>
+    <path class="area" d="M0 86 L34 80 L68 74 L102 78 L136 70 L170 66 L204 58 L238 60 L272 52 L306 45 L340 49 L374 34 L408 40 L442 24 L472 30 L472 112 L0 112 Z"/>
+    <path class="up" d="M0 86 L34 80 L68 74 L102 78 L136 70 L170 66 L204 58 L238 60 L272 52 L306 45 L340 49 L374 34 L408 40 L442 24 L472 30"/>
+  </g>
+  <rect x="844" y="786" width="252" height="112" rx="8" fill="#ffffff" stroke="#e5edf7"/>
+  <text class="muted small" x="866" y="814">详情检查器</text>
+  <text class="ink small" x="866" y="842" font-weight="800">贵州茅台</text>
+  <text class="muted tiny" x="866" y="864">新闻：占位 / 数值：128 / 完整度：98%</text>
+  <text class="muted tiny" x="866" y="884">最近同步：AKShare #1281</text>
+
+  <text class="ink label" x="1170" y="356">控制面</text>
+  <text class="muted small" x="1170" y="379">数据源、同步、数据库三件事各有边界，不混到研究页里</text>
+  <g transform="translate(1170 402)">
+    <rect class="blue" width="348" height="48" rx="8"/>
+    <text class="ink" x="18" y="30" font-size="15" font-weight="800">AKShare</text>
+    <text class="muted tiny" x="132" y="30">股票列表 / 日线 / 健康</text>
+    <rect class="green" y="60" width="348" height="48" rx="8"/>
+    <text class="ink" x="18" y="90" font-size="15" font-weight="800">BaoStock</text>
+    <text class="muted tiny" x="132" y="90">股票列表 / 日线 / 交易日历</text>
+    <rect class="amber" y="120" width="348" height="48" rx="8"/>
+    <text class="ink" x="18" y="150" font-size="15" font-weight="800">Tushare</text>
+    <text class="muted tiny" x="132" y="150">Token 增强 / 待启用</text>
+    <rect class="soft" y="180" width="348" height="48" rx="8"/>
+    <text class="ink" x="18" y="210" font-size="15" font-weight="800">Stock SDK</text>
+    <text class="muted tiny" x="132" y="210">Node 包 / 可选增强</text>
+  </g>
+
+  <text class="ink label" x="1170" y="670">同步与数据库</text>
+  <text class="muted small" x="1170" y="693">把补齐、批次、质量和血缘放在一起看</text>
+  <g transform="translate(1170 714)">
+    <rect class="soft" width="348" height="56" rx="8"/>
+    <text class="ink" x="18" y="34" font-size="15" font-weight="800">同步任务</text>
+    <text class="muted tiny" x="132" y="34">日线缺口补齐 / 运行中</text>
+    <rect class="soft" y="68" width="348" height="56" rx="8"/>
+    <text class="ink" x="18" y="102" font-size="15" font-weight="800">质量问题</text>
+    <text class="muted tiny" x="132" y="102">缺失交易日 / 重复 / 边界</text>
+    <rect class="green" y="136" width="348" height="56" rx="8"/>
+    <text class="ink" x="18" y="170" font-size="15" font-weight="800">数据库状态</text>
+    <text class="muted tiny" x="132" y="170">schema / row count / lineage</text>
+    <rect x="0" y="214" width="348" height="40" rx="6" fill="#172033"/>
+    <text class="white chip" x="174" y="239" text-anchor="middle">打开数据库管理</text>
+  </g>
+</svg>

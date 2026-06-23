@@ -188,6 +188,18 @@ def get_history_kline(
     return results
 
 
+def _classify_news(title: str, summary: str) -> str:
+    """简单的基于关键词的新闻分类"""
+    text = (title + " " + summary).lower()
+    if any(k in text for k in ["央行", "降准", "降息", "政策", "监管", "国务院", "证监会", "财政", "货币", "利率"]):
+        return "政策"
+    if any(k in text for k in ["分红", "业绩", "公告", "减持", "增持", "回购", "营收", "净利润", "合同", "中标", "募资"]):
+        return "公司"
+    if any(k in text for k in ["板块", "行业", "光伏", "新能源", "芯片", "人工智能", "汽车", "医药", "消费", "半导体", "锂电"]):
+        return "行业"
+    return "市场"
+
+
 def get_news(keyword: str = "A股", limit: int = 20, page: int = 1) -> List[Dict]:
     """获取新浪财经新闻（API直连）
 
@@ -241,6 +253,10 @@ def get_news(keyword: str = "A股", limit: int = 20, page: int = 1) -> List[Dict
                 "summary": item.get("summary", "")[:200],
                 "source": item.get("media_name", "新浪"),
                 "created_at": created_at,
+                "category": _classify_news(
+                    item.get("title", ""),
+                    item.get("summary", ""),
+                ),
             })
         except Exception as e:
             logger.warning(f"解析新闻失败: {e}")

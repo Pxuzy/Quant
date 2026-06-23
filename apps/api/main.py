@@ -9,7 +9,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.core.config import get_settings
 from apps.api.db.session import init_db
-from apps.api.routers import database, data_quality, data_sources, datasets, health, market_data, stocks, sync_tasks, trading_calendars
+from apps.api.routers import (
+    data_quality,
+    data_sources,
+    datasets,
+    database,
+    health,
+    market,
+    market_data,
+    stocks,
+    sync_tasks,
+    trading_calendars,
+)
 
 
 def create_app() -> FastAPI:
@@ -25,6 +36,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health.router)
+    app.include_router(market.router)
     app.include_router(database.router)
     app.include_router(data_quality.router)
     app.include_router(data_sources.router)

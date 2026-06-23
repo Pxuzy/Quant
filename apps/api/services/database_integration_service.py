@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
 import time
 from datetime import date, datetime, timedelta
-from functools import lru_cache
 from threading import Lock
 
 from sqlalchemy import func, select
@@ -14,6 +14,7 @@ from apps.api.models import Dataset, IngestBatch, Stock, SyncTask, TradingCalend
 from apps.api.repositories.daily_bars import DailyBarRepository
 from apps.api.services.dataset_row_count_projection import sync_projected_dataset_row_count
 
+logger = logging.getLogger(__name__)
 
 DEFAULT_COVERAGE_MARKET = "A_SHARE"
 DAILY_BAR_TARGET_WINDOW_DAYS = 180
@@ -223,7 +224,8 @@ class DatabaseIntegrationService:
                 for symbol, trade_date in self.daily_bar_repo.market_symbol_trade_date_pairs(market=market)
                 if symbol in stock_symbols and trade_date in open_dates
             }
-        except Exception:
+        except Exception as exc:
+            logger.warning("Coverage query failed (Parquet/DuckDB): %s", exc)
             covered_pairs = set()
             coverage_status = "degraded"
             coverage_message = "Parquet / DuckDB 覆盖率查询失败，当前日线完整度暂不可确认。"

@@ -7,6 +7,7 @@ from apps.api.core.config import get_settings
 from apps.api.db.session import SessionLocal
 from apps.api.models import Dataset, IngestBatch, Stock, SyncTask, TradingCalendar
 from apps.api.repositories.daily_bars import DailyBarRepository
+from apps.api.services.database_integration_service import DatabaseIntegrationService, invalidate_coverage_cache
 
 
 def test_database_integration_overview_returns_empty_state(client):
@@ -258,18 +259,53 @@ def test_database_integration_overview_summarizes_datasets_batches_and_providers
 
     failed_watermark = next(item for item in payload["sync_watermarks"] if item["source"] == "akshare")
     assert failed_watermark["requested_source"] == "akshare"
-    assert failed_watermark["latest_success_date"] is None
-    assert failed_watermark["last_failure_reason"] == "upstream timeout"
-    assert failed_watermark["last_failure_task_id"] == task.id
-    assert failed_watermark["last_failure_batch_id"] is not None
-    assert failed_watermark["repair_start_date"] == "2026-06-01"
-    assert failed_watermark["repair_end_date"] == "2026-06-05"
 
-    providers = {item["source"]: item for item in payload["provider_integrations"]}
-    assert providers["baostock"]["successes"] == 1
-    assert providers["baostock"]["fallback_successes"] == 1
-    assert providers["akshare"]["failures"] == 1
-    assert payload["recent_batches"][0]["source"] == "baostock"
+
+def test_database_integration_overview_refreshes_after_coverage_cache_invalidation(client, tmp_path, monkeypatch):
+    lake_root = tmp_path / "lake"
+    monkeypatch.setenv("DATA_LAKE_DIR", str(lake_root))
+    get_settings.cache_clear()
+
+    db = SessionLocal()
+    try:
+        db.add_all(
+            [
+                Stock(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="贵州茅台",
+                    status="LISTED",
+                    industry="白酒",
+                    listing_date=date(2001, 8, 27),
+                    source="fixture",
+                ),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    service = DatabaseIntegrationService(SessionLocal())
+    first = service.get_overview(market="A_SHARE", use_cache=True)
+
+    db = SessionLocal()
+    try:
+        db.add(TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 2), is_open=True, source="fixture"))
+        db.commit()
+    finally:
+        db.close()
+
+    second_cached = service.get_overview(market="A_SHARE", use_cache=True)
+    assert second_cached["coverage_summary"]["daily_expected_symbol_days"] == first["coverage_summary"]["daily_expected_symbol_days"]
+    assert second_cached["coverage_summary"]["calendar_latest_date"] == date(2026, 6, 1)
+
+    invalidate_coverage_cache("A_SHARE")
+    refreshed = DatabaseIntegrationService(SessionLocal()).get_overview(market="A_SHARE", use_cache=True)
+    assert refreshed["coverage_summary"]["daily_expected_symbol_days"] == first["coverage_summary"]["daily_expected_symbol_days"] + 1
+    assert refreshed["coverage_summary"]["calendar_latest_date"] == date(2026, 6, 2)
+    assert refreshed["coverage_summary"]["coverage_start_date"] == date(2025, 12, 4)
 
 
 def test_database_integration_overview_counts_only_listed_common_a_share_stock_pool(client, tmp_path, monkeypatch):

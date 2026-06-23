@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 from datetime import date
 from importlib import import_module
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from apps.api.adapters.base import (
     AdapterCapability,
@@ -229,10 +232,12 @@ class TushareAdapter(StockDataSourceAdapter):
             )
         except RuntimeError as exc:
             # Token 没配的情况
+            logger.warning("Tushare token not configured: %s", exc)
             return HealthCheckResult(
                 healthy=False, status="unavailable", message=str(exc)
             )
         except Exception as exc:
+            logger.warning("Tushare health check failed: %s", exc)
             return HealthCheckResult(
                 healthy=False, status="unhealthy", message=str(exc)
             )

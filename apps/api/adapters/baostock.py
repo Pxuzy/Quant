@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import date
 from importlib import import_module
 from time import sleep
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from apps.api.adapters.base import (
     AdapterCapability,
@@ -250,6 +253,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
                 message="BaoStock is not installed. Install the optional baostock package to enable this source.",
             )
         except Exception as exc:
+            logger.warning("BaoStock health check failed: %s", exc)
             return HealthCheckResult(
                 healthy=False, status="unhealthy", message=str(exc)
             )

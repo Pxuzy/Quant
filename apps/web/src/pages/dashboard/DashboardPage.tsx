@@ -188,7 +188,7 @@ export function DashboardPage() {
         <Typography.Text
           code
           style={{ cursor: 'pointer', color: '#1677ff' }}
-          onClick={() => navigate({ to: '/stock/$code', params: { code } })}
+                onClick={() => navigate({ to: '/data-system/stocks/$symbol', params: { symbol: code } })}
         >
           {code}
         </Typography.Text>
@@ -202,7 +202,7 @@ export function DashboardPage() {
       render: (_: string, record: Quote) => (
         <Typography.Text
           style={{ cursor: 'pointer', color: '#1677ff' }}
-          onClick={() => navigate({ to: '/stock/$code', params: { code: record.code } })}
+          onClick={() => navigate({ to: '/data-system/stocks/$symbol', params: { symbol: record.code } })}
         >
           {record.name}
         </Typography.Text>
@@ -260,7 +260,7 @@ export function DashboardPage() {
         <Typography.Text
           code
           style={{ cursor: 'pointer', color: '#1677ff' }}
-          onClick={() => navigate({ to: '/stock/$code', params: { code } })}
+                onClick={() => navigate({ to: '/data-system/stocks/$symbol', params: { symbol: code } })}
         >
           {code}
         </Typography.Text>
@@ -274,7 +274,7 @@ export function DashboardPage() {
       render: (name: string, record: Quote) => (
         <Typography.Text
           style={{ cursor: 'pointer', color: '#1677ff' }}
-          onClick={() => navigate({ to: '/stock/$code', params: { code: record.code } })}
+          onClick={() => navigate({ to: '/data-system/stocks/$symbol', params: { symbol: record.code } })}
         >
           {name}
         </Typography.Text>
@@ -461,7 +461,7 @@ export function DashboardPage() {
                       <Tag
                         key={r.code}
                         color={favorites.includes(r.code) ? 'default' : 'blue'}
-                        onClick={() => navigate({ to: '/stock/$code', params: { code: r.code } })}
+                        onClick={() => navigate({ to: '/data-system/stocks/$symbol', params: { symbol: r.code } })}
                         style={{ cursor: 'pointer' }}
                       >
                         {r.name} ({r.code})
@@ -503,7 +503,7 @@ export function DashboardPage() {
             <Col>
               <Button
                 icon={<ApiOutlined />}
-                onClick={() => navigate({ to: '/data-sources' })}
+                onClick={() => navigate({ to: '/data-system/data-sources' })}
               >
                 数据源
               </Button>

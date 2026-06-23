@@ -1,4 +1,4 @@
-# 数据模型
+﻿# 数据模型
 
 本文档依据 `apps/api/models/entities.py` 整理当前核心实体。
 

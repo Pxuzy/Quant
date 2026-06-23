@@ -1,4 +1,4 @@
-# Quant 项目文档中心
+﻿# Quant 项目文档中心
 
 本文档中心采用“总览 -> 产品方向 -> 产品基线 -> 技术 -> 数据 -> 运行 -> 状态”的结构。首读文档先说明 Quant 要解决什么问题，再进入架构、接口和运行细节。
 
@@ -7,19 +7,20 @@
 新成员建议按下面顺序阅读：
 
 1. [项目总览](./overview/project-overview.md)
-2. [个人股票研究工作台产品方向](./product/personal-stock-workbench.md)
-3. [阶段一产品基线](./product/phase-1-baseline.md)
-4. [功能矩阵](./product/feature-catalog.md)
-5. [系统架构总览](./architecture/system-overview.md)
-6. [开发运行手册](./operations/development-runbook.md)
-7. [路线图和当前状态](./status/roadmap.md)
+2. [个人股票数据管理工作台产品定义](./product/stock-workbench-product-definition.md)
+3. [个人股票研究工作台产品方向](./product/personal-stock-workbench.md)
+4. [阶段一产品基线](./product/phase-1-baseline.md)
+5. [功能矩阵](./product/feature-catalog.md)
+6. [系统架构总览](./architecture/system-overview.md)
+7. [开发运行手册](./operations/development-runbook.md)
+8. [路线图和当前状态](./status/roadmap.md)
 
 ## 文档分区
 
 | 分区 | 用途 | 主要文档 |
 | --- | --- | --- |
 | `overview/` | 项目定位、目标、术语 | [项目总览](./overview/project-overview.md), [术语表](./overview/glossary.md) |
-| `product/` | 产品方向、阶段范围、页面和功能 | [个人股票研究工作台产品方向](./product/personal-stock-workbench.md), [阶段一产品基线](./product/phase-1-baseline.md), [功能矩阵](./product/feature-catalog.md) |
+| `product/` | 产品方向、阶段范围、页面和功能 | [个人股票数据管理工作台产品定义](./product/stock-workbench-product-definition.md), [个人股票研究工作台产品方向](./product/personal-stock-workbench.md), [阶段一产品基线](./product/phase-1-baseline.md), [功能矩阵](./product/feature-catalog.md) |
 | `architecture/` | 系统结构、模块边界、API、数据模型 | [系统架构总览](./architecture/system-overview.md), [API 目录](./architecture/api-catalog.md), [数据模型](./architecture/data-model.md) |
 | `data/` | 数据源、同步、质量、血缘、数据集 | [数据源和同步治理](./data/data-source-and-sync-governance.md) |
 | `operations/` | 本地启动、环境变量、验证命令 | [开发运行手册](./operations/development-runbook.md) |

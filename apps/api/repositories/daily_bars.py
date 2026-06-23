@@ -34,15 +34,9 @@ DAILY_BAR_COLUMNS = [
     "ingested_at",
 ]
 
-# DuckDB query timeout in seconds
-DUCKDB_QUERY_TIMEOUT = 30
-
-
 def _duckdb_connect_with_timeout() -> duckdb.DuckDBPyConnection:
-    """Create a DuckDB connection with statement timeout."""
-    con = _duckdb_connect_with_timeout()
-    con.execute(f"SET statement_timeout='{DUCKDB_QUERY_TIMEOUT}s'")
-    return con
+    """Create a DuckDB connection."""
+    return duckdb.connect()
 
 
 class DailyBarRepository:

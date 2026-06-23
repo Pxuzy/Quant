@@ -1,4 +1,4 @@
-# Quant
+﻿# Quant
 
 Quant is a modular quantitative trading data platform. The first build focuses on the stock data management foundation: stock basics, data-source configuration, sync tasks, and a React management UI.
 

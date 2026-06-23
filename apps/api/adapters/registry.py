@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from apps.api.adapters.adata import ADataAdapter
 from apps.api.adapters.akshare import AkShareAdapter
 from apps.api.adapters.baostock import BaoStockAdapter
@@ -28,6 +30,7 @@ from apps.api.adapters.tushare import TushareAdapter
 
 
 class AdapterRegistry:
+    logger = logging.getLogger(__name__)
     """
     适配器注册中心 —— 管理所有数据源适配器。
 
@@ -88,6 +91,7 @@ class AdapterRegistry:
             return self._adapters[code]
         except KeyError as exc:
             # 列出所有可用的名字，帮助用户知道正确的 code 是什么
+            logger.debug("Unknown adapter code requested: %s", exc)
             available = ", ".join(sorted(self._adapters))
             raise ValueError(
                 f"Unknown data source '{code}'. Available sources: {available}"

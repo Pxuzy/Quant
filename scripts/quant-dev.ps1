@@ -261,17 +261,16 @@ function Start-WebBackground {
     try {
         $env:VITE_API_PROXY_TARGET = "http://127.0.0.1:$ApiPort"
         $env:VITE_DEV_SERVER_PORT = [string]$WebPort
+        $cmdOutput = "npm run dev -- --host 127.0.0.1 --port $WebPort --strictPort 1> `"$webOutLog`" 2> `"$webErrLog`""
         $arguments = @(
             "/d",
             "/c",
-            "npm run dev -- --host 127.0.0.1 --port $WebPort --strictPort"
+            $cmdOutput
         )
         $process = Start-Process `
             -FilePath "cmd.exe" `
             -ArgumentList $arguments `
             -WorkingDirectory $webDir `
-            -RedirectStandardOutput $webOutLog `
-            -RedirectStandardError $webErrLog `
             -WindowStyle Hidden `
             -PassThru
         Set-Content -LiteralPath $webPidPath -Value ([string]$process.Id) -Encoding UTF8

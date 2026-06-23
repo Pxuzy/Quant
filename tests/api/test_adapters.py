@@ -392,6 +392,36 @@ def test_akshare_adapter_falls_back_within_provider_for_stock_list_and_daily_bar
     assert normalized_daily[0].close == 1307.22
 
 
+def test_akshare_adapter_reports_missing_optional_dependency_as_unavailable(monkeypatch):
+    adapter = AkShareAdapter()
+
+    def fake_get_client():
+        raise ModuleNotFoundError("No module named 'openpyxl'")
+
+    monkeypatch.setattr(adapter, "_get_client", fake_get_client)
+
+    health = adapter.health_check()
+
+    assert health.healthy is False
+    assert health.status == "unavailable"
+    assert "openpyxl" in health.message
+
+
+def test_stock_sdk_adapter_reports_missing_optional_dependency_as_unavailable(monkeypatch):
+    adapter = StockSdkAdapter()
+
+    def fake_get_client():
+        raise ModuleNotFoundError("No module named 'stock_sdk'")
+
+    monkeypatch.setattr(adapter, "_get_client", fake_get_client)
+
+    health = adapter.health_check()
+
+    assert health.healthy is False
+    assert health.status == "unavailable"
+    assert "stock_sdk" in health.message
+
+
 def test_baostock_adapter_normalizes_stock_list_from_optional_client():
     client = FakeBaoStockClient()
     adapter = BaoStockAdapter(client=client)

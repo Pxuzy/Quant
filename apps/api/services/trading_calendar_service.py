@@ -13,6 +13,7 @@ from apps.api.repositories.datasets import DatasetRepository
 from apps.api.repositories.ingest_batches import IngestBatchRepository
 from apps.api.repositories.sync_tasks import SyncTaskRepository
 from apps.api.repositories.trading_calendars import TradingCalendarRepository
+from apps.api.services.database_integration_service import invalidate_coverage_cache
 from apps.api.services.normalized_data_validation import validate_calendar_records
 from apps.api.services.stock_sync_service import AUTO_SOURCE_CODE
 
@@ -63,6 +64,7 @@ class TradingCalendarService:
     ) -> SyncTask:
         self._validate_date_range(start_date=start_date, end_date=end_date)
         source_code = source.strip().lower()
+        market_code = market.strip().upper()
         if source_code == AUTO_SOURCE_CODE:
             candidates = self._enabled_adapters_for_capability("calendars")
             if not candidates:
@@ -70,13 +72,14 @@ class TradingCalendarService:
                 raise ValueError("No enabled data source supports calendars.")
             task = self._create_calendar_task(
                 source=AUTO_SOURCE_CODE,
-                market=market,
+                market=market_code,
                 start_date=start_date,
                 end_date=end_date,
                 candidate_sources=[adapter.code for adapter in candidates],
             )
             self.db.commit()
             self.db.refresh(task)
+            invalidate_coverage_cache(market_code)
             return task
 
         adapter = self.registry.get(source_code)
@@ -89,9 +92,10 @@ class TradingCalendarService:
             self.db.rollback()
             raise ValueError(f"Data source '{source_code}' is disabled.")
 
-        task = self._create_calendar_task(source=source_code, market=market, start_date=start_date, end_date=end_date)
+        task = self._create_calendar_task(source=source_code, market=market_code, start_date=start_date, end_date=end_date)
         self.db.commit()
         self.db.refresh(task)
+        invalidate_coverage_cache(market_code)
         return task
 
     def run_calendar_sync_task(self, task_id: int) -> SyncTask:
@@ -215,6 +219,7 @@ class TradingCalendarService:
     def _run_auto_calendar_sync_task(self, task: SyncTask) -> SyncTask:
         records_read = 0
         records_written = 0
+        market = (task.market or "A_SHARE").strip().upper()
         candidates = self._enabled_adapters_for_capability("calendars")
         candidate_codes = [adapter.code for adapter in candidates]
         errors: list[str] = []
@@ -272,6 +277,7 @@ class TradingCalendarService:
                 )
                 self.db.commit()
                 self.db.refresh(task)
+                invalidate_coverage_cache(market)
                 return task
 
             raise RuntimeError(f"All calendar data sources failed: {'; '.join(errors)}")
@@ -285,6 +291,7 @@ class TradingCalendarService:
             )
             self.db.commit()
             self.db.refresh(task)
+            invalidate_coverage_cache(market)
             return task
 
     def _sync_with_adapter(self, *, task: SyncTask, adapter: StockDataSourceAdapter) -> tuple[int, int]:
@@ -295,7 +302,7 @@ class TradingCalendarService:
         if task.start_date is None or task.end_date is None:
             raise RuntimeError("Trading calendar task is missing date range.")
 
-        market = task.market or "A_SHARE"
+        market = (task.market or "A_SHARE").strip().upper()
         raw_records = adapter.fetch_trading_calendar(
             market=market,
             start_date=task.start_date,
@@ -350,6 +357,7 @@ class TradingCalendarService:
         except Exception as exc:
             self.ingest_batch_repo.fail_batch(batch, message=str(exc))
             raise
+        invalidate_coverage_cache(market)
         return records_read, records_written
 
     @staticmethod

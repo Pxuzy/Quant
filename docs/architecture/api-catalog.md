@@ -1,4 +1,4 @@
-# API 目录
+﻿# API 目录
 
 本文档按后端路由整理当前 API。所有接口由 `apps/api/main.py` 注册。
 
