@@ -57,3 +57,7 @@ qa-screenshots/
 *.png
 !docs/**/*.png
 .gstack/
+.agents/
+.clinerules/
+.cursor/
+fix-gstack-skills.ps1
