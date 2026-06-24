@@ -1,10 +1,11 @@
 import { apiRequest } from '../../shared/api/client';
+import { normalizeNewsResponse } from './news';
 
 export const marketQueryKeys = {
   all: ['market'] as const,
   quotes: (codes: string[]) => [...marketQueryKeys.all, 'quotes', ...codes] as const,
   index: () => [...marketQueryKeys.all, 'index'] as const,
-  kline: (code: string, period: string) => [...marketQueryKeys.all, 'kline', code, period] as const,
+  kline: (code: string, period: string, count: number) => [...marketQueryKeys.all, 'kline', code, period, count] as const,
   news: (keyword: string) => [...marketQueryKeys.all, 'news', keyword] as const,
   search: (keyword: string) => [...marketQueryKeys.all, 'search', keyword] as const,
 };
@@ -65,6 +66,8 @@ export interface SectorRanking {
 
 export type SortField = 'change_pct' | 'amount' | 'volume' | 'up_count' | 'down_count';
 
+type NewsResponse = NewsItem[] | { items?: NewsItem[]; data?: NewsItem[]; results?: NewsItem[] };
+
 export function fetchQuotes(codes: string[], signal?: AbortSignal): Promise<Quote[]> {
   return apiRequest<Quote[]>(`/api/market/quote?codes=${codes.join(',')}`, undefined, { signal });
 }
@@ -83,11 +86,12 @@ export function fetchKline(
   count: number = 100,
   signal?: AbortSignal,
 ): Promise<KLine[]> {
-  return apiRequest<KLine[]>(`/api/market/kline?code=${code}&period=${period}&count=${count}`, undefined, { signal });
+  return apiRequest<KLine[]>('/api/market/kline', { code, period, count }, { signal });
 }
 
 export function fetchNews(keyword: string = 'A股', limit: number = 10, signal?: AbortSignal, page: number = 1): Promise<NewsItem[]> {
-  return apiRequest<NewsItem[]>(`/api/market/news?keyword=${encodeURIComponent(keyword)}&limit=${limit}&page=${page}`, undefined, { signal });
+  return apiRequest<NewsResponse>(`/api/market/news?keyword=${encodeURIComponent(keyword)}&limit=${limit}&page=${page}`, undefined, { signal })
+    .then(normalizeNewsResponse);
 }
 
 export function searchStocks(keyword: string, signal?: AbortSignal): Promise<Array<{code: string; name: string; market: string}>> {

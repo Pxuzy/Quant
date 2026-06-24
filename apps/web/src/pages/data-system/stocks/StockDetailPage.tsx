@@ -19,6 +19,7 @@ import {
 } from '../../../features/stocks/api';
 import type { StockDailyCoverage, StockDailyIngestBatch, StockDailyQuality } from '../../../features/stocks/types';
 import { StatusTag } from '../../../shared/components/StatusTag';
+import { StockKlineChart } from '../../stock/StockPage';
 import {
   formatDate,
   formatDateTime,
@@ -1056,14 +1057,13 @@ export function StockDetailPage() {
         </Col>
 
         <Col span={16} className="stock-terminal-main">
-          <Card className="stock-detail-panel stock-detail-chart-card" title="日线行情（K 线 / 收盘趋势 / 成交量）">
-            {dailyBarsQuery.isError ? (
-              <Alert type="error" showIcon message="日线数据加载失败" description="可以先在同步调度中同步该股票日线。" />
-            ) : dailyBarsQuery.isLoading ? (
-              <Skeleton active paragraph={{ rows: 8 }} />
-            ) : (
-              <CloseVolumeChart model={chartModel} />
-            )}
+          <Card className="stock-detail-panel stock-detail-chart-card" title="K 线研究">
+            <StockKlineChart
+              code={symbol}
+              title={`${symbol}${stock?.name ? ` ${stock.name}` : ''}`}
+              embedded
+              minHeight={520}
+            />
           </Card>
 
           <Row gutter={[16, 16]} align="stretch">

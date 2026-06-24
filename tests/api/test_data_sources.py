@@ -353,6 +353,50 @@ def test_tushare_auth_status_reports_configured_when_token_exists(client, monkey
     assert tushare["config_json"]["auth_status"] == "configured"
 
 
+def test_tushare_metadata_declares_mcp_and_sector_capabilities(client, monkeypatch):
+    monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
+
+    response = client.get("/api/data-sources")
+
+    assert response.status_code == 200
+    tushare = next(source for source in response.json() if source["code"] == "tushare")
+    metadata = tushare["provider_metadata"]
+    assert metadata["docs_url"] == "https://tushare.pro/document/1?doc_id=108"
+    assert metadata["mcp_url"] == "https://tushare.pro/document/1?doc_id=463"
+    assert metadata["mcp_role"] == "adapter_layer"
+    assert "index_classify" in metadata["sector_capabilities"]
+    assert "index_member_all" in metadata["sector_capabilities"]
+    assert "industry and sector datasets" in metadata["rate_limit_note"]
+
+
+def test_data_source_catalog_lists_free_mcp_candidates_without_registering_them(client):
+    response = client.get("/api/data-sources/catalog")
+
+    assert response.status_code == 200
+    payload = response.json()
+    codes = {item["code"] for item in payload}
+    assert codes == {"stock_mcp", "tsrs_mcp_server", "mcp_aktools", "cn_financial_mcp"}
+
+    mcp_aktools = next(item for item in payload if item["code"] == "mcp_aktools")
+    assert mcp_aktools["mcp_role"] == "adapter_layer"
+    assert mcp_aktools["source_kind"] == "community_mcp"
+    assert mcp_aktools["integration_status"] == "research_only"
+    assert mcp_aktools["authorization_required"] is False
+    assert "akshare_public_data" in mcp_aktools["capabilities"]
+
+    cn_financial_mcp = next(item for item in payload if item["code"] == "cn_financial_mcp")
+    assert "industry_data" in cn_financial_mcp["capabilities"]
+    assert "research only" in cn_financial_mcp["production_note"].lower()
+
+    list_response = client.get("/api/data-sources")
+    assert list_response.status_code == 200
+    registered_codes = {source["code"] for source in list_response.json()}
+    assert "wind" not in registered_codes
+    assert "choice" not in registered_codes
+    assert "tushare_mcp" not in registered_codes
+    assert "tushare" in registered_codes
+
+
 def test_data_source_update_preserves_user_priority(client):
     update_response = client.patch("/api/data-sources/baostock", json={"enabled": False, "priority": 7})
     assert update_response.status_code == 200

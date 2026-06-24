@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from apps.api.db.session import get_db
-from apps.api.schemas.data_sources import DataSourceHealthRead, DataSourceRead, DataSourceSmokeRead, DataSourceUpdate
+from apps.api.schemas.data_sources import (
+    DataSourceCatalogItemRead,
+    DataSourceHealthRead,
+    DataSourceRead,
+    DataSourceSmokeRead,
+    DataSourceUpdate,
+)
 from apps.api.services.data_source_service import DataSourceService
 
 router = APIRouter(prefix="/api/data-sources", tags=["data-sources"])
@@ -17,6 +23,11 @@ router = APIRouter(prefix="/api/data-sources", tags=["data-sources"])
 @router.get("", response_model=list[DataSourceRead])
 def list_data_sources(db: Session = Depends(get_db)):
     return DataSourceService(db).list_sources()
+
+
+@router.get("/catalog", response_model=list[DataSourceCatalogItemRead])
+def list_data_source_catalog(db: Session = Depends(get_db)):
+    return DataSourceService(db).list_catalog()
 
 
 @router.patch("/{code}", response_model=DataSourceRead)

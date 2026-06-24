@@ -82,3 +82,18 @@ class DataSourceSmokeRead(BaseModel):
     normalized_records: int
     validation_errors: list[str]
     sample: list[dict]
+
+
+class DataSourceCatalogItemRead(BaseModel):
+    code: str
+    name: str
+    source_kind: str
+    mcp_role: str | None = None
+    integration_status: str
+    capabilities: list[str]
+    authorization_required: bool
+    homepage_url: str | None = None
+    docs_url: str | None = None
+    mcp_url: str | None = None
+    recommended_use: str
+    production_note: str

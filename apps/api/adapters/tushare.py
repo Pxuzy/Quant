@@ -199,11 +199,22 @@ class TushareAdapter(StockDataSourceAdapter):
         return ProviderMetadata(
             provider_type="python_package",
             homepage_url="https://tushare.pro/",
-            docs_url="https://tushare.pro/document/2?doc_id=25",
+            docs_url="https://tushare.pro/document/1?doc_id=108",
             auth_mode="token",
             stability="official",  # ★ Tushare 是官方维护的，比社区源更稳定
-            rate_limit_note="Requires a Tushare Pro token and follows Tushare account quota limits.",
+            rate_limit_note=(
+                "Requires a Tushare Pro token and follows Tushare account quota limits; "
+                "industry and sector datasets may require additional points or package permissions."
+            ),
             install_note="Install optional package: pip install tushare. Set TUSHARE_TOKEN before enabling.",
+            mcp_url="https://tushare.pro/document/1?doc_id=463",
+            mcp_role="adapter_layer",
+            sector_capabilities=(
+                "index_classify",
+                "index_member_all",
+                "index_weight",
+                "ths_hot",
+            ),
         )
 
     def auth_status(self) -> str:

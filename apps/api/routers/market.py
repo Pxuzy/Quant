@@ -45,11 +45,47 @@ def get_kline(
 
 @router.get("/news")
 def get_news_list(
-    keyword: str = Query("A股", description="搜索关键词"),
+    keyword: str | None = Query(None, description="搜索关键词（可选）"),
     limit: int = Query(20, description="条数"),
     page: int = Query(1, description="页码"),
 ):
-    return get_news(keyword, limit, page)
+    """新闻（从DB读取，由定时任务填充）"""
+    from apps.api.db.session import SessionLocal
+    from apps.api.repositories.news_articles import NewsRepository
+    
+    db = SessionLocal()
+    try:
+        repo = NewsRepository(db)
+        articles, total = repo.list_news(keyword=keyword, page=page, page_size=limit)
+        return {
+            "items": [
+                {
+                    "id": a.id,
+                    "title": a.title,
+                    "url": a.url,
+                    "summary": a.summary,
+                    "source": a.source,
+                    "category": a.category,
+                    "related_symbols": a.related_symbols,
+                    "published_at": a.published_at.isoformat() if a.published_at else None,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
+                for a in articles
+            ],
+            "total": total,
+            "page": page,
+            "page_size": limit,
+        }
+    finally:
+        db.close()
+
+
+@router.post("/news/ingest")
+def trigger_news_ingest():
+    """手动触发新闻抓取"""
+    from apps.api.services.news_ingest_service import run_news_ingest
+    result = run_news_ingest()
+    return result
 
 
 @router.get("/search")

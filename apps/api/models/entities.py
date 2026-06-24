@@ -204,3 +204,47 @@ class DataQualityReport(Base):
     expected_value: Mapped[str | None] = mapped_column(String(128), nullable=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+
+class Watchlist(Base):
+    """自选股分组。每个分组下面有多个 WatchlistItem。
+
+    ponytail: 初期不分用户/多群组，一个 name 一个 pocket 就够；user_id 留 nullable 是为以后多终端切换做准备，不做 enforce。
+    """
+    __tablename__ = "watchlists"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class WatchlistItem(Base):
+    """自选股明细。一只股票在同一个 group 下唯一。
+    """
+    __tablename__ = "watchlist_items"
+    __table_args__ = (UniqueConstraint("watchlist_id", "symbol", name="uq_watchlist_symbol"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    watchlist_id: Mapped[int] = mapped_column(ForeignKey("watchlists.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+
+class NewsArticle(Base):
+    __tablename__ = "news_articles"
+    __table_args__ = (UniqueConstraint("source", "external_id", name="uq_news_source_external_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
+    url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    related_symbols: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    external_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)

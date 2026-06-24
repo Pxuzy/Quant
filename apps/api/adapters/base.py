@@ -106,8 +106,11 @@ class ProviderMetadata:
     stability: str = "community"
     rate_limit_note: str | None = None
     install_note: str | None = None
+    mcp_url: str | None = None
+    mcp_role: str | None = None
+    sector_capabilities: tuple[str, ...] = ()
 
-    def to_dict(self) -> dict[str, str | None]:
+    def to_dict(self) -> dict[str, object]:
         return asdict(self)
 
 

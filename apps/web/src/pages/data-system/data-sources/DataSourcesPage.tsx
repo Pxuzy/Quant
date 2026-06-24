@@ -5,6 +5,7 @@ import {
   ExperimentOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
+  SafetyCertificateOutlined,
   SyncOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
@@ -29,11 +30,12 @@ import type { ColumnsType } from 'antd/es/table';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useCheckDataSourceHealthMutation,
+  useDataSourceCatalogQuery,
   useDataSourcesQuery,
   useSmokeTestDataSourceMutation,
   useUpdateDataSourceMutation,
 } from '../../../features/data-sources/api';
-import type { DataSource } from '../../../features/data-sources/types';
+import type { DataSource, DataSourceCatalogItem } from '../../../features/data-sources/types';
 import { useSyncStocksMutation } from '../../../features/stocks/api';
 import { formatCapability, formatExchange, formatProviderType } from '../../../shared/domain/labels';
 import { AuthStatusTag, resolveAuthStatus } from '../../../shared/components/AuthStatusTag';
@@ -46,6 +48,35 @@ const STATUS_COLOR: Record<string, string> = {
   unavailable: 'orange',
   unknown: 'default',
 };
+
+const CATALOG_KIND_LABELS: Record<string, string> = {
+  community_mcp: '开源 MCP',
+};
+
+const CATALOG_STATUS_LABELS: Record<string, string> = {
+  registered_adapter: '已接入',
+  candidate: '候选',
+  requires_license: '需授权',
+  research_only: '研究用',
+};
+
+const CATALOG_CAPABILITY_LABELS: Record<string, string> = {
+  sector_data: '板块数据',
+  concept_board: '概念板块',
+  market_data: '行情',
+  ai_agent_tools: 'Agent 工具',
+  public_data_wrappers: '公开数据封装',
+  tushare_api_wrapper: 'Tushare 封装',
+  akshare_public_data: 'AKShare 公开数据',
+  a_share_data: 'A 股数据',
+  financial_reports: '财报',
+  industry_data: '行业数据',
+  macro_data: '宏观数据',
+};
+
+function formatCatalogValue(value: string, labels: Record<string, string>) {
+  return labels[value] ?? value;
+}
 
 function getCapabilities(s: DataSource) {
   const cap = (s.config_json?.capabilities || {}) as Record<string, unknown>;
@@ -63,6 +94,7 @@ export function DataSourcesPage() {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
   const query = useDataSourcesQuery();
+  const catalogQuery = useDataSourceCatalogQuery();
   const updateMutation = useUpdateDataSourceMutation();
   const healthMutation = useCheckDataSourceHealthMutation();
   const smokeMutation = useSmokeTestDataSourceMutation();
@@ -71,6 +103,7 @@ export function DataSourcesPage() {
   const [keyword, setKeyword] = useState('');
 
   const sources = useMemo(() => query.data ?? [], [query.data]);
+  const catalog = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
   const filtered = useMemo(() => {
     const k = keyword.trim().toLowerCase();
     if (!k) return sources;
@@ -81,6 +114,18 @@ export function DataSourcesPage() {
         (s.health_status || '').toLowerCase().includes(k),
     );
   }, [sources, keyword]);
+  const filteredCatalog = useMemo(() => {
+    const k = keyword.trim().toLowerCase();
+    if (!k) return catalog;
+    return catalog.filter(
+      (item) =>
+        item.name.toLowerCase().includes(k) ||
+        item.code.toLowerCase().includes(k) ||
+        item.source_kind.toLowerCase().includes(k) ||
+        item.integration_status.toLowerCase().includes(k) ||
+        item.capabilities.some((capability) => capability.toLowerCase().includes(k)),
+    );
+  }, [catalog, keyword]);
 
   const summary = useMemo(() => {
     const healthy = sources.filter((s) => s.health_status === 'healthy').length;
@@ -92,6 +137,7 @@ export function DataSourcesPage() {
 
   const refresh = () => {
     void query.refetch();
+    void catalogQuery.refetch();
     void queryClient.invalidateQueries({ queryKey: ['data', 'data-sources'] });
   };
 
@@ -293,6 +339,87 @@ export function DataSourcesPage() {
     },
   ];
 
+  const catalogColumns: ColumnsType<DataSourceCatalogItem> = [
+    {
+      title: '候选服务',
+      dataIndex: 'name',
+      width: 220,
+      render: (_, item) => (
+        <Space direction="vertical" size={0}>
+          <Space size={6}>
+            <SafetyCertificateOutlined style={{ color: item.authorization_required ? '#faad14' : '#52c41a' }} />
+            <Typography.Text strong>{item.name}</Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>({item.code})</Typography.Text>
+          </Space>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {item.recommended_use}
+          </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: '类别',
+      dataIndex: 'source_kind',
+      width: 110,
+      render: (value) => <Tag color="blue">{formatCatalogValue(String(value), CATALOG_KIND_LABELS)}</Tag>,
+    },
+    {
+      title: '接入状态',
+      dataIndex: 'integration_status',
+      width: 100,
+      render: (value) => {
+        const text = String(value);
+        const color = text === 'registered_adapter' ? 'green' : text === 'requires_license' ? 'orange' : 'default';
+        return <Tag color={color}>{formatCatalogValue(text, CATALOG_STATUS_LABELS)}</Tag>;
+      },
+    },
+    {
+      title: 'MCP 定位',
+      dataIndex: 'mcp_role',
+      width: 100,
+      render: (value) => (value ? <Tag color="purple">适配层</Tag> : <Typography.Text type="secondary">—</Typography.Text>),
+    },
+    {
+      title: '授权',
+      dataIndex: 'authorization_required',
+      width: 90,
+      render: (value) => <Tag color={value ? 'orange' : 'green'}>{value ? '需确认' : '公开/免凭证'}</Tag>,
+    },
+    {
+      title: '板块能力',
+      dataIndex: 'capabilities',
+      width: 220,
+      render: (capabilities: string[]) => (
+        <Space size={2} wrap>
+          {capabilities.slice(0, 4).map((capability) => (
+            <Tag key={capability}>{formatCatalogValue(capability, CATALOG_CAPABILITY_LABELS)}</Tag>
+          ))}
+          {capabilities.length > 4 && <Tag>+{capabilities.length - 4}</Tag>}
+        </Space>
+      ),
+    },
+    {
+      title: '边界',
+      dataIndex: 'production_note',
+      width: 280,
+      render: (value) => <Typography.Text type="secondary" style={{ fontSize: 12 }}>{value}</Typography.Text>,
+    },
+    {
+      title: '链接',
+      width: 140,
+      render: (_, item) => (
+        <Space size={6} wrap>
+          {item.docs_url && (
+            <Typography.Link href={item.docs_url} target="_blank" rel="noreferrer">文档</Typography.Link>
+          )}
+          {item.mcp_url && (
+            <Typography.Link href={item.mcp_url} target="_blank" rel="noreferrer">MCP</Typography.Link>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
   return (
     <div className="workbench data-sources-page" style={{ padding: '12px 16px' }}>
       <Space direction="vertical" size={4} style={{ marginBottom: 12 }}>
@@ -362,6 +489,35 @@ export function DataSourcesPage() {
               : r.health_status === 'unavailable' ? 'row-unavailable'
               : ''
           }
+        />
+      </Card>
+
+      <Card
+        size="small"
+        style={{ marginTop: 12 }}
+        title={
+          <Space>
+            <SafetyCertificateOutlined />
+            <span>免费 MCP 候选目录</span>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              共 {catalog.length} 个{keyword && ` · 过滤后 ${filteredCatalog.length}`}
+            </Typography.Text>
+          </Space>
+        }
+        bodyStyle={{ padding: 0 }}
+      >
+        <Table<DataSourceCatalogItem>
+          rowKey="code"
+          size="small"
+          dataSource={filteredCatalog}
+          columns={catalogColumns}
+          pagination={{
+            pageSize: 6,
+            showSizeChanger: false,
+            showTotal: (t) => `共 ${t} 条`,
+          }}
+          scroll={{ x: 1280 }}
+          loading={catalogQuery.isLoading}
         />
       </Card>
     </div>

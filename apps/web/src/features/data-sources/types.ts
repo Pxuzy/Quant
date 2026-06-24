@@ -13,6 +13,9 @@ export type DataSourceProviderMetadata = {
   stability?: string;
   rate_limit_note?: string | null;
   install_note?: string | null;
+  mcp_url?: string | null;
+  mcp_role?: string | null;
+  sector_capabilities?: string[];
 };
 
 export type DataSourceSmokeSummary = {
@@ -57,6 +60,21 @@ export type DataSource = {
 export type DataSourceUpdate = {
   enabled?: boolean;
   priority?: number;
+};
+
+export type DataSourceCatalogItem = {
+  code: string;
+  name: string;
+  source_kind: string;
+  mcp_role?: string | null;
+  integration_status: string;
+  capabilities: string[];
+  authorization_required: boolean;
+  homepage_url?: string | null;
+  docs_url?: string | null;
+  mcp_url?: string | null;
+  recommended_use: string;
+  production_note: string;
 };
 
 export type DataSourceHealthResult = {

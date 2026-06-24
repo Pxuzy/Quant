@@ -37,6 +37,9 @@ class DataSourceService:
         self.db.commit()
         return self.data_source_repo.list_all()
 
+    def list_catalog(self) -> list[dict]:
+        return DATA_SOURCE_CATALOG
+
     def update_source(self, code: str, *, enabled: bool | None = None, priority: int | None = None) -> DataSource | None:
         self.data_source_repo.sync_registered_adapters(self.registry)
         data_source = self.data_source_repo.update_source(code, enabled=enabled, priority=priority)
@@ -347,3 +350,63 @@ def _safe_smoke_error_message(message: str) -> str:
     if len(cleaned) > MAX_SMOKE_ERROR_MESSAGE_LENGTH:
         return f"{cleaned[: MAX_SMOKE_ERROR_MESSAGE_LENGTH - 3].rstrip()}..."
     return cleaned
+
+
+DATA_SOURCE_CATALOG: list[dict] = [
+    {
+        "code": "stock_mcp",
+        "name": "stock-mcp",
+        "source_kind": "community_mcp",
+        "mcp_role": "adapter_layer",
+        "integration_status": "research_only",
+        "capabilities": ["ai_agent_tools", "public_data_wrappers", "market_data"],
+        "authorization_required": False,
+        "homepage_url": "https://github.com/huweihua123/stock-mcp",
+        "docs_url": "https://github.com/huweihua123/stock-mcp",
+        "mcp_url": "https://github.com/huweihua123/stock-mcp",
+        "recommended_use": "Free community MCP for local AI-agent experiments against public stock data wrappers.",
+        "production_note": "Research only; do not place community MCP output on the formal ingest path without source authorization review.",
+    },
+    {
+        "code": "tsrs_mcp_server",
+        "name": "tsrs-mcp-server",
+        "source_kind": "community_mcp",
+        "mcp_role": "adapter_layer",
+        "integration_status": "research_only",
+        "capabilities": ["ai_agent_tools", "tushare_api_wrapper", "market_data"],
+        "authorization_required": False,
+        "homepage_url": "https://github.com/hanxuanliang/tsrs-mcp-server",
+        "docs_url": "https://github.com/hanxuanliang/tsrs-mcp-server",
+        "mcp_url": "https://github.com/hanxuanliang/tsrs-mcp-server",
+        "recommended_use": "Free Rust MCP wrapper to test Tushare-style tool calls before formal adapter work.",
+        "production_note": "Research only; Tushare-backed data still follows Tushare account permission if a token is used.",
+    },
+    {
+        "code": "mcp_aktools",
+        "name": "mcp-aktools",
+        "source_kind": "community_mcp",
+        "mcp_role": "adapter_layer",
+        "integration_status": "research_only",
+        "capabilities": ["ai_agent_tools", "akshare_public_data", "sector_data", "concept_board"],
+        "authorization_required": False,
+        "homepage_url": "https://github.com/aahl/mcp-aktools",
+        "docs_url": "https://github.com/aahl/mcp-aktools",
+        "mcp_url": "https://github.com/aahl/mcp-aktools",
+        "recommended_use": "Free MCP wrapper around AKShare / AkTools for public-data research validation.",
+        "production_note": "Research only; public upstream availability and authorization must be checked before formal ingestion.",
+    },
+    {
+        "code": "cn_financial_mcp",
+        "name": "cn-financial-mcp",
+        "source_kind": "community_mcp",
+        "mcp_role": "adapter_layer",
+        "integration_status": "research_only",
+        "capabilities": ["ai_agent_tools", "a_share_data", "financial_reports", "industry_data", "macro_data"],
+        "authorization_required": False,
+        "homepage_url": "https://github.com/ccq1/cn-financial-mcp",
+        "docs_url": "https://github.com/ccq1/cn-financial-mcp",
+        "mcp_url": "https://github.com/ccq1/cn-financial-mcp",
+        "recommended_use": "Free community MCP for broad China financial data experiments.",
+        "production_note": "Research only; validate source provenance and licensing before any write to formal datasets.",
+    },
+]

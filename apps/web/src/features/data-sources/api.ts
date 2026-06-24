@@ -1,14 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../shared/api/client';
-import type { DataSource, DataSourceHealthResult, DataSourceSmokeResult, DataSourceUpdate } from './types';
+import type {
+  DataSource,
+  DataSourceCatalogItem,
+  DataSourceHealthResult,
+  DataSourceSmokeResult,
+  DataSourceUpdate,
+} from './types';
 
 export const dataSourceQueryKeys = {
   all: ['data-sources'] as const,
   list: () => [...dataSourceQueryKeys.all, 'list'] as const,
+  catalog: () => [...dataSourceQueryKeys.all, 'catalog'] as const,
 };
 
 export function fetchDataSources(signal?: AbortSignal): Promise<DataSource[]> {
   return apiRequest<DataSource[]>('/api/data-sources', undefined, { signal });
+}
+
+export function fetchDataSourceCatalog(signal?: AbortSignal): Promise<DataSourceCatalogItem[]> {
+  return apiRequest<DataSourceCatalogItem[]>('/api/data-sources/catalog', undefined, { signal });
 }
 
 export function updateDataSource(code: string, payload: DataSourceUpdate): Promise<DataSource> {
@@ -41,6 +52,13 @@ export function useDataSourcesQuery() {
   return useQuery({
     queryKey: dataSourceQueryKeys.list(),
     queryFn: ({ signal }) => fetchDataSources(signal),
+  });
+}
+
+export function useDataSourceCatalogQuery() {
+  return useQuery({
+    queryKey: dataSourceQueryKeys.catalog(),
+    queryFn: ({ signal }) => fetchDataSourceCatalog(signal),
   });
 }
 
