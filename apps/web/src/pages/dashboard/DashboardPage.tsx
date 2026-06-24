@@ -5,14 +5,10 @@ import {
   App as AntApp,
   Button,
   Card,
-  Col,
-  Divider,
   Input,
-  Row,
   Select,
   Space,
   Spin,
-  Statistic,
   Table,
   Tag,
   Typography,
@@ -27,13 +23,14 @@ import {
   WarningOutlined,
 } from '@ant-design/icons';
 import {
+  fetchSectorRankings,
   fetchIndexQuotes,
   fetchNews,
   fetchQuotes,
   searchStocks,
   marketQueryKeys,
 } from '../../features/market/api';
-import type { Quote, NewsItem } from '../../features/market/api';
+import type { Quote, SectorRanking } from '../../features/market/api';
 import { apiRequest } from '../../shared/api/client';
 
 const REFRESH_OPTIONS = [
@@ -45,6 +42,13 @@ const REFRESH_OPTIONS = [
 ] as const;
 
 const FAVORITES_KEY = 'quant_dashboard_favorites';
+const BOARD_CATEGORIES = ['行业板块', '概念板块', '指数板块'] as const;
+type BoardCategory = (typeof BOARD_CATEGORIES)[number];
+const BOARD_CATEGORY_FALLBACKS: Record<BoardCategory, string[]> = {
+  行业板块: ['银行', '电力', '煤炭', '白酒', '半导体'],
+  概念板块: ['人工智能', '新能源车', '光伏'],
+  指数板块: ['上证指数', '深证成指', '沪深300', '创业板指'],
+};
 
 function loadFavorites(): string[] {
   try {
@@ -71,6 +75,22 @@ function formatAmount(v: number): string {
   return v.toFixed(2);
 }
 
+function formatSignedPct(v: number): string {
+  return `${v > 0 ? '+' : ''}${v.toFixed(2)}%`;
+}
+
+function getChangeTone(v: number): 'up' | 'down' | 'flat' {
+  if (v > 0) return 'up';
+  if (v < 0) return 'down';
+  return 'flat';
+}
+
+function getTagColor(v: number): 'red' | 'green' | 'default' {
+  if (v > 0) return 'red';
+  if (v < 0) return 'green';
+  return 'default';
+}
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
@@ -82,6 +102,8 @@ export function DashboardPage() {
   const [searchResults, setSearchResults] = useState<Array<{ code: string; name: string; market: string }>>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [sector, setSector] = useState('电力');
+  const [selectedBoardCategory, setSelectedBoardCategory] = useState<BoardCategory>('行业板块');
+  const [sectorSort, setSectorSort] = useState<'change_pct' | 'amount' | 'volume'>('change_pct');
 
   useEffect(() => {
     saveFavorites(favorites);
@@ -99,6 +121,14 @@ export function DashboardPage() {
   const sectorQuery = useQuery({
     queryKey: ['market', 'sector', sector],
     queryFn: ({ signal }) => apiRequest<Quote[]>(`/api/market/sector?name=${encodeURIComponent(sector)}`, undefined, { signal }),
+    refetchInterval: refreshInterval || false,
+    placeholderData: (prev) => prev,
+  });
+
+  // Sector rankings
+  const sectorRankQuery = useQuery({
+    queryKey: [...marketQueryKeys.all, 'sector-rankings', selectedBoardCategory],
+    queryFn: ({ signal }) => fetchSectorRankings([selectedBoardCategory], signal),
     refetchInterval: refreshInterval || false,
     placeholderData: (prev) => prev,
   });
@@ -163,10 +193,8 @@ export function DashboardPage() {
     void queryClient.invalidateQueries({ queryKey: marketQueryKeys.all });
   }, [queryClient]);
 
-  // --- Index cards ---
   const indexCards = useMemo(() => {
     const data = indexQuery.data ?? [];
-    // Default 4 cards if no data
     const defaults = [
       { code: 'sh000001', name: '上证指数', price: 0, change: 0, change_pct: 0 },
       { code: 'sz399001', name: '深证成指', price: 0, change: 0, change_pct: 0 },
@@ -177,7 +205,95 @@ export function DashboardPage() {
     return defaults.map((d) => map.get(d.code) ?? d);
   }, [indexQuery.data]);
 
-  // --- Favorite stocks table columns ---
+  const indexPulse = useMemo(() => {
+    const active = indexCards.filter((item) => item.price > 0);
+    const rows = active.length > 0 ? active : indexCards;
+    const avg = rows.length > 0 ? rows.reduce((sum, item) => sum + item.change_pct, 0) / rows.length : 0;
+    return {
+      up: rows.filter((item) => item.change_pct > 0).length,
+      down: rows.filter((item) => item.change_pct < 0).length,
+      flat: rows.filter((item) => item.change_pct === 0).length,
+      avg,
+    };
+  }, [indexCards]);
+
+  const sectorLeader = useMemo(
+    () =>
+      (sectorQuery.data ?? []).reduce<Quote | undefined>(
+        (best, item) => (!best || item.change_pct > best.change_pct ? item : best),
+        undefined,
+      ),
+    [sectorQuery.data],
+  );
+
+  const sectorLaggard = useMemo(
+    () =>
+      (sectorQuery.data ?? []).reduce<Quote | undefined>(
+        (best, item) => (!best || item.change_pct < best.change_pct ? item : best),
+        undefined,
+      ),
+    [sectorQuery.data],
+  );
+
+  const sectorRankings = useMemo(() => sectorRankQuery.data ?? [], [sectorRankQuery.data]);
+
+  const visibleSectorRankings = useMemo(() => {
+    const items = sectorRankings.filter((item) => item.category === selectedBoardCategory);
+    return [...items].sort((a, b) => {
+      if (sectorSort === 'amount') return (b.amount ?? 0) - (a.amount ?? 0);
+      if (sectorSort === 'volume') return (b.volume ?? 0) - (a.volume ?? 0);
+      return (b.change_pct ?? 0) - (a.change_pct ?? 0);
+    });
+  }, [selectedBoardCategory, sectorRankings, sectorSort]);
+
+  const selectedSectorRanking = useMemo(
+    () => visibleSectorRankings.find((item) => item.name === sector),
+    [sector, visibleSectorRankings],
+  );
+
+  const selectedCategory = selectedSectorRanking?.category ?? selectedBoardCategory;
+  const isIndexBoard = selectedCategory === '指数板块';
+
+  const sectorOptions = useMemo(() => {
+    const rows = visibleSectorRankings.length > 0
+      ? visibleSectorRankings.map((item) => item.name)
+      : BOARD_CATEGORY_FALLBACKS[selectedBoardCategory];
+    return rows.map((name) => ({ label: name, value: name }));
+  }, [selectedBoardCategory, visibleSectorRankings]);
+
+  useEffect(() => {
+    const first = visibleSectorRankings[0]?.name;
+    if (first && !visibleSectorRankings.some((item) => item.name === sector)) {
+      setSector(first);
+    }
+  }, [sector, visibleSectorRankings]);
+
+  const handleSelectBoard = useCallback((item: SectorRanking) => {
+    setSelectedBoardCategory(item.category as BoardCategory);
+    setSector(item.name);
+  }, []);
+
+  const handleSelectCategory = useCallback(
+    (category: BoardCategory) => {
+      setSelectedBoardCategory(category);
+      setSector(BOARD_CATEGORY_FALLBACKS[category][0]);
+    },
+    [],
+  );
+
+  const favoriteSnapshot = useMemo(() => {
+    const rows = favQuery.data ?? [];
+    const avg = rows.length > 0 ? rows.reduce((sum, item) => sum + item.change_pct, 0) / rows.length : 0;
+    return {
+      count: rows.length,
+      warning: rows.filter((item) => item.change_pct <= -2).length,
+      strong: rows.filter((item) => item.change_pct >= 2).length,
+      avg,
+    };
+  }, [favQuery.data]);
+
+  const latestNews = useMemo(() => (newsQuery.data ?? []).slice(0, 6), [newsQuery.data]);
+
   const favColumns = [
     {
       title: '代码',
@@ -222,7 +338,7 @@ export function DashboardPage() {
       width: 90,
       render: (v: number) => (
         <Tag color={v > 0 ? 'red' : v < 0 ? 'green' : 'default'}>
-          {v > 0 ? '+' : ''}{v.toFixed(2)}%
+          {formatSignedPct(v)}
         </Tag>
       ),
     },
@@ -243,13 +359,13 @@ export function DashboardPage() {
           size="small"
           danger
           icon={<DeleteOutlined />}
+          aria-label={`移除 ${record.name}`}
           onClick={() => removeFavorite(record.code)}
         />
       ),
     },
   ];
 
-  // --- Sector table columns ---
   const sectorColumns = [
     {
       title: '代码',
@@ -281,6 +397,19 @@ export function DashboardPage() {
       ),
     },
     {
+      title: '板块',
+      dataIndex: 'sectors',
+      key: 'sectors',
+      width: 100,
+      render: (sectors: string[] | undefined) => (
+        <Space size={[2, 2]} wrap>
+          {(sectors ?? []).slice(0, 2).map((s) => (
+            <Tag key={s} color="blue" style={{ fontSize: 10, margin: 0, padding: '0 3px' }}>{s}</Tag>
+          ))}
+        </Space>
+      ),
+    },
+    {
       title: '最新价',
       dataIndex: 'price',
       key: 'price',
@@ -294,7 +423,7 @@ export function DashboardPage() {
       width: 90,
       render: (v: number) => (
         <Tag color={v > 0 ? 'red' : v < 0 ? 'green' : 'default'}>
-          {v > 0 ? '+' : ''}{v.toFixed(2)}%
+          {formatSignedPct(v)}
         </Tag>
       ),
     },
@@ -314,39 +443,11 @@ export function DashboardPage() {
     },
   ];
 
-  // --- News table columns ---
-  const newsColumns = [
-    {
-      title: '标题',
-      dataIndex: 'title',
-      key: 'title',
-      ellipsis: true,
-      render: (title: string, record: NewsItem) => (
-        <a href={record.url} target="_blank" rel="noopener noreferrer">
-          {title}
-        </a>
-      ),
-    },
-    {
-      title: '来源',
-      dataIndex: 'source',
-      key: 'source',
-      width: 100,
-    },
-    {
-      title: '时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 170,
-    },
-  ];
-
   const isLoading = indexQuery.isLoading && !indexQuery.data;
 
   return (
-    <div style={{ padding: '16px 24px', background: '#f5f5f5', minHeight: '100vh' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div className="dashboard-page">
+      <div className="dashboard-toolbar">
         <Typography.Title level={3} style={{ margin: 0 }}>
           市场行情仪表盘
         </Typography.Title>
@@ -370,55 +471,121 @@ export function DashboardPage() {
       </div>
 
       <Spin spinning={isLoading}>
-        {/* Index Cards Row */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        {/* Top trader ticker — horizontal index strip, 4 columns no border */}
+        <div className="dashboard-ticker" aria-label="指数快览">
           {indexCards.map((idx) => {
-            const isUp = idx.change_pct > 0;
-            const isDown = idx.change_pct < 0;
+            const tone = getChangeTone(idx.change_pct);
             return (
-              <Col xs={24} sm={12} md={6} key={idx.code}>
-                <Card size="small" style={{ borderTop: `3px solid ${isUp ? '#ff4d4f' : isDown ? '#52c41a' : '#d9d9d9'}` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>{idx.name}</Typography.Text>
-                      <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.3 }}>
-                        {idx.price > 0 ? idx.price.toFixed(2) : '--'}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <Tag color={isUp ? 'red' : isDown ? 'green' : 'default'} style={{ marginRight: 0 }}>
-                        {idx.change_pct > 0 ? '+' : ''}{idx.change_pct.toFixed(2)}%
-                      </Tag>
-                      <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-                        {idx.change > 0 ? '+' : ''}{idx.change.toFixed(2)}
-                      </div>
-                    </div>
+              <div className={`dashboard-ticker-cell is-${tone}`} key={idx.code}>
+                <div>
+                  <div className="name">{idx.name}</div>
+                  <div className="price">
+                    {idx.price > 0 ? idx.price.toFixed(2) : '--'}
                   </div>
-                </Card>
-              </Col>
+                </div>
+                <div className="meta">
+                  <Tag color={idx.change_pct > 0 ? 'red' : idx.change_pct < 0 ? 'green' : 'default'}>
+                    {formatSignedPct(idx.change_pct)}
+                  </Tag>
+                  <span>{idx.change > 0 ? '+' : ''}{idx.change.toFixed(2)}</span>
+                </div>
+              </div>
             );
           })}
-        </Row>
+        </div>
 
-        {/* Middle: Sector + Favorites */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} lg={14}>
+        <div className="dashboard-monitor-grid">
+          <aside className="dashboard-monitor-left">
             <Card
+              className="dashboard-panel"
+              size="small"
+              title="板块排行"
+              extra={
+                <Space size="small">
+                  <Select
+                    value={sectorSort}
+                    onChange={(v) => setSectorSort(v)}
+                    size="small"
+                    style={{ width: 90 }}
+                    options={[
+                      { label: '涨跌幅', value: 'change_pct' },
+                      { label: '成交额', value: 'amount' },
+                      { label: '成交量', value: 'volume' },
+                    ]}
+                  />
+                  <Typography.Text type="secondary">排序</Typography.Text>
+                </Space>
+              }
+              loading={sectorRankQuery.isLoading}
+            >
+              <div className="dashboard-rank-board">
+                <div className="dashboard-category-tabs" role="tablist" aria-label="板块分类">
+                  {BOARD_CATEGORIES.map((category) => (
+                    <button
+                      aria-selected={selectedBoardCategory === category}
+                      className={selectedBoardCategory === category ? 'is-active' : ''}
+                      key={category}
+                      onClick={() => handleSelectCategory(category)}
+                      role="tab"
+                      type="button"
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+                <div className="dashboard-rank-head">
+                  <span>排名</span>
+                  <span>板块</span>
+                  <span>涨跌幅</span>
+                  <span>成交额</span>
+                </div>
+                {visibleSectorRankings.slice(0, 10).map((item: SectorRanking, index) => (
+                  <button
+                    className={`dashboard-rank-row ${item.name === sector ? 'is-active' : ''}`}
+                    key={`${item.category}-${item.name}`}
+                    type="button"
+                    onClick={() => handleSelectBoard(item)}
+                  >
+                    <span>{index + 1}</span>
+                    <strong>
+                      <b>{item.name}</b>
+                      <small>
+                        {item.up_count}/{item.down_count} · {item.leader?.name ?? '暂无领涨'}
+                      </small>
+                    </strong>
+                    <em className={`is-${getChangeTone(item.change_pct)}`}>{formatSignedPct(item.change_pct)}</em>
+                    <em className="dashboard-rank-amount">{formatAmount(item.amount)}</em>
+                  </button>
+                ))}
+                {visibleSectorRankings.length === 0 && <Typography.Text type="secondary">暂无{selectedBoardCategory}</Typography.Text>}
+              </div>
+            </Card>
+          </aside>
+
+          <section className="dashboard-monitor-main">
+            <Card
+              className="dashboard-panel dashboard-workspace-panel"
               size="small"
               title={
-                <Space>
-                  <span>板块行情</span>
+                <Space size="small">
+                  <span>{isIndexBoard ? '指数行情' : '板块成份股'}</span>
                   <Select
                     value={sector}
                     onChange={setSector}
                     size="small"
-                    style={{ width: 100 }}
-                    options={[
-                      { label: '电力', value: '电力' },
-                      { label: '煤炭', value: '煤炭' },
-                      { label: '银行', value: '银行' },
-                    ]}
+                    style={{ width: 142 }}
+                    options={sectorOptions}
                   />
+                </Space>
+              }
+              extra={
+                <Space size="small">
+                  {selectedSectorRanking && (
+                    <Tag color={getTagColor(selectedSectorRanking.change_pct)}>
+                      {formatSignedPct(selectedSectorRanking.change_pct)}
+                    </Tag>
+                  )}
+                  <Typography.Text type="secondary">{(sectorQuery.data ?? []).length}只</Typography.Text>
                 </Space>
               }
             >
@@ -428,43 +595,40 @@ export function DashboardPage() {
                 rowKey="code"
                 size="small"
                 pagination={false}
-                scroll={{ y: 320 }}
+                scroll={{ x: 650, y: 440 }}
                 loading={sectorQuery.isLoading}
               />
             </Card>
-          </Col>
+          </section>
 
-          <Col xs={24} lg={10}>
+          <aside className="dashboard-monitor-right">
             <Card
+              className="dashboard-panel"
               size="small"
-              title="自选股"
+              title="自选监控"
               extra={
-                <Space size="small">
-                  <Input.Search
-                    placeholder="搜索股票代码/名称"
-                    size="small"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    onSearch={handleSearch}
-                    loading={searchLoading}
-                    style={{ width: 200 }}
-                  />
-                </Space>
+                <Input.Search
+                  placeholder="代码/名称"
+                  size="small"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onSearch={handleSearch}
+                  loading={searchLoading}
+                  style={{ width: 156 }}
+                />
               }
             >
-              {/* Search results dropdown */}
               {searchResults.length > 0 && (
-                <div style={{ marginBottom: 8, padding: 8, background: '#fafafa', borderRadius: 4, border: '1px solid #f0f0f0' }}>
+                <div className="dashboard-search-results">
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>搜索结果：</Typography.Text>
-                  <Space wrap size={[4, 4]} style={{ marginTop: 4 }}>
+                  <Space wrap size={[4, 4]}>
                     {searchResults.map((r) => (
                       <Tag
                         key={r.code}
                         color={favorites.includes(r.code) ? 'default' : 'blue'}
-                        onClick={() => navigate({ to: '/data-system/stocks/$symbol', params: { symbol: r.code } })}
-                        style={{ cursor: 'pointer' }}
+                        onClick={() => addFavorite(r.code)}
                       >
-                        {r.name} ({r.code})
+                        + {r.name} {r.code}
                       </Tag>
                     ))}
                   </Space>
@@ -477,71 +641,60 @@ export function DashboardPage() {
                 rowKey="code"
                 size="small"
                 pagination={false}
-                scroll={{ y: 320 }}
+                scroll={{ x: 520, y: 132 }}
                 loading={favQuery.isLoading}
                 locale={{ emptyText: '暂无自选股，请搜索添加' }}
               />
             </Card>
-          </Col>
-        </Row>
 
-        {/* News */}
-        <Card size="small" title="财经要闻" style={{ marginBottom: 16 }}>
-          <Table
-            dataSource={newsQuery.data ?? []}
-            columns={newsColumns}
-            rowKey="url"
-            size="small"
-            pagination={{ pageSize: 10, size: 'small' }}
-            loading={newsQuery.isLoading}
-          />
-        </Card>
+            <Card className="dashboard-panel" size="small" title="预警与操作">
+              <div className="dashboard-alert-list">
+                <div className="dashboard-alert-row">
+                  <strong>指数涨跌</strong>
+                  <span className={`is-${getChangeTone(indexPulse.avg)}`}>{indexPulse.up}/{indexPulse.down} · 均值 {formatSignedPct(indexPulse.avg)}</span>
+                </div>
+                <div className="dashboard-alert-row">
+                  <strong>自选预警</strong>
+                  <span className={`is-${getChangeTone(favoriteSnapshot.avg)}`}>{favoriteSnapshot.warning}只 · 均值 {formatSignedPct(favoriteSnapshot.avg)}</span>
+                </div>
+                <div className="dashboard-alert-row">
+                  <strong>{isIndexBoard ? '指数领涨' : '板块内领涨'}</strong>
+                  <span className={sectorLeader ? `is-${getChangeTone(sectorLeader.change_pct)}` : ''}>
+                    {sectorLeader ? `${sectorLeader.name} ${formatSignedPct(sectorLeader.change_pct)}` : '等待数据'}
+                  </span>
+                </div>
+                <div className="dashboard-alert-row">
+                  <strong>{isIndexBoard ? '指数领跌' : '板块内领跌'}</strong>
+                  <span className={sectorLaggard ? `is-${getChangeTone(sectorLaggard.change_pct)}` : ''}>
+                    {sectorLaggard ? `${sectorLaggard.name} ${formatSignedPct(sectorLaggard.change_pct)}` : '等待数据'}
+                  </span>
+                </div>
+              </div>
+            </Card>
 
-        {/* Data Admin Quick Access */}
-        <Card size="small" title="数据后台" style={{ marginBottom: 16 }}>
-          <Row gutter={[12, 12]}>
-            <Col>
-              <Button
-                icon={<ApiOutlined />}
-                onClick={() => navigate({ to: '/data-system/data-sources' })}
-              >
-                数据源
-              </Button>
-            </Col>
-            <Col>
-              <Button
-                icon={<SyncOutlined />}
-                onClick={() => navigate({ to: '/data-system/pipeline' })}
-              >
-                数据链路
-              </Button>
-            </Col>
-            <Col>
-              <Button
-                icon={<CloudSyncOutlined />}
-                onClick={() => navigate({ to: '/data-system/sync-tasks' })}
-              >
-                同步调度
-              </Button>
-            </Col>
-            <Col>
-              <Button
-                icon={<DatabaseOutlined />}
-                onClick={() => navigate({ to: '/data-system/database' })}
-              >
-                数据库管理
-              </Button>
-            </Col>
-            <Col>
-              <Button
-                icon={<WarningOutlined />}
-                onClick={() => navigate({ to: '/data-system/alerts' })}
-              >
-                异常中心
-              </Button>
-            </Col>
-          </Row>
-        </Card>
+            <Card className="dashboard-panel dashboard-admin-panel" size="small" title="快捷入口">
+              <div className="dashboard-admin-actions">
+                <Button size="small" icon={<ApiOutlined />} onClick={() => navigate({ to: '/data-system/data-sources' })}>数据源</Button>
+                <Button size="small" icon={<SyncOutlined />} onClick={() => navigate({ to: '/data-system/pipeline' })}>数据链路</Button>
+                <Button size="small" icon={<CloudSyncOutlined />} onClick={() => navigate({ to: '/data-system/sync-tasks' })}>同步调度</Button>
+                <Button size="small" icon={<DatabaseOutlined />} onClick={() => navigate({ to: '/data-system/database' })}>数据库管理</Button>
+                <Button size="small" icon={<WarningOutlined />} onClick={() => navigate({ to: '/data-system/alerts' })}>异常中心</Button>
+              </div>
+            </Card>
+
+            <Card className="dashboard-panel dashboard-news-panel" size="small" title="新闻快扫" loading={newsQuery.isLoading}>
+              <div className="dashboard-news-list dashboard-news-list-compact">
+                {latestNews.slice(0, 4).map((item) => (
+                  <a className="dashboard-news-item" href={item.url} target="_blank" rel="noopener noreferrer" key={item.url}>
+                    <span>{item.title}</span>
+                    <em>{item.source}</em>
+                  </a>
+                ))}
+                {latestNews.length === 0 && <Typography.Text type="secondary">暂无新闻</Typography.Text>}
+              </div>
+            </Card>
+          </aside>
+        </div>
       </Spin>
     </div>
   );
