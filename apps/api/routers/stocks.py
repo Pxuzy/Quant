@@ -26,8 +26,11 @@ router = APIRouter(prefix="/api/stocks", tags=["stocks"])
 @router.get("", response_model=PaginatedStocks)
 def list_stocks(
     keyword: str | None = Query(default=None),
+    exchange: str | None = Query(default=None),
+    industry: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     market: str | None = Query(default=None),
+    daily_coverage: str | None = Query(default=None),
     common_only: bool = Query(default=True),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
@@ -35,8 +38,11 @@ def list_stocks(
 ) -> dict:
     return StockQueryService(db).list_stocks(
         keyword=keyword,
+        exchange=exchange,
+        industry=industry,
         status=status_filter,
         market=market,
+        daily_coverage=daily_coverage,
         common_only=common_only,
         page=page,
         page_size=page_size,

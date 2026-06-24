@@ -22,6 +22,21 @@ const statusOptions = [
   { label: '退市', value: 'DELISTED' },
 ];
 
+const exchangeOptions = [
+  { label: '全部交易所', value: '' },
+  { label: '上交所', value: 'SSE' },
+  { label: '深交所', value: 'SZSE' },
+  { label: '北交所', value: 'BSE' },
+];
+
+const dailyCoverageOptions = [
+  { label: '全部数据日', value: '' },
+  { label: '已有日线', value: 'has_data' },
+  { label: '需补日线', value: 'needs_repair' },
+  { label: '暂无日线', value: 'missing' },
+  { label: '完整日线', value: 'complete' },
+];
+
 export function StockFilters({
   value,
   syncing,
@@ -61,8 +76,10 @@ export function StockFilters({
         onChange({
           keyword: values.keyword?.trim(),
           industry: values.industry?.trim(),
+          exchange: values.exchange,
           market: values.market,
           status: values.status,
+          dailyCoverage: values.dailyCoverage,
           syncSource: values.syncSource,
         });
       }}
@@ -72,7 +89,11 @@ export function StockFilters({
       </Form.Item>
 
       <Form.Item name="industry" className="filter-industry">
-        <Input allowClear placeholder="行业" />
+        <Input allowClear placeholder="行业 / 板块" />
+      </Form.Item>
+
+      <Form.Item name="exchange">
+        <Select className="filter-select" options={exchangeOptions} />
       </Form.Item>
 
       <Form.Item name="market">
@@ -81,6 +102,10 @@ export function StockFilters({
 
       <Form.Item name="status">
         <Select className="filter-select" options={statusOptions} />
+      </Form.Item>
+
+      <Form.Item name="dailyCoverage">
+        <Select className="filter-select-wide" options={dailyCoverageOptions} />
       </Form.Item>
 
       <Form.Item name="syncSource">

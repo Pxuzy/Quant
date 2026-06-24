@@ -28,6 +28,7 @@ export interface Quote {
   ask1_price: number;
   ask1_vol: number;
   prev_close: number;
+  sectors?: string[];
 }
 
 export interface KLine {
@@ -47,6 +48,22 @@ export interface NewsItem {
   created_at: string;
   category?: string;
 }
+
+export interface SectorRanking {
+  name: string;
+  category: '行业板块' | '概念板块' | '指数板块';
+  change_pct: number;
+  up_count: number;
+  down_count: number;
+  stock_count: number;
+  amount: number;
+  volume: number;
+  leader?: Quote | null;
+  fund_flow?: string | null;
+  turnover_rate?: number | null;
+}
+
+export type SortField = 'change_pct' | 'amount' | 'volume' | 'up_count' | 'down_count';
 
 export function fetchQuotes(codes: string[], signal?: AbortSignal): Promise<Quote[]> {
   return apiRequest<Quote[]>(`/api/market/quote?codes=${codes.join(',')}`, undefined, { signal });
@@ -75,4 +92,9 @@ export function fetchNews(keyword: string = 'A股', limit: number = 10, signal?:
 
 export function searchStocks(keyword: string, signal?: AbortSignal): Promise<Array<{code: string; name: string; market: string}>> {
   return apiRequest(`/api/market/search?keyword=${encodeURIComponent(keyword)}`, undefined, { signal });
+}
+
+export function fetchSectorRankings(categories: SectorRanking['category'][], signal?: AbortSignal): Promise<SectorRanking[]> {
+  const params = new URLSearchParams({ categories: categories.join(',') });
+  return apiRequest<SectorRanking[]>(`/api/market/sectors?${params.toString()}`, undefined, { signal });
 }

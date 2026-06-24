@@ -28,11 +28,21 @@ export function StocksWorkbenchPage() {
     () => ({
       keyword: search.keyword ?? '',
       industry: search.industry ?? '',
+      exchange: search.exchange ?? '',
       market: normalizeV1Market(search.market),
       status: search.status ?? '',
+      dailyCoverage: search.dailyCoverage ?? '',
       syncSource: search.syncSource ?? 'auto',
     }),
-    [search.industry, search.keyword, search.market, search.status, search.syncSource],
+    [
+      search.dailyCoverage,
+      search.exchange,
+      search.industry,
+      search.keyword,
+      search.market,
+      search.status,
+      search.syncSource,
+    ],
   );
 
   const pagination = useMemo(
@@ -43,22 +53,27 @@ export function StocksWorkbenchPage() {
     [search.page, search.pageSize],
   );
 
-  const keyword = useMemo(() => {
-    return [filters.keyword, filters.industry]
-      .map((item) => item?.trim())
-      .filter(Boolean)
-      .join(' ');
-  }, [filters.industry, filters.keyword]);
-
   const params = useMemo<StockListParams>(
     () => ({
-      keyword,
+      keyword: filters.keyword?.trim(),
+      industry: filters.industry?.trim(),
+      exchange: filters.exchange,
       market: filters.market,
       status: filters.status,
+      dailyCoverage: filters.dailyCoverage,
       page: pagination.page,
       pageSize: pagination.pageSize,
     }),
-    [filters.market, filters.status, keyword, pagination.page, pagination.pageSize],
+    [
+      filters.dailyCoverage,
+      filters.exchange,
+      filters.industry,
+      filters.keyword,
+      filters.market,
+      filters.status,
+      pagination.page,
+      pagination.pageSize,
+    ],
   );
 
   const stocksQuery = useStocksQuery(params);
@@ -80,16 +95,24 @@ export function StocksWorkbenchPage() {
   }, [dataSourcesQuery.data]);
 
   const activeFilters = useMemo(() => {
-    return [filters.keyword, filters.industry, filters.market, filters.status].filter(Boolean).length;
-  }, [filters.industry, filters.keyword, filters.market, filters.status]);
+    return [
+      filters.keyword,
+      filters.industry,
+      filters.exchange,
+      filters.status,
+      filters.dailyCoverage,
+    ].filter(Boolean).length;
+  }, [filters.dailyCoverage, filters.exchange, filters.industry, filters.keyword, filters.status]);
 
   const handleFilterChange = (next: StockFilterValues) => {
     void navigate({
       search: {
         keyword: next.keyword || undefined,
         industry: next.industry || undefined,
+        exchange: next.exchange || undefined,
         market: next.market || undefined,
         status: next.status || undefined,
+        dailyCoverage: next.dailyCoverage || undefined,
         syncSource: next.syncSource || undefined,
         page: 1,
         pageSize: pagination.pageSize,
@@ -198,8 +221,10 @@ export function StocksWorkbenchPage() {
                     search: {
                       keyword: filters.keyword || undefined,
                       industry: filters.industry || undefined,
+                      exchange: filters.exchange || undefined,
                       market: filters.market || undefined,
                       status: filters.status || undefined,
+                      dailyCoverage: filters.dailyCoverage || undefined,
                       syncSource: filters.syncSource || undefined,
                       page,
                       pageSize,

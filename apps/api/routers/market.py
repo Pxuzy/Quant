@@ -8,12 +8,15 @@ apply_starlette_router_compat()
 
 from fastapi import APIRouter, Query
 
-from quant.services.market_service import (
+from apps.api.services.market_service import (
     get_history_kline,
     get_index_quotes,
     get_news,
     get_realtime_quotes,
+    get_sector_rankings,
     get_sector_stocks,
+    get_sector_constituents,
+    get_stock_sectors,
     search_stock,
 )
 
@@ -62,3 +65,27 @@ def get_sector(
     name: str = Query("电力", description="板块名称"),
 ):
     return get_sector_stocks(name)
+
+
+@router.get("/sectors")
+def get_sectors(
+    categories: str | None = Query(None, description="逗号分隔板块分类，如 行业板块,概念板块,指数板块"),
+):
+    category_list = [item.strip() for item in categories.split(",") if item.strip()] if categories else None
+    return get_sector_rankings(category_list)
+
+
+@router.get("/sector-constituents")
+def get_sector_constituents_api(
+    name: str = Query(..., description="板块名称，如 银行、人工智能"),
+):
+    """获取板块成分股实时行情"""
+    return get_sector_constituents(name)
+
+
+@router.get("/stock-sectors")
+def get_stock_sectors_api(
+    code: str = Query(..., description="股票代码，如 sh600900"),
+):
+    """获取股票所属板块列表"""
+    return {"code": code, "sectors": get_stock_sectors(code)}

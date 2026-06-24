@@ -73,7 +73,6 @@ export function AppLayout() {
           <Space className="header-left" size={12}>
             <Space className="header-crumb" size={10}>
               <Typography.Text strong>{current.label}</Typography.Text>
-              <Typography.Text type="secondary">A_SHARE</Typography.Text>
             </Space>
           </Space>
           <Space className="header-right" size={10}>

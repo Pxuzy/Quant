@@ -105,14 +105,19 @@ export type StockDailyIngestBatchesResult = {
 
 export type StockListParams = {
   keyword?: string;
+  exchange?: string;
+  industry?: string;
   market?: string;
   status?: string;
+  dailyCoverage?: string;
   page: number;
   pageSize: number;
 };
 
-export type StockFilterValues = Pick<StockListParams, 'keyword' | 'market' | 'status'> & {
-  industry?: string;
+export type StockFilterValues = Pick<
+  StockListParams,
+  'keyword' | 'exchange' | 'industry' | 'market' | 'status' | 'dailyCoverage'
+> & {
   syncSource?: string;
 };
 

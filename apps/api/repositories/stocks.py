@@ -18,8 +18,10 @@ class StockRepository:
         keyword: str | None,
         status: str | None,
         market: str | None,
-        page: int,
-        page_size: int,
+        page: int | None,
+        page_size: int | None,
+        exchange: str | None = None,
+        industry: str | None = None,
         common_only: bool = False,
     ) -> tuple[list[Stock], int]:
         conditions = []
@@ -32,6 +34,10 @@ class StockRepository:
                     Stock.industry.ilike(pattern),
                 )
             )
+        if exchange:
+            conditions.append(Stock.exchange == exchange.strip().upper())
+        if industry:
+            conditions.append(Stock.industry.ilike(f"%{industry.strip()}%"))
         if status:
             conditions.append(Stock.status == status)
         if market:
@@ -46,7 +52,9 @@ class StockRepository:
             records_stmt = records_stmt.where(*conditions)
 
         total = self.db.scalar(total_stmt) or 0
-        records = self.db.scalars(records_stmt.offset((page - 1) * page_size).limit(page_size)).all()
+        if page is not None and page_size is not None:
+            records_stmt = records_stmt.offset((page - 1) * page_size).limit(page_size)
+        records = self.db.scalars(records_stmt).all()
         return list(records), total
 
     def count(self, *, market: str | None = None, common_only: bool = False) -> int:

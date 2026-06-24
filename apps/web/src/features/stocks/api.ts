@@ -30,8 +30,11 @@ export function fetchStocks(
     '/api/stocks',
     {
       keyword: params.keyword,
+      exchange: params.exchange,
+      industry: params.industry,
       market: params.market,
       status: params.status,
+      daily_coverage: params.dailyCoverage,
       page: params.page,
       page_size: params.pageSize,
     },

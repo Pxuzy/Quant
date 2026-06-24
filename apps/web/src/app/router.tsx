@@ -78,9 +78,11 @@ const StockPage = lazy(() =>
 
 export type StocksSearch = {
   keyword?: string;
+  exchange?: string;
   industry?: string;
   market?: string;
   status?: string;
+  dailyCoverage?: string;
   syncSource?: string;
   page?: number;
   pageSize?: number;
@@ -245,9 +247,11 @@ const stocksRoute = createRoute({
   path: '/data-system/stocks',
   validateSearch: (search): StocksSearch => ({
     keyword: stringSearch(search.keyword),
+    exchange: stringSearch(search.exchange),
     industry: stringSearch(search.industry),
     market: stringSearch(search.market),
     status: stringSearch(search.status),
+    dailyCoverage: stringSearch(search.dailyCoverage),
     syncSource: stringSearch(search.syncSource),
     page: numberSearch(search.page),
     pageSize: numberSearch(search.pageSize),

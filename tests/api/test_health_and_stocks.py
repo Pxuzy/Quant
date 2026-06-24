@@ -221,6 +221,91 @@ def test_stock_list_includes_latest_data_date_and_completeness(client, tmp_path,
     assert items_by_symbol["000001"]["data_completeness"] is None
 
 
+def test_stock_list_filters_by_exchange_industry_and_daily_coverage(client, tmp_path, monkeypatch):
+    lake_root = tmp_path / "lake"
+    monkeypatch.setenv("DATA_LAKE_DIR", str(lake_root))
+    get_settings.cache_clear()
+
+    from apps.api.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        db.add_all(
+            [
+                Stock(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="贵州茅台",
+                    status="LISTED",
+                    industry="白酒",
+                    listing_date=date(2001, 8, 27),
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="000001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="平安银行",
+                    status="LISTED",
+                    industry="银行",
+                    listing_date=date(1991, 4, 3),
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="300750",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="宁德时代",
+                    status="LISTED",
+                    industry="电池",
+                    listing_date=date(2018, 6, 11),
+                    source="fixture",
+                ),
+            ]
+        )
+        db.add_all(
+            [
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 2), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 3), is_open=True, source="fixture"),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    DailyBarRepository(lake_root=lake_root).write_many(
+        [
+            make_daily_bar(symbol="600519", exchange="SSE", trade_date=date(2026, 6, 1)),
+            make_daily_bar(symbol="600519", exchange="SSE", trade_date=date(2026, 6, 3)),
+            make_daily_bar(symbol="300750", exchange="SZSE", trade_date=date(2026, 6, 1)),
+            make_daily_bar(symbol="300750", exchange="SZSE", trade_date=date(2026, 6, 2)),
+            make_daily_bar(symbol="300750", exchange="SZSE", trade_date=date(2026, 6, 3)),
+        ]
+    )
+
+    exchange_response = client.get("/api/stocks", params={"exchange": "SSE", "page_size": 20})
+    assert exchange_response.status_code == 200
+    assert [item["symbol"] for item in exchange_response.json()["items"]] == ["600519"]
+
+    industry_response = client.get("/api/stocks", params={"industry": "银行", "page_size": 20})
+    assert industry_response.status_code == 200
+    assert [item["symbol"] for item in industry_response.json()["items"]] == ["000001"]
+
+    missing_response = client.get("/api/stocks", params={"daily_coverage": "missing", "page_size": 20})
+    assert missing_response.status_code == 200
+    assert [item["symbol"] for item in missing_response.json()["items"]] == ["000001"]
+
+    repair_response = client.get("/api/stocks", params={"daily_coverage": "needs_repair", "page_size": 20})
+    assert repair_response.status_code == 200
+    assert [item["symbol"] for item in repair_response.json()["items"]] == ["600519"]
+
+    complete_response = client.get("/api/stocks", params={"daily_coverage": "complete", "page_size": 20})
+    assert complete_response.status_code == 200
+    assert [item["symbol"] for item in complete_response.json()["items"]] == ["300750"]
+
+
 def test_stock_daily_coverage_reports_missing_trade_dates(client, tmp_path, monkeypatch):
     lake_root = tmp_path / "lake"
     monkeypatch.setenv("DATA_LAKE_DIR", str(lake_root))

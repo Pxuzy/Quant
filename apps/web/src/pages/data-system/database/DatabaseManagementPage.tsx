@@ -357,10 +357,10 @@ function getMetadataStoreLabel(kind?: string) {
     return '-';
   }
   if (kind === 'SQLite') {
-    return 'SQLite 本地备用';
+    return '本地元数据';
   }
   if (kind === 'PostgreSQL') {
-    return 'PostgreSQL 元数据库';
+    return '生产元数据';
   }
   return `${kind} 元数据库`;
 }
@@ -1780,9 +1780,9 @@ export function DatabaseManagementPage() {
     <div className="workbench database-page" ref={pageRef}>
       <div className="workbench-heading database-heading">
         <Space direction="vertical" size={4}>
-          <Typography.Title level={3}>数据库管理</Typography.Title>
+          <Typography.Title level={3}>存储引擎管理</Typography.Title>
           <Typography.Text type="secondary">
-            查看股票池、日线行情、交易日历、同步批次和数据质量的存储状态与整合状态
+            看行情热库、Parquet 数据湖、DuckDB 查询和元数据目录的分工与状态
           </Typography.Text>
         </Space>
         <Space wrap className="database-heading-actions">
@@ -1830,7 +1830,7 @@ export function DatabaseManagementPage() {
         <Col xs={24} sm={12} lg={6}>
           <Card className="motion-summary-card">
             <Statistic
-              title="当前元数据库"
+              title="元数据目录"
               value={getMetadataStoreLabel(databaseStatus?.database_kind)}
               prefix={<DatabaseOutlined />}
               loading={databaseStatusQuery.isLoading}
@@ -1843,7 +1843,7 @@ export function DatabaseManagementPage() {
         <Col xs={24} sm={12} lg={6}>
           <Card className="motion-summary-card">
             <Statistic
-              title="行情数据湖"
+              title="Parquet 冷湖"
               value={formatBytes(databaseStatus?.data_lake_size_bytes)}
               prefix={<FileSearchOutlined />}
               loading={databaseStatusQuery.isLoading}
@@ -1886,7 +1886,7 @@ export function DatabaseManagementPage() {
 
       <div className="database-section-nav">
         <a href="#database-coverage-section">覆盖</a>
-        <a href="#database-storage-section">存储</a>
+        <a href="#database-storage-section">引擎</a>
         <a href="#database-providers-section">数据源</a>
         <a href="#database-freshness-section">新鲜度</a>
         <a href="#database-lineage-section">批次追溯</a>
@@ -1896,9 +1896,9 @@ export function DatabaseManagementPage() {
 
       <Row id="database-storage-section" gutter={[16, 16]} className="database-storage-row">
         <Col xs={24} xl={12}>
-          <Card className="database-panel database-storage-card" title="存储位置">
+          <Card className="database-panel database-storage-card" title="存储引擎分工">
             {databaseStatusQuery.isError ? (
-              <Alert type="error" showIcon message="数据库状态加载失败" />
+              <Alert type="error" showIcon message="存储状态加载失败" />
             ) : databaseStatusQuery.isLoading ? (
               <Skeleton active paragraph={{ rows: 3 }} />
             ) : (
@@ -1910,17 +1910,20 @@ export function DatabaseManagementPage() {
                 />
                 <div className="database-storage-map">
                   <div>
-                    <Typography.Text strong>元数据库</Typography.Text>
-                    <Typography.Text type="secondary">股票池、数据源、同步任务、批次、目录和质量报告</Typography.Text>
-                    <Typography.Text code>{databaseStatus?.database_url}</Typography.Text>
+                    <Typography.Text strong>行情热库</Typography.Text>
+                    <Typography.Text type="secondary">目标使用 ClickHouse 承接日线、分钟线、因子和高并发筛选查询</Typography.Text>
+                    <Space size={[6, 6]} wrap>
+                      <Typography.Text code>ClickHouse</Typography.Text>
+                      <Tag color="orange">待接入</Tag>
+                    </Space>
                   </div>
                   <div>
-                    <Typography.Text strong>行情数据湖</Typography.Text>
-                    <Typography.Text type="secondary">日线等大规模行情数据，以 Parquet 文件保存</Typography.Text>
+                    <Typography.Text strong>行情冷湖</Typography.Text>
+                    <Typography.Text type="secondary">当前日线等大规模行情数据，以 Parquet 文件保存</Typography.Text>
                     <Typography.Text code>{databaseStatus?.data_lake_path}</Typography.Text>
                   </div>
                   <div>
-                    <Typography.Text strong>查询引擎</Typography.Text>
+                    <Typography.Text strong>本地查询引擎</Typography.Text>
                     <Typography.Text type="secondary">DuckDB 负责扫描和聚合 Parquet，不作为主存储库</Typography.Text>
                     <Space size={[6, 6]} wrap>
                       <Typography.Text code>DuckDB / Parquet Reader</Typography.Text>
@@ -1930,22 +1933,27 @@ export function DatabaseManagementPage() {
                     </Space>
                     <Typography.Text type="secondary">{databaseStatus?.duckdb_engine_note}</Typography.Text>
                   </div>
+                  <div>
+                    <Typography.Text strong>元数据目录</Typography.Text>
+                    <Typography.Text type="secondary">股票池、数据源、同步任务、批次、目录和质量报告</Typography.Text>
+                    <Typography.Text code>{databaseStatus?.database_url}</Typography.Text>
+                  </div>
                 </div>
               </Space>
             )}
           </Card>
         </Col>
         <Col xs={24} xl={12}>
-          <Card className="database-panel database-storage-card" title="数据内容概览">
+          <Card className="database-panel database-storage-card" title="当前落地状态">
             <div className="database-storage-summary-grid">
               <div>
                 <Typography.Text type="secondary">数据集</Typography.Text>
                 <Typography.Title level={4}>{formatNumber(datasetsTotal)} 个</Typography.Title>
               </div>
               <div>
-                <Typography.Text type="secondary">元数据表</Typography.Text>
-                <Typography.Title level={4}>{formatNumber(storageSummary.postgres ?? 0)} 个</Typography.Title>
-                <Tag>PostgreSQL 元数据 / SQLite 本地备用</Tag>
+                <Typography.Text type="secondary">行情热库</Typography.Text>
+                <Typography.Title level={4}>ClickHouse</Typography.Title>
+                <Tag color="orange">下一阶段接入</Tag>
               </div>
               <div>
                 <Typography.Text type="secondary">行情文件集</Typography.Text>
@@ -1958,7 +1966,9 @@ export function DatabaseManagementPage() {
                 <Tag color="green">查询引擎，不是主库</Tag>
               </div>
             </div>
-            <Typography.Text type="secondary">全量目录记录 {formatNumber(rowsTotal)} 行；正式业务通过 API 读取，不直接暴露文件路径。</Typography.Text>
+            <Typography.Text type="secondary">
+              全量目录记录 {formatNumber(rowsTotal)} 行；行情主路径是热库/数据湖，SQLite 只保留本地元数据兜底。
+            </Typography.Text>
           </Card>
         </Col>
       </Row>

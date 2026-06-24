@@ -26,10 +26,41 @@ class StockQueryService:
         market: str | None,
         page: int,
         page_size: int,
+        exchange: str | None = None,
+        industry: str | None = None,
+        daily_coverage: str | None = None,
         common_only: bool = True,
     ) -> dict:
+        if daily_coverage:
+            items, _total = self.stock_repo.list_stocks(
+                keyword=keyword,
+                exchange=exchange,
+                industry=industry,
+                status=status,
+                market=market,
+                page=None,
+                page_size=None,
+                common_only=common_only,
+            )
+            enriched_items = [
+                item
+                for item in self._enrich_with_daily_bar_coverage(items)
+                if _matches_daily_coverage(item, daily_coverage)
+            ]
+            total = len(enriched_items)
+            start = (page - 1) * page_size
+            return {
+                "items": enriched_items[start : start + page_size],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": ceil(total / page_size) if total else 0,
+            }
+
         items, total = self.stock_repo.list_stocks(
             keyword=keyword,
+            exchange=exchange,
+            industry=industry,
             status=status,
             market=market,
             page=page,
@@ -263,6 +294,20 @@ class StockQueryService:
 def _single_market(stocks: list[Stock]) -> str | None:
     markets = {stock.market for stock in stocks}
     return next(iter(markets)) if len(markets) == 1 else None
+
+
+def _matches_daily_coverage(item: dict, daily_coverage: str) -> bool:
+    latest_data_date = item.get("latest_data_date")
+    data_completeness = item.get("data_completeness")
+    if daily_coverage == "has_data":
+        return latest_data_date is not None
+    if daily_coverage == "missing":
+        return latest_data_date is None
+    if daily_coverage == "needs_repair":
+        return latest_data_date is not None and data_completeness is not None and data_completeness < 1
+    if daily_coverage == "complete":
+        return data_completeness is not None and data_completeness >= 1
+    return True
 
 
 def _coverage_ratio(*, actual_count: int, expected_dates: set[date], start_date: date, end_date: date) -> float | None:
