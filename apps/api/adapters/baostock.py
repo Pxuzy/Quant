@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from importlib import import_module
 from time import sleep
@@ -179,6 +180,13 @@ def _to_float(value: Any, *, default: float | None = None) -> float | None:
     return float(text)
 
 
+def _clean_industry(value: Any) -> str | None:
+    text = _clean_text(value)
+    if text is None:
+        return None
+    return re.sub(r"^[A-Z]\d+", "", text).strip() or None
+
+
 # =============================================================================
 # 主类：BaoStock 适配器
 # =============================================================================
@@ -262,6 +270,26 @@ class BaoStockAdapter(StockDataSourceAdapter):
             healthy=True, status="healthy", message="BaoStock package is available."
         )
 
+    def _fetch_stock_industry_map(self, client: Any) -> dict[str, str]:
+        if not hasattr(client, "query_stock_industry"):
+            return {}
+        result_set = client.query_stock_industry()
+        if getattr(result_set, "error_code", "0") != "0":
+            logger.warning(
+                "BaoStock query_stock_industry failed: %s",
+                getattr(result_set, "error_msg", ""),
+            )
+            return {}
+
+        rows = _result_set_to_records(result_set)
+        industry_by_code: dict[str, str] = {}
+        for row in rows:
+            raw_code = _clean_text(row.get("code"))
+            industry = _clean_industry(row.get("industry"))
+            if raw_code and industry:
+                industry_by_code[raw_code] = industry
+        return industry_by_code
+
     # ===== 获取股票列表 =====
 
     def fetch_stock_list(self, *, market: str) -> list[dict[str, Any]]:
@@ -307,7 +335,14 @@ class BaoStockAdapter(StockDataSourceAdapter):
                             "BaoStock query_stock_basic failed.",
                         )
                     )
-                return _result_set_to_records(result_set)
+                records = _result_set_to_records(result_set)
+                industry_by_code = self._fetch_stock_industry_map(client)
+                if industry_by_code:
+                    for record in records:
+                        raw_code = _clean_text(record.get("code"))
+                        if raw_code and not _clean_text(record.get("industry")):
+                            record["industry"] = industry_by_code.get(raw_code)
+                return records
             except Exception as exc:
                 errors.append(str(exc))
                 if attempt < 2:
@@ -373,7 +408,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
                     name=name,
                     status=status,
                     # AKShare 没有的字段，BaoStock 有：
-                    industry=_clean_text(record.get("industry")),
+                    industry=_clean_industry(record.get("industry")),
                     listing_date=_parse_baostock_date(record.get("ipoDate")),
                     delisting_date=_parse_baostock_date(
                         record.get("outDate")

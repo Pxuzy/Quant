@@ -486,7 +486,6 @@ class ADataAdapter(StockDataSourceAdapter):
             "stock_code": symbol,
             "k_type": 1,  # 1 = 日线
             "start_date": start_date.isoformat(),
-            "end_date": end_date.isoformat(),
         }
 
         try:

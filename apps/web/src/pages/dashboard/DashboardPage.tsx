@@ -44,11 +44,6 @@ const REFRESH_OPTIONS = [
 const FAVORITES_KEY = 'quant_dashboard_favorites';
 const BOARD_CATEGORIES = ['行业板块', '概念板块', '指数板块'] as const;
 type BoardCategory = (typeof BOARD_CATEGORIES)[number];
-const BOARD_CATEGORY_FALLBACKS: Record<BoardCategory, string[]> = {
-  行业板块: ['银行', '电力', '煤炭', '白酒', '半导体'],
-  概念板块: ['人工智能', '新能源车', '光伏'],
-  指数板块: ['上证指数', '深证成指', '沪深300', '创业板指'],
-};
 
 function loadFavorites(): string[] {
   try {
@@ -101,7 +96,7 @@ export function DashboardPage() {
   const [searchInput, setSearchInput] = useState('');
   const [searchResults, setSearchResults] = useState<Array<{ code: string; name: string; market: string }>>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [sector, setSector] = useState('电力');
+  const [sector, setSector] = useState('');
   const [selectedBoardCategory, setSelectedBoardCategory] = useState<BoardCategory>('行业板块');
   const [sectorSort, setSectorSort] = useState<'change_pct' | 'amount' | 'volume'>('change_pct');
 
@@ -119,8 +114,8 @@ export function DashboardPage() {
 
   // Sector stocks
   const sectorQuery = useQuery({
-    queryKey: ['market', 'sector', sector],
-    queryFn: ({ signal }) => apiRequest<Quote[]>(`/api/market/sector?name=${encodeURIComponent(sector)}`, undefined, { signal }),
+    queryKey: ['market', 'sector', selectedBoardCategory, sector],
+    queryFn: ({ signal }) => apiRequest<Quote[]>('/api/market/sector', { name: sector, category: selectedBoardCategory }, { signal }),
     refetchInterval: refreshInterval || false,
     placeholderData: (prev) => prev,
   });
@@ -255,11 +250,8 @@ export function DashboardPage() {
   const isIndexBoard = selectedCategory === '指数板块';
 
   const sectorOptions = useMemo(() => {
-    const rows = visibleSectorRankings.length > 0
-      ? visibleSectorRankings.map((item) => item.name)
-      : BOARD_CATEGORY_FALLBACKS[selectedBoardCategory];
-    return rows.map((name) => ({ label: name, value: name }));
-  }, [selectedBoardCategory, visibleSectorRankings]);
+    return visibleSectorRankings.map((item) => ({ label: item.name, value: item.name }));
+  }, [visibleSectorRankings]);
 
   useEffect(() => {
     const first = visibleSectorRankings[0]?.name;
@@ -276,7 +268,7 @@ export function DashboardPage() {
   const handleSelectCategory = useCallback(
     (category: BoardCategory) => {
       setSelectedBoardCategory(category);
-      setSector(BOARD_CATEGORY_FALLBACKS[category][0]);
+      setSector('');
     },
     [],
   );
@@ -532,6 +524,9 @@ export function DashboardPage() {
                       {category}
                     </button>
                   ))}
+                  <Typography.Text type="secondary" style={{ fontSize: 11, padding:'0 4px', alignSelf:'center' }}>
+                    {visibleSectorRankings.length}个
+                  </Typography.Text>
                 </div>
                 <div className="dashboard-rank-head">
                   <span>排名</span>
@@ -539,7 +534,7 @@ export function DashboardPage() {
                   <span>涨跌幅</span>
                   <span>成交额</span>
                 </div>
-                {visibleSectorRankings.slice(0, 10).map((item: SectorRanking, index) => (
+                {visibleSectorRankings.map((item: SectorRanking, index) => (
                   <button
                     className={`dashboard-rank-row ${item.name === sector ? 'is-active' : ''}`}
                     key={`${item.category}-${item.name}`}
@@ -550,7 +545,7 @@ export function DashboardPage() {
                     <strong>
                       <b>{item.name}</b>
                       <small>
-                        {item.up_count}/{item.down_count} · {item.leader?.name ?? '暂无领涨'}
+                        {item.stock_count}只 · {item.up_count}/{item.down_count} · {item.leader?.name ?? '暂无领涨'}
                       </small>
                     </strong>
                     <em className={`is-${getChangeTone(item.change_pct)}`}>{formatSignedPct(item.change_pct)}</em>
@@ -573,7 +568,11 @@ export function DashboardPage() {
                     value={sector}
                     onChange={setSector}
                     size="small"
-                    style={{ width: 142 }}
+                    showSearch
+                    filterOption={(input, option) =>
+                      (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
+                    style={{ width: 220 }}
                     options={sectorOptions}
                   />
                 </Space>

@@ -16,62 +16,696 @@ import urllib.parse
 import json
 import re
 import logging
+import contextlib
+import io
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from html.parser import HTMLParser
+from importlib import import_module
+from pathlib import Path
 from typing import List, Dict, Optional
+
+from apps.api.db.session import SessionLocal, get_engine
+from apps.api.repositories.stock_boards import StockBoardRepository
+from apps.api.repositories.stocks import StockRepository
 
 logger = logging.getLogger(__name__)
 
-SECTOR_GROUPS = [
-    # ── 行业板块 ──
-    {"name": "银行", "category": "行业板块", "codes": ["sh601398", "sh601288", "sh601939", "sh601328", "sh600036", "sh600016", "sh600000", "sz000001"]},
-    {"name": "电力", "category": "行业板块", "codes": ["sh600900", "sh600025", "sh601985", "sh600021", "sh600027", "sh600116", "sh600795", "sh600023", "sh600726", "sz000591", "sz000883", "sz000875"]},
-    {"name": "煤炭", "category": "行业板块", "codes": ["sh601088", "sh601225", "sh600188", "sh601898", "sh601001", "sz000552", "sz002128"]},
-    {"name": "白酒", "category": "行业板块", "codes": ["sh600519", "sz000858", "sz000568", "sh600809", "sh603369", "sz002304"]},
-    {"name": "半导体", "category": "行业板块", "codes": ["sh688981", "sh688012", "sh688008", "sz300782", "sh603986", "sz002371"]},
-    {"name": "医药生物", "category": "行业板块", "codes": ["sz000538", "sh600276", "sz300347", "sz002007", "sh600056", "sz002252", "sz300564", "sz002422"]},
-    {"name": "新能源", "category": "行业板块", "codes": ["sh601012", "sz300274", "sz002459", "sh600438", "sh688599", "sz002129"]},
-    {"name": "房地产", "category": "行业板块", "codes": ["sz000002", "sh600048", "sz002146", "sh601155", "sz000671", "sh600383"]},
-    {"name": "汽车", "category": "行业板块", "codes": ["sz002594", "sh601633", "sh600104", "sz002460", "sz002812", "sh601236"]},
-    {"name": "非银金融", "category": "行业板块", "codes": ["sh600030", "sh601688", "sh600837", "sz000776", "sh601211", "sz300059"]},
-    {"name": "食品饮料", "category": "行业板块", "codes": ["sh600519", "sz000858", "sz000568", "sh600809", "sz002304", "sz399997"]},
-    {"name": "交通运输", "category": "行业板块", "codes": ["sh601006", "sh600028", "sz002236", "sh601896", "sh600018", "sz000890"]},
-    {"name": "电子", "category": "行业板块", "codes": ["sz002049", "sh688012", "sz002371", "sz300496", "sh603986", "sz000725"]},
-    {"name": "家用电器", "category": "行业板块", "codes": ["sz000651", "sh600690", "sz002032", "sz000333", "sh603868", "sz002508"]},
-    {"name": "机械设备", "category": "行业板块", "codes": ["sz000333", "sh601012", "sz300033", "sh600588", "sz002097", "sh688017"]},
-    {"name": "基础化工", "category": "行业板块", "codes": ["sh600309", "sz002497", "sh603027", "sz002254", "sh600426", "sz300220"]},
-    {"name": "有色金属", "category": "行业板块", "codes": ["sh601899", "sh600362", "sz002460", "sh601168", "sz000878", "sh601212"]},
-    {"name": "建筑装饰", "category": "行业板块", "codes": ["sh601668", "sz002304", "sh600856", "sz002081", "sh601398", "sz300970"]},
-    # ── 概念板块 ──
+# ── THS 同花顺一级行业板块映射缓存 ──
+THS_SECTOR_MAP_PATH = Path(__file__).resolve().parents[3] / "data" / "mcp_cache" / "ths_sector_map.json"
+
+# THS 同花顺一级行业板块列表（14个）
+THS_INDUSTRY_SECTORS = [
+    "能源金属", "半导体", "元件", "电子化学品", "化学纤维",
+    "军工电子", "消费电子", "医疗服务", "光学光电子", "其他电子",
+    "小金属", "贵金属", "机场航运", "工业金属",
+]
+SECTOR_CATEGORY_ORDER = ["行业板块", "概念板块", "指数板块"]
+STATIC_BOARD_GROUPS = [
     {"name": "人工智能", "category": "概念板块", "codes": ["sz300033", "sh600570", "sz300418", "sh688256", "sz002230", "sh603019"]},
     {"name": "新能源车", "category": "概念板块", "codes": ["sz300750", "sz002594", "sh601633", "sh600104", "sz002460", "sz002812"]},
     {"name": "光伏", "category": "概念板块", "codes": ["sh601012", "sz300274", "sz002459", "sh600438", "sh688599", "sz002129"]},
     {"name": "芯片", "category": "概念板块", "codes": ["sh688981", "sh688012", "sh688008", "sz300782", "sh603986", "sz002371"]},
-    {"name": "5G", "category": "概念板块", "codes": ["sz002093", "sh600522", "sz300308", "sz002281", "sh688012", "sz300418"]},
-    {"name": "创新药", "category": "概念板块", "codes": ["sh688513", "sz300347", "sh600276", "sz002007", "sh688169", "sz300564"]},
-    {"name": "军工", "category": "概念板块", "codes": ["sh601989", "sz002414", "sh688012", "sz300520", "sh600893", "sz000768"]},
-    {"name": "白酒", "category": "概念板块", "codes": ["sh600519", "sz000858", "sz000568", "sh600809", "sh603369", "sz002304"]},
-    {"name": "碳中和", "category": "概念板块", "codes": ["sh601012", "sz300274", "sz002459", "sh600438", "sz002129", "sh601985"]},
-    {"name": "华为产业链", "category": "概念板块", "codes": ["sz002241", "sh688012", "sz300496", "sz002049", "sh603986", "sz300782"]},
-    {"name": "数字货币", "category": "概念板块", "codes": ["sz300033", "sh600570", "sz002230", "sh688256", "sz300418", "sz000712"]},
-    {"name": "医美", "category": "概念板块", "codes": ["sz000858", "sz002304", "sh600809", "sz300347", "sz002007", "sz002422"]},
-    # ── 指数板块 ──
     {"name": "上证指数", "category": "指数板块", "codes": ["sh000001"]},
     {"name": "深证成指", "category": "指数板块", "codes": ["sz399001"]},
     {"name": "沪深300", "category": "指数板块", "codes": ["sh000300"]},
     {"name": "创业板指", "category": "指数板块", "codes": ["sz399006"]},
-    {"name": "科创50", "category": "指数板块", "codes": ["sh000688"]},
-    {"name": "中证500", "category": "指数板块", "codes": ["sh000905"]},
-    {"name": "中证1000", "category": "指数板块", "codes": ["sh000852"]},
 ]
+STATIC_BOARD_CODE_MAP = {(group["category"], group["name"]): group["codes"] for group in STATIC_BOARD_GROUPS}
+STATIC_BOARD_LEGACY_CODE_MAP = {group["name"]: group["codes"] for group in STATIC_BOARD_GROUPS}
 
-SECTOR_CATEGORY_ORDER = ["行业板块", "概念板块", "指数板块"]
-SECTOR_CODE_MAP = {group["name"]: group["codes"] for group in SECTOR_GROUPS}
+# ── 实时加载 THS 板块映射 ──
+_ths_map_cache: dict | None = None
+_ths_map_mtime: float = 0
 
-# ── 股票 → 板块 映射（每只股票可属于多个板块）──
-STOCK_SECTOR_MAP: Dict[str, List[str]] = {}
-for _g in SECTOR_GROUPS:
-    for _c in _g["codes"]:
-        STOCK_SECTOR_MAP.setdefault(_c, []).append(_g["name"])
+
+class _THSMemberTableParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows: list[list[str]] = []
+        self._row: list[str] | None = None
+        self._cell: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "tr":
+            self._row = []
+        elif tag in {"td", "th"} and self._row is not None:
+            self._cell = []
+
+    def handle_data(self, data: str) -> None:
+        if self._cell is not None:
+            text = _clean_text(data)
+            if text:
+                self._cell.append(text)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"td", "th"} and self._row is not None and self._cell is not None:
+            self._row.append(" ".join(self._cell))
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            if self._row:
+                self.rows.append(self._row)
+            self._row = None
+
+
+def _load_ths_map() -> dict:
+    """从 JSON 缓存加载 THS 板块→股票映射（自动热更新）。"""
+    global _ths_map_cache, _ths_map_mtime
+    path = THS_SECTOR_MAP_PATH
+    if path.exists():
+        mtime = path.stat().st_mtime
+        if _ths_map_cache is None or mtime > _ths_map_mtime:
+            try:
+                with open(path, encoding="utf-8") as f:
+                    _ths_map_cache = json.load(f)
+                _ths_map_mtime = mtime
+                logger.info(f"THS板块映射已加载: {_ths_map_cache.get('total_sectors',0)}板块 {_ths_map_cache.get('total_stocks',0)}股票")
+            except Exception as exc:
+                logger.warning(f"THS板块映射加载失败: {exc}")
+                _ths_map_cache = {"stock_to_sectors": {}, "sector_to_stocks": {}}
+    return _ths_map_cache or {"stock_to_sectors": {}, "sector_to_stocks": {}}
+
+
+def get_stock_sectors(code: str) -> List[str]:
+    """获取股票所属的同花顺一级行业板块列表。"""
+    symbol = code.replace("sh", "").replace("sz", "").replace("bj", "")
+    exchange = _exchange_from_symbol(symbol)
+    try:
+        get_engine()
+        db = SessionLocal()
+        try:
+            repo = StockBoardRepository(db)
+            sectors = [
+                board.name
+                for board in repo.list_boards(category="行业板块")
+                for member in repo.list_members(board=board)
+                if member.symbol == symbol and member.exchange == exchange
+            ]
+            if sectors:
+                return sectors
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("数据库股票板块查询失败: %s", exc)
+    return _load_ths_map().get("stock_to_sectors", {}).get(symbol, [])
+
+
+def get_sector_stocks(sector_name: str = "能源金属", category: str | None = None) -> List[Dict]:
+    """获取板块成分股实时行情。行业板块优先使用同花顺板块表。"""
+    normalized_category = _clean_text(category)
+    if normalized_category == "行业板块":
+        _ensure_ths_industry_boards()
+        rows = _db_board_stocks(sector_name, category=normalized_category)
+        if rows:
+            return rows
+        sector_stocks = _load_ths_map().get("sector_to_stocks", {}).get(sector_name, [])
+        codes = [_stock_quote_code(symbol, _exchange_from_symbol(symbol)) for symbol in sector_stocks]
+    elif normalized_category:
+        codes = STATIC_BOARD_CODE_MAP.get((normalized_category, sector_name), [])
+    else:
+        rows = _db_board_stocks(sector_name, category=None)
+        if rows:
+            return rows
+        sector_stocks = _load_ths_map().get("sector_to_stocks", {}).get(sector_name, [])
+        if sector_stocks:
+            codes = [_stock_quote_code(symbol, _exchange_from_symbol(symbol)) for symbol in sector_stocks]
+        else:
+            codes = STATIC_BOARD_LEGACY_CODE_MAP.get(sector_name, [])
+
+    quotes = get_realtime_quotes(codes)
+    for quote in quotes:
+        quote["sectors"] = [sector_name]
+    return quotes
+
+
+def _static_sector_rankings(requested_categories: list[str]) -> list[dict]:
+    """板块排行后备。行业板块只返回同花顺短行业名。"""
+    groups = []
+    for category in requested_categories:
+        if category == "行业板块":
+            sector_stocks_map = _load_ths_map().get("sector_to_stocks", {})
+            for name in THS_INDUSTRY_SECTORS:
+                codes = sector_stocks_map.get(name, [])
+                groups.append({
+                    "name": name,
+                    "category": "行业板块",
+                    "codes": [_stock_quote_code(symbol, _exchange_from_symbol(symbol)) for symbol in codes],
+                })
+        else:
+            groups.extend(group for group in STATIC_BOARD_GROUPS if group["category"] == category)
+
+    all_codes = sorted({code for group in groups for code in group["codes"]})
+    quotes_by_code = _quotes_for_codes(all_codes)
+
+    rows = []
+    for group in groups:
+        quotes = [quotes_by_code[code] for code in group["codes"] if code in quotes_by_code]
+        leader = max(quotes, key=lambda item: item.get("change_pct", 0), default=None) if quotes else None
+        change_pct = (
+            sum(item.get("change_pct", 0) for item in quotes) / len(quotes)
+            if quotes else 0
+        )
+        rows.append({
+            "name": group["name"],
+            "category": group["category"],
+            "change_pct": round(change_pct, 2),
+            "up_count": sum(1 for item in quotes if item.get("change_pct", 0) > 0),
+            "down_count": sum(1 for item in quotes if item.get("change_pct", 0) < 0),
+            "stock_count": len(quotes),
+            "amount": round(sum(item.get("amount", 0) for item in quotes), 2),
+            "volume": sum(item.get("volume", 0) for item in quotes),
+            "leader": leader,
+        })
+    return rows
+
+
+def get_sector_rankings(categories: Optional[List[str]] = None) -> List[Dict]:
+    """获取板块排行。行业板块优先使用同花顺短行业并写入数据库。"""
+    requested_categories = [category for category in (categories or SECTOR_CATEGORY_ORDER) if category in SECTOR_CATEGORY_ORDER]
+    if not requested_categories:
+        requested_categories = SECTOR_CATEGORY_ORDER
+
+    rows: list[dict] = []
+    static_categories = list(requested_categories)
+    if "行业板块" in requested_categories:
+        ths_rows = _ensure_ths_industry_boards()
+        if ths_rows:
+            rows.extend(ths_rows)
+            static_categories = [category for category in static_categories if category != "行业板块"]
+
+    rows.extend(_static_sector_rankings(static_categories))
+
+    grouped_rows: list[dict] = []
+    for category in requested_categories:
+        category_rows = [row for row in rows if row["category"] == category]
+        grouped_rows.extend(sorted(category_rows, key=lambda item: item["change_pct"], reverse=True))
+    return grouped_rows
+
+
+def _stock_quote_code(symbol: str, exchange: str) -> str:
+    prefix = "sh" if exchange == "SSE" else "bj" if exchange == "BSE" else "sz"
+    return f"{prefix}{symbol}"
+
+
+def _exchange_from_symbol(symbol: str) -> str:
+    if symbol.startswith(("43", "83", "87", "88", "92")):
+        return "BSE"
+    if symbol.startswith(("5", "6", "9")):
+        return "SSE"
+    return "SZSE"
+
+
+def _empty_quote(code: str, name: str, sectors: list[str] | None = None) -> Dict:
+    return {
+        "code": code,
+        "name": name,
+        "price": 0,
+        "change": 0,
+        "change_pct": 0,
+        "open": 0,
+        "high": 0,
+        "low": 0,
+        "volume": 0,
+        "amount": 0,
+        "pe": 0,
+        "pb": 0,
+        "turnover": 0,
+        "bid1_price": 0,
+        "bid1_vol": 0,
+        "ask1_price": 0,
+        "ask1_vol": 0,
+        "prev_close": 0,
+        "sectors": sectors or [],
+    }
+
+
+def _quotes_for_codes(codes: list[str]) -> Dict[str, Dict]:
+    chunks = [codes[start:start + 30] for start in range(0, len(codes), 30)]
+    quotes = []
+    if len(chunks) <= 1:
+        for chunk in chunks:
+            quotes.extend(get_realtime_quotes(chunk))
+    else:
+        with ThreadPoolExecutor(max_workers=min(6, len(chunks))) as executor:
+            for chunk_quotes in executor.map(get_realtime_quotes, chunks):
+                quotes.extend(chunk_quotes)
+    return {quote["code"]: quote for quote in quotes}
+
+
+def _records_from_frame(frame) -> list[dict]:
+    if frame is None:
+        return []
+    if isinstance(frame, list):
+        return [row for row in frame if isinstance(row, dict)]
+    if isinstance(frame, dict):
+        return [frame]
+    to_dict = getattr(frame, "to_dict", None)
+    if callable(to_dict):
+        try:
+            return list(to_dict(orient="records"))
+        except TypeError:
+            records = to_dict()
+            return records if isinstance(records, list) else []
+    return []
+
+
+def _clean_text(value) -> str:
+    if value is None:
+        return ""
+    text = str(value).replace("\u3000", " ").replace("\xa0", " ").strip()
+    return "" if text.lower() in {"", "none", "nan", "nat", "--", "-"} else text
+
+
+def _to_float(value) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return None if value != value else float(value)
+    text = _clean_text(value)
+    if not text:
+        return None
+    text = text.replace(",", "").replace("%", "")
+    match = re.search(r"[-+]?\d+(?:\.\d+)?", text)
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return None
+
+
+def _to_int(value) -> int:
+    number = _to_float(value)
+    return int(number) if number is not None else 0
+
+
+def _import_akshare():
+    stderr = io.StringIO()
+    with contextlib.redirect_stderr(stderr):
+        return import_module("akshare")
+
+
+def _fetch_ths_industry_code_map(ak) -> dict[str, str]:
+    names = ak.stock_board_industry_name_ths()
+    return {
+        _clean_text(row.get("name")): _clean_text(row.get("code"))
+        for row in _records_from_frame(names)
+        if _clean_text(row.get("name")) and _clean_text(row.get("code"))
+    }
+
+
+def _member_from_row(row: dict) -> dict | None:
+    raw_symbol = _clean_text(row.get("代码") or row.get("code"))
+    stock_name = _clean_text(row.get("名称") or row.get("name"))
+    symbol_match = re.search(r"\d{1,6}", raw_symbol)
+    if not symbol_match or not stock_name:
+        return None
+    symbol = symbol_match.group(0).zfill(6)
+    return {
+        "symbol": symbol,
+        "exchange": _exchange_from_symbol(symbol),
+        "name": stock_name,
+    }
+
+
+def _fetch_ths_industry_members(ak, name: str) -> list[dict]:
+    provider_code = _fetch_ths_industry_code_map(ak).get(name)
+    if not provider_code:
+        return []
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+        ),
+        "Referer": "http://q.10jqka.com.cn/thshy/",
+    }
+    first_url = f"http://q.10jqka.com.cn/thshy/detail/code/{provider_code}/"
+    first_html = _request(first_url, headers=headers, timeout=15, encoding="gbk")
+    page_count_match = re.search(r'class=["\']page_info["\'][^>]*>\s*\d+\s*/\s*(\d+)', first_html)
+    page_count = int(page_count_match.group(1)) if page_count_match else 1
+    html_pages = [first_html]
+    for page in range(2, page_count + 1):
+        page_url = f"http://q.10jqka.com.cn/thshy/detail/code/{provider_code}/page/{page}/"
+        html_pages.append(_request(page_url, headers=headers, timeout=15, encoding="gbk"))
+
+    members: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for html in html_pages:
+        parser = _THSMemberTableParser()
+        parser.feed(html)
+        table_headers: list[str] | None = None
+        for row in parser.rows:
+            if "代码" in row and "名称" in row:
+                table_headers = row
+                continue
+            if table_headers and len(row) >= len(table_headers):
+                member = _member_from_row(dict(zip(table_headers, row, strict=False)))
+                if member and (member["symbol"], member["exchange"]) not in seen:
+                    members.append(member)
+                    seen.add((member["symbol"], member["exchange"]))
+    return members
+
+
+def _stock_board_to_ranking(board) -> dict:
+    leader = None
+    if board.leader_name:
+        leader = {
+            "code": "",
+            "name": board.leader_name,
+            "price": board.leader_price or 0,
+            "change": 0,
+            "change_pct": board.leader_change_pct or 0,
+            "open": 0,
+            "high": 0,
+            "low": 0,
+            "volume": 0,
+            "amount": 0,
+            "pe": 0,
+            "pb": 0,
+            "turnover": 0,
+            "bid1_price": 0,
+            "bid1_vol": 0,
+            "ask1_price": 0,
+            "ask1_vol": 0,
+            "prev_close": 0,
+        }
+    return {
+        "name": board.name,
+        "category": board.category,
+        "change_pct": round(board.change_pct or 0, 2),
+        "up_count": board.up_count,
+        "down_count": board.down_count,
+        "stock_count": board.stock_count,
+        "amount": board.amount,
+        "volume": int(board.volume),
+        "leader": leader,
+        "fund_flow": board.net_inflow,
+    }
+
+
+def _db_stock_board_rankings(category: str) -> list[dict]:
+    try:
+        get_engine()
+        db = SessionLocal()
+        try:
+            repo = StockBoardRepository(db)
+            return [_stock_board_to_ranking(board) for board in repo.list_boards(category=category)]
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("数据库板块排行查询失败: %s", exc)
+        return []
+
+
+def _fetch_ths_industry_boards() -> list[dict]:
+    ak = _import_akshare()
+    summary = ak.stock_board_industry_summary_ths()
+    try:
+        code_by_name = _fetch_ths_industry_code_map(ak)
+    except Exception as exc:
+        logger.warning("同花顺行业板块代码表抓取失败: %s", exc)
+        code_by_name = {}
+    rows: list[dict] = []
+    for row in _records_from_frame(summary):
+        name = _clean_text(row.get("板块"))
+        if not name:
+            continue
+        up_count = _to_int(row.get("上涨家数"))
+        down_count = _to_int(row.get("下跌家数"))
+        rows.append({
+            "name": name,
+            "category": "行业板块",
+            "source": "akshare_ths",
+            "provider_code": code_by_name.get(name),
+            "change_pct": _to_float(row.get("涨跌幅")) or 0,
+            "up_count": up_count,
+            "down_count": down_count,
+            "stock_count": up_count + down_count,
+            "amount": (_to_float(row.get("总成交额")) or 0) * 100_000_000,
+            "volume": (_to_float(row.get("总成交量")) or 0) * 10_000,
+            "net_inflow": (_to_float(row.get("净流入")) or 0) * 100_000_000,
+            "leader_name": _clean_text(row.get("领涨股")),
+            "leader_price": _to_float(row.get("领涨股-最新价")),
+            "leader_change_pct": _to_float(row.get("领涨股-涨跌幅")),
+        })
+    return rows
+
+
+def _ensure_ths_industry_boards() -> list[dict]:
+    existing = _db_stock_board_rankings("行业板块")
+    if existing:
+        return existing
+    try:
+        records = _fetch_ths_industry_boards()
+        if not records:
+            return []
+        get_engine()
+        db = SessionLocal()
+        try:
+            StockBoardRepository(db).upsert_boards(records)
+            db.commit()
+        finally:
+            db.close()
+        return _db_stock_board_rankings("行业板块")
+    except Exception as exc:
+        logger.warning("同花顺行业板块抓取失败，使用静态板块后备: %s", exc)
+        return []
+
+
+def _fetch_board_members(category: str, name: str) -> list[dict]:
+    ak = _import_akshare()
+    members: list[dict] = []
+    if category == "行业板块":
+        try:
+            members = _fetch_ths_industry_members(ak, name)
+        except Exception as exc:
+            logger.warning("同花顺行业成分股抓取失败，尝试备用接口: %s", exc)
+
+    function_name = "stock_board_industry_cons_em" if category == "行业板块" else "stock_board_concept_cons_em"
+    if not hasattr(ak, function_name):
+        return members
+    try:
+        frame = getattr(ak, function_name)(symbol=name)
+    except Exception:
+        if members:
+            return members
+        raise
+    seen = {(member["symbol"], member["exchange"]) for member in members}
+    for row in _records_from_frame(frame):
+        member = _member_from_row(row)
+        if member and (member["symbol"], member["exchange"]) not in seen:
+            members.append(member)
+            seen.add((member["symbol"], member["exchange"]))
+    return members
+
+
+def _sync_stock_industries_from_board_members(db, repo: StockBoardRepository) -> int:
+    industry_by_symbol: dict[tuple[str, str, str], str] = {}
+    for board in repo.list_boards(category="行业板块"):
+        for member in repo.list_members(board=board):
+            industry_by_symbol[(member.symbol, member.exchange, "A_SHARE")] = board.name
+    return StockRepository(db).update_industries(industry_by_symbol)
+
+
+def sync_ths_industry_boards(*, include_members: bool = True, limit: int | None = None) -> dict:
+    records = _fetch_ths_industry_boards()
+    if limit is not None:
+        records = records[:limit]
+    if not records:
+        return {
+            "boards_read": 0,
+            "boards_written": 0,
+            "boards_with_members": 0,
+            "members_written": 0,
+            "stocks_updated": 0,
+            "failed_boards": [],
+        }
+
+    get_engine()
+    db = SessionLocal()
+    failed_boards: list[dict] = []
+    boards_with_members = 0
+    members_written = 0
+    try:
+        repo = StockBoardRepository(db)
+        boards_written = repo.upsert_boards(records)
+        db.commit()
+
+        if include_members:
+            for record in records:
+                board_name = record["name"]
+                board = repo.get_board(name=board_name, category="行业板块")
+                if board is None:
+                    continue
+                try:
+                    members = _fetch_board_members("行业板块", board_name)
+                except Exception as exc:
+                    failed_boards.append({"name": board_name, "error": str(exc)})
+                    db.rollback()
+                    continue
+                if not members:
+                    failed_boards.append({"name": board_name, "error": "empty members"})
+                    continue
+                members_written += repo.replace_members(board=board, members=members, source="akshare")
+                boards_with_members += 1
+                db.commit()
+
+        stocks_updated = _sync_stock_industries_from_board_members(db, repo)
+        db.commit()
+        return {
+            "boards_read": len(records),
+            "boards_written": boards_written,
+            "boards_with_members": boards_with_members,
+            "members_written": members_written,
+            "stocks_updated": stocks_updated,
+            "failed_boards": failed_boards[:20],
+        }
+    finally:
+        db.close()
+
+
+def _db_board_stocks(sector_name: str, *, category: str | None) -> list[dict]:
+    try:
+        get_engine()
+        db = SessionLocal()
+        try:
+            repo = StockBoardRepository(db)
+            board = repo.get_board(name=sector_name, category=category)
+            if board is None:
+                return []
+            members = repo.list_members(board=board)
+            if not members:
+                try:
+                    fetched_members = _fetch_board_members(category or board.category, sector_name)
+                except Exception as exc:
+                    logger.warning("板块成分股抓取失败: %s", exc)
+                    fetched_members = []
+                if fetched_members:
+                    repo.replace_members(board=board, members=fetched_members, source="akshare")
+                    db.commit()
+                    members = repo.list_members(board=board)
+            if not members:
+                return []
+            codes = [_stock_quote_code(member.symbol, member.exchange) for member in members]
+            quotes_by_code = _quotes_for_codes(codes)
+            rows: list[dict] = []
+            for member, code in zip(members, codes, strict=False):
+                row = quotes_by_code.get(code, _empty_quote(code, member.name))
+                row["sectors"] = [sector_name]
+                rows.append(row)
+            return rows
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("数据库板块成分股查询失败: %s", exc)
+        return []
+
+
+def _db_industry_groups() -> list[dict]:
+    try:
+        get_engine()
+        db = SessionLocal()
+        try:
+            repo = StockRepository(db)
+            groups = repo.list_industry_groups(market="A_SHARE", common_only=True)
+            group_samples: list[tuple[str, int, list[str]]] = []
+            for industry, stock_count in groups[:24]:
+                stocks = repo.list_stocks_by_industry(
+                    industry=industry,
+                    market="A_SHARE",
+                    status="LISTED",
+                    limit=4,
+                    common_only=True,
+                )
+                group_samples.append((
+                    industry,
+                    stock_count,
+                    [_stock_quote_code(stock.symbol, stock.exchange) for stock in stocks],
+                ))
+            for industry, stock_count in groups[24:]:
+                group_samples.append((industry, stock_count, []))
+
+            all_codes = sorted({code for _, _, codes in group_samples for code in codes})
+            quotes_by_code = _quotes_for_codes(all_codes)
+
+            rows: list[dict] = []
+            for industry, stock_count, codes in group_samples:
+                quotes = [quotes_by_code[code] for code in codes if code in quotes_by_code]
+                leader = max(quotes, key=lambda item: item.get("change_pct", 0), default=None)
+                change_pct = (
+                    sum(item.get("change_pct", 0) for item in quotes) / len(quotes)
+                    if quotes else 0
+                )
+                rows.append({
+                    "name": industry,
+                    "category": "行业板块",
+                    "change_pct": round(change_pct, 2),
+                    "up_count": sum(1 for item in quotes if item.get("change_pct", 0) > 0),
+                    "down_count": sum(1 for item in quotes if item.get("change_pct", 0) < 0),
+                    "stock_count": stock_count,
+                    "amount": round(sum(item.get("amount", 0) for item in quotes), 2),
+                    "volume": sum(item.get("volume", 0) for item in quotes),
+                    "leader": leader,
+                })
+            return sorted(rows, key=lambda item: item["change_pct"], reverse=True)
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("数据库行业板块聚合失败，使用静态板块后备: %s", exc)
+        return []
+
+
+def _db_sector_stocks(industry: str) -> list[dict]:
+    try:
+        get_engine()
+        db = SessionLocal()
+        try:
+            repo = StockRepository(db)
+            stocks = repo.list_stocks_by_industry(
+                industry=industry,
+                market="A_SHARE",
+                status="LISTED",
+                limit=None,
+                common_only=True,
+            )
+            if not stocks:
+                return []
+
+            codes = [_stock_quote_code(stock.symbol, stock.exchange) for stock in stocks]
+            quotes_by_code = _quotes_for_codes(codes)
+            rows: list[dict] = []
+            for stock, code in zip(stocks, codes, strict=False):
+                row = quotes_by_code.get(code, _empty_quote(code, stock.name))
+                row["sectors"] = [industry]
+                rows.append(row)
+            return rows
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("数据库行业成分股查询失败，使用静态板块后备: %s", exc)
+        return []
 
 
 def _request(url: str, headers: dict = None, timeout: int = 10, encoding: str = "utf-8") -> str:
@@ -379,18 +1013,6 @@ def get_index_quotes() -> List[Dict]:
     return get_realtime_quotes(index_codes)
 
 
-def get_stock_sectors(code: str) -> List[str]:
-    """获取股票所属的板块名称列表
-
-    Args:
-        code: 股票代码，如 'sh600900'
-
-    Returns:
-        所属板块名称列表，如 ['电力', '碳中和']
-    """
-    return STOCK_SECTOR_MAP.get(code, [])
-
-
 def get_sector_constituents(sector_name: str) -> List[Dict]:
     """获取板块成分股实时行情
 
@@ -400,89 +1022,7 @@ def get_sector_constituents(sector_name: str) -> List[Dict]:
     Returns:
         成分股实时行情列表，包含股票所属板块信息
     """
-    codes = SECTOR_CODE_MAP.get(sector_name, [])
-    if not codes:
-        return []
-
-    quotes = get_realtime_quotes(codes)
-    # 为每只股票附加所属板块标签
-    for q in quotes:
-        q["sectors"] = get_stock_sectors(q["code"])
-    return quotes
-
-
-def get_sector_stocks(sector_code: str = "电力") -> List[Dict]:
-    """获取板块内股票列表（通过搜索）
-
-    注意：当前没有直接的板块行情API，通过关键词搜索获取相关股票
-
-    Args:
-        sector_code: 板块关键词
-
-    Returns:
-        对应板块的股票行情列表，包含所属板块标签
-    """
-    codes = SECTOR_CODE_MAP.get(sector_code, [])
-    if not codes:
-        return []
-
-    quotes = get_realtime_quotes(codes)
-    for q in quotes:
-        q["sectors"] = get_stock_sectors(q["code"])
-    return quotes
-
-
-def get_sector_rankings(categories: Optional[List[str]] = None) -> List[Dict]:
-    """获取板块级排行。
-
-    当前腾讯板块行情不可用，先用代表成份股或指数行情聚合出板块涨跌、涨跌家数和领涨标的。
-    """
-    requested_categories = [
-        category for category in (categories or SECTOR_CATEGORY_ORDER)
-        if category in SECTOR_CATEGORY_ORDER
-    ]
-    if not requested_categories:
-        requested_categories = SECTOR_CATEGORY_ORDER
-
-    groups = [
-        group for category in requested_categories
-        for group in SECTOR_GROUPS
-        if group["category"] == category
-    ]
-
-    all_codes = sorted({code for group in groups for code in group["codes"]})
-    quotes = []
-    for start in range(0, len(all_codes), 30):
-        quotes.extend(get_realtime_quotes(all_codes[start:start + 30]))
-
-    quotes_by_code = {quote["code"]: quote for quote in quotes}
-
-    rows = []
-    for group in groups:
-        quotes = [quotes_by_code[code] for code in group["codes"] if code in quotes_by_code]
-        leader = max(quotes, key=lambda item: item.get("change_pct", 0), default=None)
-        change_pct = (
-            sum(item.get("change_pct", 0) for item in quotes) / len(quotes)
-            if quotes else 0
-        )
-        rows.append({
-            "name": group["name"],
-            "category": group["category"],
-            "change_pct": round(change_pct, 2),
-            "up_count": sum(1 for item in quotes if item.get("change_pct", 0) > 0),
-            "down_count": sum(1 for item in quotes if item.get("change_pct", 0) < 0),
-            "stock_count": len(quotes),
-            "amount": round(sum(item.get("amount", 0) for item in quotes), 2),
-            "volume": sum(item.get("volume", 0) for item in quotes),
-            "leader": leader,
-        })
-
-    grouped_rows = []
-    for category in requested_categories:
-        category_rows = [row for row in rows if row["category"] == category]
-        grouped_rows.extend(sorted(category_rows, key=lambda item: item["change_pct"], reverse=True))
-
-    return grouped_rows
+    return get_sector_stocks(sector_name)
 
 
 if __name__ == "__main__":

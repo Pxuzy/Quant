@@ -12,6 +12,21 @@
 | `tushare` | 专业增强数据源 | 需要 `TUSHARE_TOKEN`，默认可选 |
 | `stock_sdk` | Node 侧社区包来源 | 需要安装 `stock-sdk@beta` 或配置 `STOCK_SDK_CWD` |
 
+## 免费 MCP 候选目录
+
+`GET /api/data-sources/catalog` 返回的是只读免费 MCP 候选目录，不是注册 provider。它用于记录可评估的开源 MCP 适配层和授权边界。
+
+当前目录覆盖：
+
+| code | 类型 | 定位 |
+| --- | --- | --- |
+| `stock_mcp` | 开源 MCP | 免费社区 MCP，适合本地 AI Agent 研究验证 |
+| `tsrs_mcp_server` | 开源 MCP | Rust 实现的 Tushare 风格工具封装；如使用 Tushare token，仍受 Tushare 权限约束 |
+| `mcp_aktools` | 开源 MCP | 基于 AKShare / AkTools 的公开数据 MCP 封装 |
+| `cn_financial_mcp` | 开源 MCP | 覆盖 A 股、财报、行业、宏观等中国金融数据的社区 MCP |
+
+免费 MCP 候选目录不会进入 `AdapterRegistry`，也不会出现在自动同步候选源里。只有实现了正式 adapter、确认上游授权并完成标准化校验的数据源，才能进入 `data_sources` 注册列表。
+
 ## provider 选择规则
 
 - 手动指定来源时，任务使用指定 provider。
@@ -19,6 +34,7 @@
 - 自动选择按启用状态、能力声明、优先级和健康状态选择候选 provider。
 - 每次正式写入都必须在 `ingest_batches.source` 记录实际 provider。
 - 禁用的数据源不参与自动选择。
+- MCP 通常是 AI 调用工具的适配层，不是数据权威源；正式写入仍必须落到已授权 provider adapter。
 
 ## 数据接入链路
 

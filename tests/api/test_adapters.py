@@ -144,6 +144,27 @@ class FakeBaoStockCalendarResultSet:
         return self._rows[self._index]
 
 
+class FakeBaoStockIndustryResultSet:
+    fields = ["updateDate", "code", "code_name", "industry", "industryClassification"]
+
+    def __init__(self) -> None:
+        self._rows = [
+            ["2026-06-22", "sh.600519", "贵州茅台", "C15酒、饮料和精制茶制造业", "证监会行业分类"],
+            ["2026-06-22", "sz.000001", "平安银行", "J66货币金融服务", "证监会行业分类"],
+            ["2026-06-22", "bj.430047", "北交所样本", "", "证监会行业分类"],
+        ]
+        self._index = -1
+        self.error_code = "0"
+        self.error_msg = ""
+
+    def next(self):
+        self._index += 1
+        return self._index < len(self._rows)
+
+    def get_row_data(self):
+        return self._rows[self._index]
+
+
 class FakeBaoStockClient:
     def __init__(self) -> None:
         self.logged_out = False
@@ -157,6 +178,9 @@ class FakeBaoStockClient:
 
     def query_stock_basic(self):
         return FakeBaoStockResultSet()
+
+    def query_stock_industry(self):
+        return FakeBaoStockIndustryResultSet()
 
     def query_history_k_data_plus(self, code, fields, **kwargs):
         self.daily_query = {"code": code, "fields": fields, **kwargs}
@@ -436,10 +460,13 @@ def test_baostock_adapter_normalizes_stock_list_from_optional_client():
     assert normalized[0].symbol == "600519"
     assert normalized[0].exchange == "SSE"
     assert normalized[0].name == "贵州茅台"
+    assert normalized[0].industry == "酒、饮料和精制茶制造业"
     assert normalized[0].listing_date == date(2001, 8, 27)
     assert normalized[0].source == "baostock"
     assert normalized[1].exchange == "SZSE"
+    assert normalized[1].industry == "货币金融服务"
     assert normalized[2].exchange == "BSE"
+    assert normalized[2].industry is None
 
 
 def test_baostock_adapter_retries_transient_stock_list_fetch_failure():

@@ -318,7 +318,7 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
     const chart = createChart(container, {
       width: w,
       height: h,
-      layout: { background: { color: '#ffffff' }, textColor: '#555' },
+      layout: { background: { color: '#ffffff' }, textColor: '#555', attributionLogo: false },
       grid: { vertLines: { color: '#f0f0f0' }, horzLines: { color: '#f0f0f0' } },
       timeScale: {
         timeVisible: false,

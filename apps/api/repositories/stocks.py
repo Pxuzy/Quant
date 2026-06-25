@@ -103,6 +103,40 @@ class StockRepository:
             stmt = stmt.limit(limit)
         return list(self.db.scalars(stmt).all())
 
+    def list_industry_groups(self, *, market: str = "A_SHARE", common_only: bool = True) -> list[tuple[str, int]]:
+        stmt = (
+            select(Stock.industry, func.count(Stock.id))
+            .where(Stock.market == market.strip().upper())
+            .where(Stock.industry.is_not(None), func.trim(Stock.industry) != "")
+            .group_by(Stock.industry)
+            .order_by(func.count(Stock.id).desc(), Stock.industry)
+        )
+        if common_only:
+            stmt = stmt.where(listed_common_stock_filter(market=market))
+        return [(industry, count) for industry, count in self.db.execute(stmt).all()]
+
+    def list_stocks_by_industry(
+        self,
+        *,
+        industry: str,
+        market: str = "A_SHARE",
+        status: str | None = "LISTED",
+        limit: int | None = None,
+        common_only: bool = True,
+    ) -> list[Stock]:
+        stmt = (
+            select(Stock)
+            .where(Stock.market == market.strip().upper(), Stock.industry == industry.strip())
+            .order_by(Stock.exchange, Stock.symbol)
+        )
+        if status:
+            stmt = stmt.where(Stock.status == status)
+        if common_only:
+            stmt = stmt.where(listed_common_stock_filter(market=market))
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        return list(self.db.scalars(stmt).all())
+
     def upsert_many(self, records: list[NormalizedStock]) -> int:
         written = 0
         for record in records:
@@ -129,10 +163,25 @@ class StockRepository:
             else:
                 stock.name = record.name
                 stock.status = record.status
-                stock.industry = record.industry
+                if record.industry is not None:
+                    stock.industry = record.industry
                 stock.listing_date = record.listing_date
                 stock.delisting_date = record.delisting_date
                 stock.source = record.source
             written += 1
         self.db.flush()
         return written
+
+    def update_industries(self, industry_by_symbol: dict[tuple[str, str, str], str]) -> int:
+        if not industry_by_symbol:
+            return 0
+        updated = 0
+        stmt = select(Stock).where(Stock.market == "A_SHARE", Stock.status == "LISTED")
+        for stock in self.db.scalars(stmt).all():
+            key = (stock.symbol, stock.exchange, stock.market)
+            industry = industry_by_symbol.get(key)
+            if industry and stock.industry != industry:
+                stock.industry = industry
+                updated += 1
+        self.db.flush()
+        return updated

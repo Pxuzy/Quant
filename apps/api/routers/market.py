@@ -18,6 +18,7 @@ from apps.api.services.market_service import (
     get_sector_constituents,
     get_stock_sectors,
     search_stock,
+    sync_ths_industry_boards,
 )
 
 router = APIRouter(prefix="/api/market", tags=["market"])
@@ -98,9 +99,10 @@ def search(
 
 @router.get("/sector")
 def get_sector(
-    name: str = Query("电力", description="板块名称"),
+    name: str = Query("能源金属", description="板块名称，如 能源金属、半导体、人工智能"),
+    category: str | None = Query("行业板块", description="板块分类"),
 ):
-    return get_sector_stocks(name)
+    return get_sector_stocks(name, category=category)
 
 
 @router.get("/sectors")
@@ -111,9 +113,17 @@ def get_sectors(
     return get_sector_rankings(category_list)
 
 
+@router.post("/sectors/sync")
+def sync_sectors(
+    include_members: bool = Query(True, description="是否同步板块成分股并更新股票行业"),
+    limit: int | None = Query(None, ge=1, description="限制同步板块数量，调试用"),
+):
+    return sync_ths_industry_boards(include_members=include_members, limit=limit)
+
+
 @router.get("/sector-constituents")
 def get_sector_constituents_api(
-    name: str = Query(..., description="板块名称，如 银行、人工智能"),
+    name: str = Query(..., description="板块名称，如 半导体、人工智能"),
 ):
     """获取板块成分股实时行情"""
     return get_sector_constituents(name)

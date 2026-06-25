@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.api.db.base import Base
@@ -54,6 +54,59 @@ class DataSource(Base):
         onupdate=utcnow,
         nullable=False,
     )
+
+
+class StockBoard(Base):
+    __tablename__ = "stock_boards"
+    __table_args__ = (UniqueConstraint("category", "name", name="uq_stock_boards_category_name"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    provider_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    change_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    up_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    down_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    stock_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    volume: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    net_inflow: Mapped[float | None] = mapped_column(Float, nullable=True)
+    leader_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    leader_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    leader_change_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+    members: Mapped[list["StockBoardMember"]] = relationship(
+        back_populates="board",
+        cascade="all, delete-orphan",
+        order_by="StockBoardMember.id",
+    )
+
+
+class StockBoardMember(Base):
+    __tablename__ = "stock_board_members"
+    __table_args__ = (UniqueConstraint("board_id", "symbol", "exchange", name="uq_stock_board_members_identity"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey("stock_boards.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    exchange: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+    board: Mapped[StockBoard] = relationship(back_populates="members")
 
 
 class SyncTask(Base):
