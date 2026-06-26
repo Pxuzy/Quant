@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-from apps.api.core.fastapi_compat import apply_starlette_router_compat
-
-apply_starlette_router_compat()
 
 from fastapi import APIRouter, Query
 
 from apps.api.services.market_service import (
     get_history_kline,
     get_index_quotes,
-    get_news,
     get_realtime_quotes,
     get_sector_rankings,
     get_sector_stocks,
@@ -53,7 +49,7 @@ def get_news_list(
     """新闻（从DB读取，由定时任务填充）"""
     from apps.api.db.session import SessionLocal
     from apps.api.repositories.news_articles import NewsRepository
-    
+
     db = SessionLocal()
     try:
         repo = NewsRepository(db)

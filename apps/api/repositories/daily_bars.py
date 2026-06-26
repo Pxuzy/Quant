@@ -569,7 +569,9 @@ def _normalize_row(row: dict) -> dict:
 
 
 def _daily_bar_sort_key(row: dict, *, sort_order: str) -> tuple:
-    trade_date = _coerce_date(row["trade_date"])
+    trade_date = _coerce_date(row.get("trade_date"))
+    if trade_date is None:
+        trade_date = date.min
     date_key = -trade_date.toordinal() if sort_order == "desc" else trade_date.toordinal()
     return (row["market"], row["symbol"], date_key, row.get("adjust_type") or "none")
 
@@ -578,12 +580,17 @@ def _read_parquet_file(path: Path) -> list[dict]:
     return pq.ParquetFile(path).read().to_pylist()
 
 
-def _coerce_date(value) -> date:
+def _coerce_date(value) -> date | None:
+    if value is None:
+        return None
     if isinstance(value, date) and not isinstance(value, datetime):
         return value
     if isinstance(value, datetime):
         return value.date()
-    return date.fromisoformat(str(value))
+    try:
+        return date.fromisoformat(str(value))
+    except (ValueError, TypeError):
+        return None
 
 
 def _coerce_datetime(value) -> datetime:

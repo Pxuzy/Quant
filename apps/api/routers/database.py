@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from datetime import date
 
-from apps.api.core.fastapi_compat import apply_starlette_router_compat
-
-apply_starlette_router_compat()
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session

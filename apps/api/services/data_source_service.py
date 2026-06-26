@@ -15,7 +15,6 @@ from apps.api.services.normalized_data_validation import (
     validate_stock_records,
 )
 
-
 MAX_SMOKE_ERROR_MESSAGE_LENGTH = 240
 SMOKE_HISTORY_LIMIT = 5
 SMOKE_CAPABILITIES = ("stock_list", "daily_bars", "calendars")
@@ -70,159 +69,89 @@ class DataSourceService:
         capabilities = adapter.capabilities().to_dict()
         selected_capability = capability.strip() if capability else self._preferred_smoke_capability(capabilities)
         self.db.commit()
+
+        def _fail(result: HealthCheckResult, cap: str) -> dict:
+            self.data_source_repo.update_health(code, result)
+            payload = self._smoke_payload(source=source, result=result, capability=cap,
+                raw_records=[], normalized_records=[], validation_errors=[])
+            self._store_smoke_result(source=source, result=result, capability=cap,
+                raw_records=[], normalized_records=[], validation_errors=[])
+            self.db.commit()
+            self.db.refresh(source)
+            return payload
+
         if selected_capability is not None and selected_capability not in SMOKE_CAPABILITIES:
             raise ValueError(f"Unsupported smoke capability '{selected_capability}'.")
         if selected_capability is None:
-            result = HealthCheckResult(
-                healthy=False,
-                status="unhealthy",
-                message=f"Data source '{code}' does not declare a smoke-testable capability.",
-            )
-            self.data_source_repo.update_health(code, result)
-            self._store_smoke_result(
-                source=source,
-                result=result,
-                capability="none",
-                raw_records=[],
-                normalized_records=[],
-                validation_errors=[],
-            )
-            self.db.commit()
-            self.db.refresh(source)
-            return self._smoke_payload(
-                source=source,
-                result=result,
-                capability="none",
-                raw_records=[],
-                normalized_records=[],
-                validation_errors=[],
-            )
-        elif not capabilities.get(selected_capability):
-            result = HealthCheckResult(
-                healthy=False,
-                status="unhealthy",
-                message=f"{adapter.name} 不支持 {selected_capability} 真实取样。",
-            )
-            self.data_source_repo.update_health(code, result)
-            self._store_smoke_result(
-                source=source,
-                result=result,
-                capability=selected_capability,
-                raw_records=[],
-                normalized_records=[],
-                validation_errors=[],
-            )
-            self.db.commit()
-            self.db.refresh(source)
-            return self._smoke_payload(
-                source=source,
-                result=result,
-                capability=selected_capability,
-                raw_records=[],
-                normalized_records=[],
-                validation_errors=[],
-            )
+            return _fail(HealthCheckResult(healthy=False, status="unhealthy",
+                message=f"Data source '{code}' does not declare a smoke-testable capability."), "none")
+        if not capabilities.get(selected_capability):
+            return _fail(HealthCheckResult(healthy=False, status="unhealthy",
+                message=f"{adapter.name} 不支持 {selected_capability} 真实取样。"), selected_capability)
 
         try:
             raw_records, normalized_records = self._run_smoke(adapter=adapter, capability=selected_capability)
             validation_errors = _validate_smoke_records(
-                capability=selected_capability,
-                source=adapter.code,
-                records=normalized_records,
-            )
+                capability=selected_capability, source=adapter.code, records=normalized_records)
             healthy = bool(normalized_records) and not validation_errors
             message = (
                 f"{adapter.name} smoke test succeeded with {len(normalized_records)} normalized {selected_capability} records."
-                if healthy
-                else _smoke_failure_message(
-                    adapter_name=adapter.name,
-                    capability=selected_capability,
-                    normalized_count=len(normalized_records),
-                    validation_errors=validation_errors,
-                )
+                if healthy else _smoke_failure_message(
+                    adapter_name=adapter.name, capability=selected_capability,
+                    normalized_count=len(normalized_records), validation_errors=validation_errors)
             )
-            result = HealthCheckResult(
-                healthy=healthy,
-                status="healthy" if healthy else "unhealthy",
-                message=message,
-            )
+            result = HealthCheckResult(healthy=healthy, status="healthy" if healthy else "unhealthy", message=message)
         except ModuleNotFoundError as exc:
-            raw_records = []
-            normalized_records = []
-            validation_errors = []
             result = HealthCheckResult(healthy=False, status="unavailable", message=str(exc))
+            raw_records, normalized_records, validation_errors = [], [], []
         except RuntimeError as exc:
-            raw_records = []
-            normalized_records = []
-            validation_errors = []
             raw_message = str(exc)
             message = _safe_smoke_error_message(raw_message)
             status = "unavailable" if _is_unavailable_smoke_error(raw_message) else "unhealthy"
             result = HealthCheckResult(healthy=False, status=status, message=message)
+            raw_records, normalized_records, validation_errors = [], [], []
         except Exception as exc:
-            raw_records = []
-            normalized_records = []
-            validation_errors = []
-            result = HealthCheckResult(healthy=False, status="unhealthy", message=_safe_smoke_error_message(str(exc)))
+            raw_message = str(exc)
+            status = "unavailable" if _is_unavailable_smoke_error(raw_message) else "unhealthy"
+            result = HealthCheckResult(healthy=False, status=status,
+                message=_safe_smoke_error_message(raw_message))
+            raw_records, normalized_records, validation_errors = [], [], []
 
         self.data_source_repo.update_health(code, result)
-        self._store_smoke_result(
-            source=source,
-            result=result,
-            capability=selected_capability,
-            raw_records=raw_records,
-            normalized_records=normalized_records,
-            validation_errors=validation_errors,
-        )
+        self._store_smoke_result(source=source, result=result, capability=selected_capability,
+            raw_records=raw_records, normalized_records=normalized_records,
+            validation_errors=validation_errors)
         self.db.commit()
         self.db.refresh(source)
-        return self._smoke_payload(
-            source=source,
-            result=result,
-            capability=selected_capability,
-            raw_records=raw_records,
-            normalized_records=normalized_records,
-            validation_errors=validation_errors,
-        )
+        return self._smoke_payload(source=source, result=result, capability=selected_capability,
+            raw_records=raw_records, normalized_records=normalized_records,
+            validation_errors=validation_errors)
 
     def _run_smoke(self, *, adapter, capability: str) -> tuple[list[dict], list]:
         today = date.today()
         start_date = today - timedelta(days=14)
         if capability == "stock_list":
-            raw_records = adapter.fetch_stock_list(market="A_SHARE")
-            normalized_records = adapter.normalize_stock_list(raw_records)
-            return raw_records, normalized_records
+            raw = adapter.fetch_stock_list(market="A_SHARE")
+            return raw, adapter.normalize_stock_list(raw)
         if capability == "calendars":
-            raw_records = adapter.fetch_trading_calendar(market="A_SHARE", start_date=start_date, end_date=today)
-            normalized_records = adapter.normalize_trading_calendar(raw_records, market="A_SHARE")
-            return raw_records, normalized_records
+            raw = adapter.fetch_trading_calendar(market="A_SHARE", start_date=start_date, end_date=today)
+            return raw, adapter.normalize_trading_calendar(raw, market="A_SHARE")
         if capability == "daily_bars":
-            raw_records = adapter.fetch_daily_bars(
-                symbol="600519",
-                exchange="SSE",
-                market="A_SHARE",
-                start_date=start_date,
-                end_date=today,
-            )
-            normalized_records = adapter.normalize_daily_bars(raw_records)
-            return raw_records, normalized_records
+            raw = adapter.fetch_daily_bars(symbol="600519", exchange="SSE", market="A_SHARE",
+                start_date=start_date, end_date=today)
+            return raw, adapter.normalize_daily_bars(raw)
         raise ValueError(f"Unsupported smoke capability '{capability}'.")
 
     @staticmethod
     def _preferred_smoke_capability(capabilities: dict[str, bool]) -> str | None:
-        for capability in SMOKE_CAPABILITIES:
-            if capabilities.get(capability):
-                return capability
+        for cap in SMOKE_CAPABILITIES:
+            if capabilities.get(cap):
+                return cap
         return None
 
     def _store_smoke_result(
-        self,
-        *,
-        source: DataSource,
-        result: HealthCheckResult,
-        capability: str,
-        raw_records: list[dict],
-        normalized_records: list,
+        self, *, source: DataSource, result: HealthCheckResult, capability: str,
+        raw_records: list[dict], normalized_records: list,
         validation_errors: list[str] | None = None,
     ) -> None:
         config_json = source.config_json if isinstance(source.config_json, dict) else {}
@@ -235,7 +164,7 @@ class DataSourceService:
             "raw_records": len(raw_records),
             "normalized_records": len(normalized_records),
             "validation_errors": validation_errors or [],
-            "sample": [_normalized_record_to_dict(record) for record in normalized_records[:3]],
+            "sample": [_normalized_record_to_dict(r) for r in normalized_records[:3]],
         }
         existing_history = config_json.get("smoke_test_history")
         smoke_history = existing_history if isinstance(existing_history, list) else []
@@ -248,12 +177,8 @@ class DataSourceService:
 
     @staticmethod
     def _smoke_payload(
-        *,
-        source: DataSource,
-        result: HealthCheckResult,
-        capability: str,
-        raw_records: list[dict],
-        normalized_records: list,
+        *, source: DataSource, result: HealthCheckResult, capability: str,
+        raw_records: list[dict], normalized_records: list,
         validation_errors: list[str] | None = None,
     ) -> dict:
         return {
@@ -265,40 +190,22 @@ class DataSourceService:
             "raw_records": len(raw_records),
             "normalized_records": len(normalized_records),
             "validation_errors": validation_errors or [],
-            "sample": [_normalized_record_to_dict(record) for record in normalized_records[:3]],
+            "sample": [_normalized_record_to_dict(r) for r in normalized_records[:3]],
         }
 
 
 def _normalized_record_to_dict(record) -> dict:
     if isinstance(record, NormalizedStock):
-        return {
-            "symbol": record.symbol,
-            "exchange": record.exchange,
-            "market": record.market,
-            "name": record.name,
-            "source": record.source,
-        }
+        return {"symbol": record.symbol, "exchange": record.exchange,
+                "market": record.market, "name": record.name, "source": record.source}
     if isinstance(record, NormalizedTradingCalendar):
-        return {
-            "market": record.market,
-            "trade_date": record.trade_date.isoformat(),
-            "is_open": record.is_open,
-            "source": record.source,
-        }
+        return {"market": record.market, "trade_date": record.trade_date.isoformat(),
+                "is_open": record.is_open, "source": record.source}
     if isinstance(record, NormalizedDailyBar):
-        return {
-            "symbol": record.symbol,
-            "exchange": record.exchange,
-            "market": record.market,
-            "trade_date": record.trade_date.isoformat(),
-            "open": record.open,
-            "high": record.high,
-            "low": record.low,
-            "close": record.close,
-            "volume": record.volume,
-            "amount": record.amount,
-            "source": record.source,
-        }
+        return {"symbol": record.symbol, "exchange": record.exchange, "market": record.market,
+                "trade_date": record.trade_date.isoformat(), "open": record.open, "high": record.high,
+                "low": record.low, "close": record.close, "volume": record.volume,
+                "amount": record.amount, "source": record.source}
     return dict(record) if isinstance(record, dict) else {"value": str(record)}
 
 
@@ -312,13 +219,8 @@ def _validate_smoke_records(*, capability: str, source: str, records: list) -> l
     return []
 
 
-def _smoke_failure_message(
-    *,
-    adapter_name: str,
-    capability: str,
-    normalized_count: int,
-    validation_errors: list[str],
-) -> str:
+def _smoke_failure_message(*, adapter_name: str, capability: str,
+    normalized_count: int, validation_errors: list[str]) -> str:
     if normalized_count <= 0:
         return f"{adapter_name} smoke test returned no normalized {capability} records."
     first_error = validation_errors[0] if validation_errors else "unknown schema validation error"
@@ -327,18 +229,10 @@ def _smoke_failure_message(
 
 def _is_unavailable_smoke_error(message: str) -> bool:
     normalized = message.lower()
-    return any(
-        marker in normalized
-        for marker in (
-            "not configured",
-            "not installed",
-            "network_error",
-            "remote end closed connection",
-            "connection aborted",
-            "timed out",
-            "timeout",
-        )
-    )
+    return any(marker in normalized for marker in (
+        "not configured", "not installed", "network error", "network_error",
+        "remote end closed connection", "connection aborted", "timed out", "timeout",
+    ))
 
 
 def _safe_smoke_error_message(message: str) -> str:
@@ -354,11 +248,8 @@ def _safe_smoke_error_message(message: str) -> str:
 
 DATA_SOURCE_CATALOG: list[dict] = [
     {
-        "code": "stock_mcp",
-        "name": "stock-mcp",
-        "source_kind": "community_mcp",
-        "mcp_role": "adapter_layer",
-        "integration_status": "research_only",
+        "code": "stock_mcp", "name": "stock-mcp", "source_kind": "community_mcp",
+        "mcp_role": "adapter_layer", "integration_status": "research_only",
         "capabilities": ["ai_agent_tools", "public_data_wrappers", "market_data"],
         "authorization_required": False,
         "homepage_url": "https://github.com/huweihua123/stock-mcp",
@@ -368,11 +259,8 @@ DATA_SOURCE_CATALOG: list[dict] = [
         "production_note": "Research only; do not place community MCP output on the formal ingest path without source authorization review.",
     },
     {
-        "code": "tsrs_mcp_server",
-        "name": "tsrs-mcp-server",
-        "source_kind": "community_mcp",
-        "mcp_role": "adapter_layer",
-        "integration_status": "research_only",
+        "code": "tsrs_mcp_server", "name": "tsrs-mcp-server", "source_kind": "community_mcp",
+        "mcp_role": "adapter_layer", "integration_status": "research_only",
         "capabilities": ["ai_agent_tools", "tushare_api_wrapper", "market_data"],
         "authorization_required": False,
         "homepage_url": "https://github.com/hanxuanliang/tsrs-mcp-server",
@@ -382,11 +270,8 @@ DATA_SOURCE_CATALOG: list[dict] = [
         "production_note": "Research only; Tushare-backed data still follows Tushare account permission if a token is used.",
     },
     {
-        "code": "mcp_aktools",
-        "name": "mcp-aktools",
-        "source_kind": "community_mcp",
-        "mcp_role": "adapter_layer",
-        "integration_status": "research_only",
+        "code": "mcp_aktools", "name": "mcp-aktools", "source_kind": "community_mcp",
+        "mcp_role": "adapter_layer", "integration_status": "research_only",
         "capabilities": ["ai_agent_tools", "akshare_public_data", "sector_data", "concept_board"],
         "authorization_required": False,
         "homepage_url": "https://github.com/aahl/mcp-aktools",
@@ -396,11 +281,8 @@ DATA_SOURCE_CATALOG: list[dict] = [
         "production_note": "Research only; public upstream availability and authorization must be checked before formal ingestion.",
     },
     {
-        "code": "cn_financial_mcp",
-        "name": "cn-financial-mcp",
-        "source_kind": "community_mcp",
-        "mcp_role": "adapter_layer",
-        "integration_status": "research_only",
+        "code": "cn_financial_mcp", "name": "cn-financial-mcp", "source_kind": "community_mcp",
+        "mcp_role": "adapter_layer", "integration_status": "research_only",
         "capabilities": ["ai_agent_tools", "a_share_data", "financial_reports", "industry_data", "macro_data"],
         "authorization_required": False,
         "homepage_url": "https://github.com/ccq1/cn-financial-mcp",

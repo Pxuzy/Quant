@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from apps.api.core.fastapi_compat import apply_starlette_router_compat
-
-apply_starlette_router_compat()
 
 from fastapi import APIRouter
 

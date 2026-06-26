@@ -1,0 +1,1002 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quant 仪表盘布局方案</title>
+    <style>
+      :root {
+        --bg: #eef3f8;
+        --panel: #ffffff;
+        --panel-soft: #f7fafc;
+        --line: #d9e3ec;
+        --line-strong: #b8c7d5;
+        --text: #182230;
+        --muted: #64748b;
+        --blue: #1f6feb;
+        --blue-soft: #e8f1ff;
+        --green: #138a4f;
+        --green-soft: #e8f6ef;
+        --red: #c24155;
+        --red-soft: #fff0f2;
+        --amber: #9a6b13;
+        --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        color-scheme: light;
+        font-family:
+          "DIN Alternate",
+          "Bahnschrift",
+          "Segoe UI",
+          "Microsoft YaHei",
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 13px;
+        letter-spacing: 0;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: 212px minmax(1180px, 1fr);
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        border-right: 1px solid var(--line);
+        background: #fbfdff;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 62px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border: 1px solid #a9c4dc;
+        border-radius: 7px;
+        color: #166aa8;
+        font-weight: 800;
+      }
+
+      .brand strong {
+        display: block;
+        font-size: 18px;
+        line-height: 20px;
+      }
+
+      .brand span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .nav {
+        display: grid;
+        gap: 6px;
+        padding: 12px 8px;
+      }
+
+      .nav a {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 36px;
+        padding: 0 12px;
+        border-radius: 6px;
+        color: #314155;
+        text-decoration: none;
+      }
+
+      .nav a.active {
+        border-left: 3px solid var(--blue);
+        background: #eef6ff;
+        color: #0f2742;
+        font-weight: 700;
+      }
+
+      .main {
+        min-width: 0;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 62px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
+        background: #fbfdff;
+      }
+
+      .tabs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .tab {
+        min-width: 118px;
+        height: 34px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: #334155;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .tab.active {
+        border-color: #8db8ee;
+        background: var(--blue-soft);
+        color: #0f4b8f;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .btn {
+        height: 32px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: #243244;
+      }
+
+      .btn.primary {
+        border-color: #1f6feb;
+        background: #1f6feb;
+        color: #fff;
+      }
+
+      .workspace {
+        padding: 14px 18px 18px;
+      }
+
+      .option {
+        display: none;
+      }
+
+      .option.active {
+        display: block;
+      }
+
+      .page-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+
+      .page-head h1 {
+        margin: 0;
+        font-size: 22px;
+        line-height: 28px;
+      }
+
+      .page-head p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .status-line {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 34px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-title {
+        font-weight: 800;
+      }
+
+      .panel-body {
+        padding: 8px 10px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 20px;
+        padding: 0 7px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: #fff;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .up {
+        color: var(--red);
+      }
+
+      .down {
+        color: var(--green);
+      }
+
+      .flat {
+        color: var(--muted);
+      }
+
+      .tag-up {
+        border-color: #f4b3bf;
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .tag-down {
+        border-color: #9fd5ba;
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .metric {
+        min-width: 0;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--green);
+        border-radius: 7px;
+        background: #fff;
+      }
+
+      .metric .name {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metric .value {
+        margin-top: 2px;
+        font-size: 24px;
+        font-weight: 900;
+        line-height: 28px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .metric .change {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+
+      th {
+        height: 30px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-align: left;
+      }
+
+      td {
+        height: 30px;
+        border-bottom: 1px solid #edf2f7;
+        color: #203047;
+      }
+
+      td.code {
+        color: #1870c9;
+        font-family: Consolas, "SFMono-Regular", monospace;
+        font-size: 12px;
+      }
+
+      .mini-list {
+        display: grid;
+        gap: 7px;
+      }
+
+      .mini-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        min-height: 28px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #edf2f7;
+      }
+
+      .mini-row:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+      }
+
+      .mini-row strong,
+      .mini-row span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .mini-row span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .quick-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .quick-grid .btn {
+        justify-content: flex-start;
+        text-align: left;
+      }
+
+      .news-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px 16px;
+      }
+
+      .news {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 66px;
+        gap: 10px;
+        color: #243244;
+        font-size: 12px;
+        line-height: 22px;
+      }
+
+      .news span,
+      .news em {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .news em {
+        color: var(--muted);
+        font-style: normal;
+        text-align: right;
+      }
+
+      /* Option A */
+      .terminal-layout {
+        display: grid;
+        gap: 8px;
+      }
+
+      .ticker {
+        display: grid;
+        grid-template-columns: 84px repeat(4, minmax(0, 1fr)) minmax(430px, 1.4fr);
+        gap: 6px;
+        align-items: stretch;
+      }
+
+      .ticker-label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        font-weight: 800;
+      }
+
+      .ticker-cell {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-content: center;
+        gap: 2px 8px;
+        min-height: 58px;
+        padding: 6px 9px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--green);
+        border-radius: 7px;
+        background: #fff;
+      }
+
+      .ticker-cell b {
+        font-size: 21px;
+        line-height: 24px;
+      }
+
+      .ticker-cell span,
+      .ticker-cell em {
+        color: var(--muted);
+        font-size: 12px;
+        font-style: normal;
+      }
+
+      .movers {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        min-height: 58px;
+        overflow: hidden;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+      }
+
+      .terminal-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.8fr) 410px;
+        gap: 8px;
+      }
+
+      .right-stack {
+        display: grid;
+        align-content: start;
+        gap: 8px;
+      }
+
+      .terminal-bottom {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 8px;
+      }
+
+      /* Option B */
+      .monitor-layout {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr) 360px;
+        gap: 8px;
+      }
+
+      .monitor-column {
+        display: grid;
+        align-content: start;
+        gap: 8px;
+      }
+
+      .index-stack {
+        display: grid;
+        gap: 6px;
+      }
+
+      .compact-index {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        min-height: 44px;
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--green);
+        border-radius: 6px;
+        background: #fff;
+      }
+
+      .compact-index b {
+        font-size: 18px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .rank-grid {
+        display: grid;
+        gap: 6px;
+      }
+
+      .rank-row {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        height: 30px;
+        border-bottom: 1px solid #edf2f7;
+      }
+
+      .rank-no {
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .workspace-table {
+        min-height: 584px;
+      }
+
+      .workspace-table .panel-body {
+        padding-top: 0;
+      }
+
+      /* Option C */
+      .command-layout {
+        display: grid;
+        gap: 10px;
+      }
+
+      .hero-board {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) 280px;
+        gap: 10px;
+      }
+
+      .market-hero {
+        min-height: 164px;
+        padding: 14px;
+        border: 1px solid #b5c9de;
+        border-radius: 8px;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(238, 246, 255, 0.86)),
+          repeating-linear-gradient(90deg, rgba(31, 111, 235, 0.08) 0 1px, transparent 1px 64px);
+        box-shadow: var(--shadow);
+      }
+
+      .hero-title {
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+      }
+
+      .hero-number {
+        margin-top: 10px;
+        font-size: 48px;
+        font-weight: 900;
+        line-height: 52px;
+      }
+
+      .hero-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .stat-card {
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .stat-card span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .stat-card strong {
+        display: block;
+        margin-top: 2px;
+        font-size: 18px;
+      }
+
+      .signal-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .signal {
+        min-height: 78px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+      }
+
+      .signal span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .signal strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 20px;
+      }
+
+      .command-main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 8px;
+      }
+
+      .command-bottom {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 8px;
+      }
+
+      @media (max-width: 1280px) {
+        .shell {
+          grid-template-columns: 74px minmax(920px, 1fr);
+        }
+
+        .brand-text,
+        .nav span {
+          display: none;
+        }
+
+        .ticker,
+        .monitor-layout,
+        .hero-board,
+        .terminal-grid,
+        .command-main,
+        .terminal-bottom,
+        .command-bottom {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">Q</div>
+          <div class="brand-text">
+            <strong>Quant</strong>
+            <span>股票数据工作台</span>
+          </div>
+        </div>
+        <nav class="nav">
+          <a class="active" href="#"><b>⌁</b><span>仪表盘</span></a>
+          <a href="#"><b>▤</b><span>新闻</span></a>
+          <a href="#"><b>⌘</b><span>数据源</span></a>
+          <a href="#"><b>△</b><span>异常中心</span></a>
+          <a href="#"><b>▦</b><span>股票池</span></a>
+          <a href="#"><b>↻</b><span>同步调度</span></a>
+          <a href="#"><b>▥</b><span>数据库</span></a>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="tabs" role="tablist" aria-label="布局方案">
+            <button class="tab active" data-option="a" type="button">A 交易终端式</button>
+            <button class="tab" data-option="b" type="button">B 三栏监控台</button>
+            <button class="tab" data-option="c" type="button">C 指挥中心式</button>
+          </div>
+          <div class="actions">
+            <button class="btn primary" type="button">补日线</button>
+            <button class="btn" type="button">深色</button>
+          </div>
+        </header>
+
+        <section class="workspace">
+          <article id="option-a" class="option active">
+            <div class="page-head">
+              <div>
+                <h1>市场行情仪表盘</h1>
+                <p>方案 A：交易终端式，行情带 + 主表 + 右侧监控，优先保证高频扫读。</p>
+              </div>
+              <div class="status-line"><i class="dot"></i>30秒刷新 · API 正常 · 09:55:24</div>
+            </div>
+
+            <div class="terminal-layout">
+              <div class="ticker">
+                <div class="ticker-label">行情带</div>
+                <div class="ticker-cell"><span>上证指数</span><em class="down">-1.37%</em><b>4106.25</b><em>-56.85</em></div>
+                <div class="ticker-cell"><span>深证成指</span><em class="down">-3.17%</em><b>15854.20</b><em>-518.30</em></div>
+                <div class="ticker-cell"><span>沪深300</span><em class="down">-2.77%</em><b>4919.39</b><em>-140.27</em></div>
+                <div class="ticker-cell"><span>创业板指</span><em class="down">-3.84%</em><b>4192.19</b><em>-167.20</em></div>
+                <div class="movers">
+                  <span class="pill tag-down">浙能电力 -3.32%</span>
+                  <span class="pill tag-down">电投绿能 -3.08%</span>
+                  <span class="pill tag-down">上海电力 -2.69%</span>
+                  <span class="pill tag-up">工商银行 +2.50%</span>
+                  <span class="pill tag-down">五粮液 -2.34%</span>
+                </div>
+              </div>
+
+              <div class="terminal-grid">
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">板块行情</span><span class="pill">电力</span></div>
+                  <div class="panel-body">
+                    <table>
+                      <thead><tr><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>成交量</th><th>PE</th></tr></thead>
+                      <tbody>
+                        <tr><td class="code">sh600900</td><td>长江电力</td><td>26.87</td><td class="down">-0.26%</td><td>118.57万</td><td>18.2</td></tr>
+                        <tr><td class="code">sh600025</td><td>华能水电</td><td>9.38</td><td class="up">+0.11%</td><td>31.41万</td><td>20.5</td></tr>
+                        <tr><td class="code">sh601985</td><td>中国核电</td><td>9.03</td><td class="down">-0.55%</td><td>115.68万</td><td>22.6</td></tr>
+                        <tr><td class="code">sh600021</td><td>上海电力</td><td>16.29</td><td class="down">-2.69%</td><td>54.59万</td><td>18.4</td></tr>
+                        <tr><td class="code">sh600027</td><td>华电国际</td><td>4.76</td><td class="down">-0.42%</td><td>101.87万</td><td>9.4</td></tr>
+                        <tr><td class="code">sh600116</td><td>三峡水利</td><td>5.95</td><td class="down">-1.16%</td><td>18.05万</td><td>24.1</td></tr>
+                        <tr><td class="code">sh600795</td><td>国电电力</td><td>4.81</td><td class="up">+1.05%</td><td>166.14万</td><td>12.7</td></tr>
+                        <tr><td class="code">sh600023</td><td>浙能电力</td><td>5.53</td><td class="down">-3.32%</td><td>66.68万</td><td>10.0</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <div class="right-stack">
+                  <section class="panel">
+                    <div class="panel-head"><span class="panel-title">自选股</span><span class="pill">4只</span></div>
+                    <div class="panel-body mini-list">
+                      <div class="mini-row"><strong>长江电力</strong><span class="down">26.87 · -0.26%</span></div>
+                      <div class="mini-row"><strong>五粮液</strong><span class="down">74.76 · -2.34%</span></div>
+                      <div class="mini-row"><strong>工商银行</strong><span class="up">7.38 · +2.50%</span></div>
+                      <div class="mini-row"><strong>平安银行</strong><span class="up">10.71 · +0.56%</span></div>
+                    </div>
+                  </section>
+                  <section class="panel">
+                    <div class="panel-head"><span class="panel-title">市场速览</span><span class="pill tag-down">偏弱</span></div>
+                    <div class="panel-body mini-list">
+                      <div class="mini-row"><strong>指数涨跌</strong><span class="down">0/4 · 均值 -2.79%</span></div>
+                      <div class="mini-row"><strong>板块领涨</strong><span class="up">国电电力 +1.05%</span></div>
+                      <div class="mini-row"><strong>板块领跌</strong><span class="down">浙能电力 -3.32%</span></div>
+                      <div class="mini-row"><strong>自选预警</strong><span class="up">1只 · 均值 +0.12%</span></div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+
+              <div class="terminal-bottom">
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">新闻快扫</span><span class="pill">A股</span></div>
+                  <div class="panel-body news-grid">
+                    <div class="news"><span>运动休闲品牌 Vuori 开启全球零售扩张</span><em>环球市场</em></div>
+                    <div class="news"><span>欧洲央行官员经济学家：通胀或能较长时间维持在2%以上</span><em>环球市场</em></div>
+                    <div class="news"><span>欧洲多地遭遇极端高温：英、法、西、意发布高温红色预警</span><em>环球市场</em></div>
+                    <div class="news"><span>德国总理默茨：将推进提高退休年龄的计划</span><em>环球市场</em></div>
+                  </div>
+                </section>
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">快捷入口</span></div>
+                  <div class="panel-body quick-grid">
+                    <button class="btn">数据源</button><button class="btn">数据链路</button>
+                    <button class="btn">同步调度</button><button class="btn">数据库管理</button>
+                    <button class="btn">异常中心</button>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </article>
+
+          <article id="option-b" class="option">
+            <div class="page-head">
+              <div>
+                <h1>市场行情仪表盘</h1>
+                <p>方案 B：三栏监控台，左侧市场状态，中间主表，右侧自选与操作。</p>
+              </div>
+              <div class="status-line"><i class="dot"></i>30秒刷新 · 监控视图</div>
+            </div>
+
+            <div class="monitor-layout">
+              <div class="monitor-column">
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">指数监控</span><span class="pill tag-down">全线下行</span></div>
+                  <div class="panel-body index-stack">
+                    <div class="compact-index"><span>上证指数</span><b>4106.25</b><span class="down">-1.37%</span><span>-56.85</span></div>
+                    <div class="compact-index"><span>深证成指</span><b>15854.20</b><span class="down">-3.17%</span><span>-518.30</span></div>
+                    <div class="compact-index"><span>沪深300</span><b>4919.39</b><span class="down">-2.77%</span><span>-140.27</span></div>
+                    <div class="compact-index"><span>创业板指</span><b>4192.19</b><span class="down">-3.84%</span><span>-167.20</span></div>
+                  </div>
+                </section>
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">板块排行</span></div>
+                  <div class="panel-body rank-grid">
+                    <div class="rank-row"><span class="rank-no">1</span><strong>国电电力</strong><span class="up">+1.05%</span></div>
+                    <div class="rank-row"><span class="rank-no">2</span><strong>华能水电</strong><span class="up">+0.11%</span></div>
+                    <div class="rank-row"><span class="rank-no">8</span><strong>浙能电力</strong><span class="down">-3.32%</span></div>
+                    <div class="rank-row"><span class="rank-no">7</span><strong>上海电力</strong><span class="down">-2.69%</span></div>
+                  </div>
+                </section>
+              </div>
+
+              <section class="panel workspace-table">
+                <div class="panel-head"><span class="panel-title">板块行情工作区</span><span><span class="pill">电力</span> <span class="pill">按涨跌幅</span></span></div>
+                <div class="panel-body">
+                  <table>
+                    <thead><tr><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>成交量</th><th>成交额</th><th>PE</th></tr></thead>
+                    <tbody>
+                      <tr><td class="code">sh600900</td><td>长江电力</td><td>26.87</td><td class="down">-0.26%</td><td>118.57万</td><td>32.07万</td><td>18.2</td></tr>
+                      <tr><td class="code">sh600025</td><td>华能水电</td><td>9.38</td><td class="up">+0.11%</td><td>31.41万</td><td>35.50万</td><td>20.5</td></tr>
+                      <tr><td class="code">sh601985</td><td>中国核电</td><td>9.03</td><td class="down">-0.55%</td><td>115.68万</td><td>39.54万</td><td>22.6</td></tr>
+                      <tr><td class="code">sh600021</td><td>上海电力</td><td>16.29</td><td class="down">-2.69%</td><td>54.59万</td><td>12.85万</td><td>18.4</td></tr>
+                      <tr><td class="code">sh600027</td><td>华电国际</td><td>4.76</td><td class="down">-0.42%</td><td>101.87万</td><td>22.63万</td><td>9.4</td></tr>
+                      <tr><td class="code">sh600116</td><td>三峡水利</td><td>5.95</td><td class="down">-1.16%</td><td>18.05万</td><td>10.34万</td><td>24.1</td></tr>
+                      <tr><td class="code">sh600795</td><td>国电电力</td><td>4.81</td><td class="up">+1.05%</td><td>166.14万</td><td>18.92万</td><td>12.7</td></tr>
+                      <tr><td class="code">sh600023</td><td>浙能电力</td><td>5.53</td><td class="down">-3.32%</td><td>66.68万</td><td>9.84万</td><td>10.0</td></tr>
+                      <tr><td class="code">sz000027</td><td>深圳能源</td><td>7.42</td><td class="down">-0.72%</td><td>43.21万</td><td>11.75万</td><td>13.3</td></tr>
+                      <tr><td class="code">sh600886</td><td>国投电力</td><td>14.62</td><td class="down">-1.21%</td><td>35.89万</td><td>13.49万</td><td>16.8</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <div class="monitor-column">
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">自选监控</span><span class="pill">搜索股票</span></div>
+                  <div class="panel-body mini-list">
+                    <div class="mini-row"><strong>长江电力</strong><span class="down">-0.26%</span></div>
+                    <div class="mini-row"><strong>五粮液</strong><span class="down">-2.34%</span></div>
+                    <div class="mini-row"><strong>工商银行</strong><span class="up">+2.50%</span></div>
+                    <div class="mini-row"><strong>平安银行</strong><span class="up">+0.56%</span></div>
+                  </div>
+                </section>
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">预警与操作</span></div>
+                  <div class="panel-body mini-list">
+                    <div class="mini-row"><strong>下跌超过 2%</strong><span class="down">3只</span></div>
+                    <div class="mini-row"><strong>自选大幅波动</strong><span class="up">1只</span></div>
+                    <div class="mini-row"><strong>需要补日线</strong><span class="flat">59/5524</span></div>
+                  </div>
+                </section>
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">快捷入口</span></div>
+                  <div class="panel-body quick-grid">
+                    <button class="btn">数据源</button><button class="btn">数据链路</button>
+                    <button class="btn">同步调度</button><button class="btn">异常中心</button>
+                  </div>
+                </section>
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">新闻快扫</span></div>
+                  <div class="panel-body mini-list">
+                    <div class="mini-row"><strong>欧洲多地遭遇极端高温</strong><span>环球市场</span></div>
+                    <div class="mini-row"><strong>德国总理默茨推进退休年龄计划</strong><span>环球市场</span></div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </article>
+
+          <article id="option-c" class="option">
+            <div class="page-head">
+              <div>
+                <h1>市场行情仪表盘</h1>
+                <p>方案 C：指挥中心式，首屏更有总览感，适合展示市场状态和重点信号。</p>
+              </div>
+              <div class="status-line"><i class="dot"></i>30秒刷新 · 总览视图</div>
+            </div>
+
+            <div class="command-layout">
+              <div class="hero-board">
+                <section class="market-hero">
+                  <div class="hero-title"><strong>上证指数</strong><span>主市场温度</span></div>
+                  <div class="hero-number">4106.25</div>
+                  <div class="hero-stats">
+                    <div class="stat-card"><span>涨跌幅</span><strong class="down">-1.37%</strong></div>
+                    <div class="stat-card"><span>涨跌额</span><strong class="down">-56.85</strong></div>
+                    <div class="stat-card"><span>指数均值</span><strong class="down">-2.79%</strong></div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">核心指数</span></div>
+                  <div class="panel-body signal-grid">
+                    <div class="signal"><span>深证成指</span><strong>15854.20</strong><em class="down">-3.17%</em></div>
+                    <div class="signal"><span>沪深300</span><strong>4919.39</strong><em class="down">-2.77%</em></div>
+                    <div class="signal"><span>创业板指</span><strong>4192.19</strong><em class="down">-3.84%</em></div>
+                    <div class="signal"><span>自选均值</span><strong>+0.12%</strong><em class="up">1只预警</em></div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">市场信号</span><span class="pill tag-down">偏防守</span></div>
+                  <div class="panel-body mini-list">
+                    <div class="mini-row"><strong>领涨</strong><span class="up">国电电力 +1.05%</span></div>
+                    <div class="mini-row"><strong>领跌</strong><span class="down">浙能电力 -3.32%</span></div>
+                    <div class="mini-row"><strong>异动</strong><span class="down">电投绿能 -3.08%</span></div>
+                    <div class="mini-row"><strong>数据状态</strong><span>日线待补</span></div>
+                  </div>
+                </section>
+              </div>
+
+              <div class="command-main">
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">板块行情</span><span class="pill">电力</span></div>
+                  <div class="panel-body">
+                    <table>
+                      <thead><tr><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>成交量</th><th>PE</th></tr></thead>
+                      <tbody>
+                        <tr><td class="code">sh600900</td><td>长江电力</td><td>26.87</td><td class="down">-0.26%</td><td>118.57万</td><td>18.2</td></tr>
+                        <tr><td class="code">sh600025</td><td>华能水电</td><td>9.38</td><td class="up">+0.11%</td><td>31.41万</td><td>20.5</td></tr>
+                        <tr><td class="code">sh601985</td><td>中国核电</td><td>9.03</td><td class="down">-0.55%</td><td>115.68万</td><td>22.6</td></tr>
+                        <tr><td class="code">sh600021</td><td>上海电力</td><td>16.29</td><td class="down">-2.69%</td><td>54.59万</td><td>18.4</td></tr>
+                        <tr><td class="code">sh600023</td><td>浙能电力</td><td>5.53</td><td class="down">-3.32%</td><td>66.68万</td><td>10.0</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">自选股</span><span class="pill">搜索股票代码/名称</span></div>
+                  <div class="panel-body">
+                    <table>
+                      <thead><tr><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>成交额</th><th>操作</th></tr></thead>
+                      <tbody>
+                        <tr><td class="code">sh600900</td><td>长江电力</td><td>26.87</td><td class="down">-0.26%</td><td>32.07万</td><td>删除</td></tr>
+                        <tr><td class="code">sz000858</td><td>五粮液</td><td>74.76</td><td class="down">-2.34%</td><td>35.50万</td><td>删除</td></tr>
+                        <tr><td class="code">sh601398</td><td>工商银行</td><td>7.38</td><td class="up">+2.50%</td><td>39.54万</td><td>删除</td></tr>
+                        <tr><td class="code">sz000001</td><td>平安银行</td><td>10.71</td><td class="up">+0.56%</td><td>12.85万</td><td>删除</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+
+              <div class="command-bottom">
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">新闻快扫</span></div>
+                  <div class="panel-body news-grid">
+                    <div class="news"><span>欧洲央行官员经济学家：通胀或能较长时间维持在2%以上</span><em>环球市场</em></div>
+                    <div class="news"><span>运动休闲品牌 Vuori 开启全球零售扩张</span><em>环球市场</em></div>
+                    <div class="news"><span>欧洲多地遭遇极端高温：英、法、西、意发布高温红色预警</span><em>环球市场</em></div>
+                    <div class="news"><span>巴克莱据悉考虑重返日本现金股票业务</span><em>环球市场</em></div>
+                  </div>
+                </section>
+                <section class="panel">
+                  <div class="panel-head"><span class="panel-title">快捷入口</span></div>
+                  <div class="panel-body quick-grid">
+                    <button class="btn">数据源</button><button class="btn">数据链路</button>
+                    <button class="btn">同步调度</button><button class="btn">数据库管理</button>
+                    <button class="btn">异常中心</button>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const tabs = [...document.querySelectorAll(".tab")];
+      const options = [...document.querySelectorAll(".option")];
+
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const key = tab.dataset.option;
+          tabs.forEach((item) => item.classList.toggle("active", item === tab));
+          options.forEach((item) => item.classList.toggle("active", item.id === `option-${key}`));
+        });
+      });
+    </script>
+  </body>
+</html>

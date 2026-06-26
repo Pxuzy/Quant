@@ -1,13 +1,14 @@
-"""新闻抓取管线 — 定时拉取 + 存储 + 去重"""
+"""新闻抓取管线 — 定时拉取 + 存储 + 去重 + 多源"""
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
+from urllib.parse import urlencode
 
-from sqlalchemy.orm import Session
-
-from apps.api.db.session import SessionLocal, get_engine, init_db
+from apps.api.db.session import SessionLocal, get_engine
 from apps.api.models.entities import NewsArticle  # noqa: F401 register model
 
 # Ensure engine is initialized at module level
@@ -20,60 +21,81 @@ logger = logging.getLogger(__name__)
 # ── 抓取配置 ──
 DEFAULT_KEYWORDS = ["A股", "股市", "财经", "央行", "新能源", "半导体"]
 MAX_PER_KEYWORD = 20
-NEWS_SOURCE = "sina"
+NEWS_SOURCES = ["sina"]
+
+# ── 辅助函数 ──
+
+def _dedup_key(title: str, url: str) -> str:
+    """生成去重 key（URL 优先，title hash 兜底）"""
+    return url or hashlib.md5(title.encode()).hexdigest()[:16]
 
 
 def fetch_news_from_sina(keyword: str, limit: int = 20) -> list[dict]:
     """从新浪财经拉取新闻"""
-    import urllib.parse
-    import json
-
-    params = urllib.parse.urlencode({
-        "pageid": "153",
-        "lid": "2516",
-        "k": keyword,
-        "num": str(min(limit, 50)),
-        "page": "1",
+    params = urlencode({
+        "pageid": "153", "lid": "2516", "k": keyword,
+        "num": str(min(limit, 50)), "page": "1",
     })
     url = f"https://feed.mix.sina.com.cn/api/roll/get?{params}"
 
     try:
-        text = _request(url)
-        data = json.loads(text)
+        data = json.loads(_request(url))
     except Exception as e:
-        logger.error(f"新闻请求失败 [{keyword}]: {e}")
+        logger.error(f"新浪请求失败 [{keyword}]: {e}")
         return []
 
-    items = data.get("result", {}).get("data", [])
     results = []
-
-    for item in items[:limit]:
-        try:
-            created_ts = int(item.get("ctime", 0))
-            published_at = (
-                datetime.fromtimestamp(created_ts, tz=timezone.utc)
-                if created_ts
-                else None
-            )
-
-            title = item.get("title", "").strip()
-            summary = item.get("summary", "")[:200].strip()
-            if not title:
-                continue
-
-            results.append({
-                "title": title,
-                "url": item.get("url", ""),
-                "summary": summary,
-                "source": NEWS_SOURCE,
-                "category": _classify_news(title, summary),
-                "external_id": str(item.get("oid", "")) or title,  # 优先 oid，fallback title
-                "published_at": published_at,
-            })
-        except Exception as e:
-            logger.warning(f"解析新闻失败: {e}")
+    for item in data.get("result", {}).get("data", [])[:limit]:
+        title = item.get("title", "").strip()
+        if not title:
             continue
+        created_ts = int(item.get("ctime", 0))
+        results.append({
+            "title": title,
+            "url": item.get("url", ""),
+            "summary": item.get("summary", "")[:200].strip(),
+            "source": "sina",
+            "category": _classify_news(title, item.get("summary", "")),
+            "external_id": str(item.get("oid", "")) or _dedup_key(title, item.get("url", "")),
+            "published_at": (
+                datetime.fromtimestamp(created_ts, tz=timezone.utc) if created_ts else None
+            ),
+        })
+    return results
 
+
+def fetch_news_from_cls(keyword: str, limit: int = 20) -> list[dict]:
+    """从财联社拉取新闻（fallback 源）"""
+    params = urlencode({
+        "app": "CailianpressWeb", "os": "web", "sv": "8.4.6",
+        "type": "all", "q": keyword, "page": "1", "rn": str(min(limit, 50)),
+    })
+    url = f"https://www.cls.cn/api/sw?{params}"
+    try:
+        data = json.loads(_request(url))
+    except Exception as e:
+        logger.error(f"财联社请求失败 [{keyword}]: {e}")
+        return []
+
+    results = []
+    for item in data.get("data", {}).get("items", [])[:limit]:
+        title = item.get("title", "").strip()
+        if not title:
+            continue
+        update_time = item.get("update_time", 0)
+        if isinstance(update_time, (int, float)) and update_time > 1e12:
+            update_time = update_time / 1000
+        results.append({
+            "title": title,
+            "url": item.get("url", "") or f"https://www.cls.cn/telegraph/{item.get('id', '')}",
+            "summary": item.get("digest", "")[:200].strip(),
+            "source": "cls",
+            "category": _classify_news(title, item.get("digest", "")),
+            "external_id": str(item.get("id", "")) or _dedup_key(title, ""),
+            "published_at": (
+                datetime.fromtimestamp(update_time, tz=timezone.utc) if update_time else None
+            ),
+        })
     return results
 
 
@@ -88,48 +110,60 @@ def extract_related_symbols(title: str, summary: str) -> list[str]:
     return list(set(valid_codes))[:5]
 
 
-def run_news_ingest(*, keywords: list[str] | None = None, limit_per: int = MAX_PER_KEYWORD) -> dict:
+def run_news_ingest(*, keywords: list[str] | None = None, limit_per: int = MAX_PER_KEYWORD,
+                    sources: list[str] | None = None) -> dict:
     """
-    执行新闻抓取管线
-    
-    Returns:
+    执行新闻抓取管线（多源）
+
+    Args:
+        keywords: 搜索关键词列表
+        limit_per: 每个关键词每个源的抓取数
+        sources: 数据源列表，默认 ["sina",    Returns:
         {"fetched": N, "new": M, "total": T}
     """
     if keywords is None:
         keywords = DEFAULT_KEYWORDS
+    if sources is None:
+        sources = NEWS_SOURCES
 
     db = SessionLocal()
     try:
         repo = NewsRepository(db)
         all_fetched = 0
         total_new = 0
+        source_stats: dict[str, dict] = {}
 
-        for keyword in keywords:
-            logger.info(f"📰 抓取新闻 [{keyword}]...")
-            articles = fetch_news_from_sina(keyword, limit=limit_per)
-            all_fetched += len(articles)
+        for source in sources:
+            fetcher = _FETCHERS.get(source)
+            if not fetcher:
+                logger.warning(f"未知数据源: {source}, 跳过")
+                continue
 
-            # Enrich with related symbols
-            for article in articles:
-                article["related_symbols"] = extract_related_symbols(
-                    article["title"], article.get("summary", "")
-                )
+            src_fetched = src_new = 0
+            for keyword in keywords:
+                articles = fetcher(keyword, limit=limit_per)
+                src_fetched += len(articles)
+                for article in articles:
+                    article["related_symbols"] = extract_related_symbols(
+                        article["title"], article.get("summary", "")
+                    )
+                src_new += repo.upsert_many(articles)
+                logger.info(f"  [{source}/{keyword}] 获取 {len(articles)} 条, 新增 {src_new} 条")
 
-            # Upsert
-            new_count = repo.upsert_many(articles)
-            total_new += new_count
-            logger.info(f"  ✅ [{keyword}] 获取 {len(articles)} 条, 新增 {new_count} 条")
+            source_stats[source] = {"fetched": src_fetched, "new": src_new}
+            all_fetched += src_fetched
+            total_new += src_new
 
         db.commit()
-
         total_in_db = repo.count()
-        logger.info(f"📊 新闻管线完成: 抓取 {all_fetched}, 新增 {total_new}, 总计 {total_in_db}")
+        logger.info(f"� 完成: 抓取 {all_fetched}, 新增 {total_new}, 总计 {total_in_db}")
 
         return {
             "fetched": all_fetched,
             "new": total_new,
             "total": total_in_db,
             "keywords": keywords,
+            "sources": source_stats,
         }
     except Exception as e:
         db.rollback()
@@ -154,6 +188,14 @@ def cleanup_old_news(keep_days: int = 30) -> int:
         return 0
     finally:
         db.close()
+
+
+# ── 数据源注册表 ──
+
+_FETCHERS: dict[str, callable] = {
+    "sina": fetch_news_from_sina,
+    "cls": fetch_news_from_cls,
+}
 
 
 if __name__ == "__main__":

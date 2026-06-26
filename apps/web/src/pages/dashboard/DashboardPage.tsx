@@ -139,8 +139,8 @@ export function DashboardPage() {
 
   // News
   const newsQuery = useQuery({
-    queryKey: marketQueryKeys.news('A股'),
-    queryFn: ({ signal }) => fetchNews('A股', 20, signal),
+    queryKey: marketQueryKeys.news(''),
+    queryFn: ({ signal }) => fetchNews('', 20, signal),
     refetchInterval: refreshInterval || false,
     placeholderData: (prev) => prev,
   });

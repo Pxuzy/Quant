@@ -7,7 +7,6 @@ import {
   createRouter,
   parseSearchWith,
   stringifySearchWith,
-  useSearch,
 } from '@tanstack/react-router';
 import { AppLayout } from '../layouts/AppLayout';
 
@@ -16,10 +15,6 @@ const DataSystemOverviewPage = lazy(() =>
     default: module.DataSystemOverviewPage,
   })),
 );
-const DataSourcesPage = lazy(() =>
-  import('../pages/data-sources/DataSourcesPage').then((m) => ({ default: m.DataSourcesPage })),
-);
-
 const NewsPage = lazy(() =>
   import('../pages/news/NewsPage').then((m) => ({ default: m.NewsPage })),
 );
@@ -127,32 +122,6 @@ export type DatabaseSearch = {
   qualityPageSize?: number;
 };
 
-export type DatasetsSearch = {
-  name?: string;
-  layer?: string;
-  storageType?: string;
-  page?: number;
-  pageSize?: number;
-};
-
-export type MarketDataSearch = {
-  symbol?: string;
-  market?: string;
-  startDate?: string;
-  endDate?: string;
-  page?: number;
-  pageSize?: number;
-};
-
-export type TradingCalendarSearch = {
-  market?: string;
-  startDate?: string;
-  endDate?: string;
-  openStatus?: string;
-  page?: number;
-  pageSize?: number;
-};
-
 export type DataQualitySearch = {
   datasetName?: string;
   status?: string;
@@ -218,12 +187,6 @@ const overviewRoute = createRoute({
   component: DataSystemOverviewPage,
 });
 
-const legacyOverviewRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/data-system/overview',
-  component: () => <Navigate to="/data-system" replace />,
-});
-
 const pipelineRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/data-system/pipeline',
@@ -234,12 +197,6 @@ const alertsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/data-system/alerts',
   component: AlertsPage,
-});
-
-const dataSystemRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/data-system/legacy',
-  component: () => <Navigate to="/data-system" replace />,
 });
 
 const stocksRoute = createRoute({
@@ -310,110 +267,7 @@ const databaseRoute = createRoute({
   component: DatabaseManagementPage,
 });
 
-const datasetsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/data-system/datasets',
-  validateSearch: (search): DatasetsSearch => ({
-    name: stringSearch(search.name),
-    layer: stringSearch(search.layer),
-    storageType: stringSearch(search.storageType),
-    page: numberSearch(search.page),
-    pageSize: numberSearch(search.pageSize),
-  }),
-  component: () => <Navigate to="/data-system/database" replace />,
-});
-
-function LegacyMarketDataRedirect() {
-  const search = marketDataRoute.useSearch();
-  return search.symbol ? (
-    <Navigate
-      to="/data-system/stocks/$symbol"
-      params={{ symbol: search.symbol }}
-      search={{ market: search.market }}
-      replace
-    />
-  ) : (
-    <Navigate
-      to="/data-system/numeric-summary"
-      search={{
-        market: search.market,
-        startDate: search.startDate,
-        endDate: search.endDate,
-        page: search.page,
-        pageSize: search.pageSize,
-      }}
-      replace
-    />
-  );
-}
-
-const marketDataRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/data-system/market-data',
-  validateSearch: (search): MarketDataSearch => ({
-    symbol: stringSearch(search.symbol),
-    market: stringSearch(search.market),
-    startDate: stringSearch(search.startDate),
-    endDate: stringSearch(search.endDate),
-    page: numberSearch(search.page),
-    pageSize: numberSearch(search.pageSize),
-  }),
-  component: LegacyMarketDataRedirect,
-});
-
-const tradingCalendarsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/data-system/trading-calendars',
-  validateSearch: (search): TradingCalendarSearch => ({
-    market: stringSearch(search.market),
-    startDate: stringSearch(search.startDate),
-    endDate: stringSearch(search.endDate),
-    openStatus: stringSearch(search.openStatus),
-    page: numberSearch(search.page),
-    pageSize: numberSearch(search.pageSize),
-  }),
-  component: () => {
-    const search = tradingCalendarsRoute.useSearch();
-    return (
-      <Navigate
-        to="/data-system/database"
-        search={{ market: search.market, view: 'calendar' }}
-        replace
-      />
-    );
-  },
-});
-
-function LegacyDataQualityRedirect() {
-  const search = useSearch({ from: '/data-system/data-quality' });
-  return (
-    <Navigate
-      to="/data-system/database"
-      search={{
-        view: 'quality',
-        qualityDatasetName: search.datasetName,
-        qualityStatus: search.status,
-        qualitySeverity: search.severity,
-        qualityPage: search.page,
-        qualityPageSize: search.pageSize,
-      }}
-      replace
-    />
-  );
-}
-
-const dataQualityRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/data-system/data-quality',
-  validateSearch: (search): DataQualitySearch => ({
-    datasetName: stringSearch(search.datasetName),
-    status: stringSearch(search.status),
-    severity: stringSearch(search.severity),
-    page: numberSearch(search.page),
-    pageSize: numberSearch(search.pageSize),
-  }),
-  component: LegacyDataQualityRedirect,
-});
+// Legacy redirects keep backward compatibility.
 
 const syncTasksRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -448,10 +302,15 @@ const newsRoute = createRoute({
   component: NewsPage,
 });
 
-const dataSourcesWorkbenchRoute = createRoute({
+const notFoundRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/data-sources',
-  component: DataSourcesPage,
+  path: '/$',
+  component: () => (
+    <div style={{ padding: 48, textAlign: 'center' }}>
+      <h2>404 - Not found</h2>
+      <p style={{ color: '#999' }}>Check the route path.</p>
+    </div>
+  ),
 });
 
 const routeTree = rootRoute.addChildren([
@@ -459,10 +318,8 @@ const routeTree = rootRoute.addChildren([
   dashboardRoute,
   stockRoute,
   newsRoute,
-  dataSourcesWorkbenchRoute,
+  notFoundRoute,
   overviewRoute,
-  dataSystemRoute,
-  legacyOverviewRoute,
   pipelineRoute,
   alertsRoute,
   stocksRoute,
@@ -471,10 +328,6 @@ const routeTree = rootRoute.addChildren([
   newsSummaryRoute,
   numericSummaryRoute,
   databaseRoute,
-  datasetsRoute,
-  tradingCalendarsRoute,
-  marketDataRoute,
-  dataQualityRoute,
   syncTasksRoute,
 ]);
 

@@ -239,30 +239,69 @@ class StockQueryService:
         }
 
     def _enrich_with_daily_bar_coverage(self, stocks: list[Stock]) -> list[dict]:
-        symbols = [stock.symbol for stock in stocks]
-        market = _single_market(stocks)
-        summaries = self.daily_bar_repo.summarize_symbols(symbols=symbols, market=market)
-        market_dates_cache: dict[str, set[date]] = {}
-
+        """Enrich stock data with daily bar coverage info.
+        Priority: use cached latest_data_date/data_completeness from Stock table (fast).
+        Fallback: query Parquet if cached data is missing.
+        """
+        # First, try to use cached data from Stock table (fast path)
+        needs_parquet: list[Stock] = []
         enriched: list[dict] = []
         for stock in stocks:
-            summary = summaries.get((stock.market, stock.symbol))
-            latest_data_date = summary["latest_data_date"] if summary else None
-            data_completeness = None
-            if summary and latest_data_date:
-                market_dates = market_dates_cache.setdefault(
-                    stock.market,
-                    self._open_trade_dates(market=stock.market) or self.daily_bar_repo.market_trade_dates(market=stock.market),
+            if stock.latest_data_date is not None:
+                # Fast path: use cached data from Stock table
+                enriched.append(
+                    {
+                        "id": stock.id,
+                        "symbol": stock.symbol,
+                        "exchange": stock.exchange,
+                        "market": stock.market,
+                        "name": stock.name,
+                        "status": stock.status,
+                        "industry": stock.industry,
+                        "listing_date": stock.listing_date,
+                        "delisting_date": stock.delisting_date,
+                        "source": stock.source,
+                        "latest_data_date": stock.latest_data_date,
+                        "data_completeness": stock.data_completeness,
+                        "created_at": stock.created_at,
+                        "updated_at": stock.updated_at,
+                    }
                 )
-                data_completeness = _coverage_ratio(
-                    actual_count=int(summary["trade_dates_count"]),
-                    expected_dates=market_dates,
-                    start_date=summary["first_data_date"],
-                    end_date=latest_data_date,
-                )
+            else:
+                needs_parquet.append(stock)
 
-            enriched.append(
-                {
+        # Slow path: only for stocks without cached data, query Parquet
+        if needs_parquet:
+            symbols = [s.symbol for s in needs_parquet]
+            market = _single_market(needs_parquet)
+            summaries = self.daily_bar_repo.summarize_symbols(symbols=symbols, market=market)
+            market_dates_cache: dict[str, set[date]] = {}
+            parquet_results: dict[str, dict] = {}
+            for stock in needs_parquet:
+                summary = summaries.get((stock.market, stock.symbol))
+                latest_data_date = summary["latest_data_date"] if summary else None
+                data_completeness = None
+                if summary and latest_data_date:
+                    market_dates = market_dates_cache.setdefault(
+                        stock.market,
+                        self._open_trade_dates(market=stock.market) or self.daily_bar_repo.market_trade_dates(market=stock.market),
+                    )
+                    data_completeness = _coverage_ratio(
+                        actual_count=int(summary["trade_dates_count"]),
+                        expected_dates=market_dates,
+                        start_date=summary["first_data_date"],
+                        end_date=latest_data_date,
+                    )
+                parquet_results[stock.symbol] = {
+                    "latest_data_date": latest_data_date,
+                    "data_completeness": data_completeness,
+                }
+
+            # Merge parquet results into enriched list
+            enriched_map = {e["symbol"]: e for e in enriched}
+            for stock in needs_parquet:
+                pr = parquet_results.get(stock.symbol, {})
+                enriched_map[stock.symbol] = {
                     "id": stock.id,
                     "symbol": stock.symbol,
                     "exchange": stock.exchange,
@@ -273,12 +312,13 @@ class StockQueryService:
                     "listing_date": stock.listing_date,
                     "delisting_date": stock.delisting_date,
                     "source": stock.source,
-                    "latest_data_date": latest_data_date,
-                    "data_completeness": data_completeness,
+                    "latest_data_date": pr.get("latest_data_date"),
+                    "data_completeness": pr.get("data_completeness"),
                     "created_at": stock.created_at,
                     "updated_at": stock.updated_at,
                 }
-            )
+            enriched = list(enriched_map.values())
+
         return enriched
 
     def _open_trade_dates(self, *, market: str) -> set[date]:

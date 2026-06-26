@@ -31,7 +31,7 @@ export function StocksWorkbenchPage() {
       exchange: search.exchange ?? '',
       market: normalizeV1Market(search.market),
       status: search.status ?? '',
-      dailyCoverage: search.dailyCoverage ?? '',
+      dailyCoverage: search.dailyCoverage ?? 'has_data',
       syncSource: search.syncSource ?? 'auto',
     }),
     [

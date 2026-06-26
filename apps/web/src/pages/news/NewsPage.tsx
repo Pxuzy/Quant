@@ -23,7 +23,7 @@ const CATEGORIES = ['全部', '市场', '行业', '公司'];
 const PLACEHOLDER = '未知来源';
 
 export function NewsPage() {
-  const [keyword, setKeyword] = useState('A股');
+  const [keyword, setKeyword] = useState('');
   const [input, setInput] = useState('A股');
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [category, setCategory] = useState('全部');

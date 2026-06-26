@@ -26,6 +26,8 @@ class Stock(Base):
     listing_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     delisting_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     source: Mapped[str] = mapped_column(String(64), nullable=False)
+    latest_data_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    data_completeness: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

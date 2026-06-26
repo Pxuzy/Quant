@@ -22,6 +22,7 @@ class StockRepository:
         page_size: int | None,
         exchange: str | None = None,
         industry: str | None = None,
+        has_data: bool | None = None,
         common_only: bool = False,
     ) -> tuple[list[Stock], int]:
         conditions = []
@@ -44,9 +45,17 @@ class StockRepository:
             conditions.append(Stock.market == market)
         if common_only:
             conditions.append(listed_common_stock_filter(market=market))
+        if has_data:
+            conditions.append(Stock.latest_data_date.isnot(None))
+        if has_data is False:
+            conditions.append(Stock.latest_data_date.is_(None))
 
         total_stmt = select(func.count(Stock.id))
-        records_stmt = select(Stock).order_by(Stock.market, Stock.exchange, Stock.symbol)
+        # Default: stocks with most recent data first, then by symbol
+        records_stmt = select(Stock).order_by(
+            Stock.updated_at.desc().nulls_last(),
+            Stock.symbol.asc(),
+        )
         if conditions:
             total_stmt = total_stmt.where(*conditions)
             records_stmt = records_stmt.where(*conditions)
