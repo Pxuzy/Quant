@@ -10,6 +10,18 @@ The current phase focuses on A-share data. It keeps the existing FastAPI + React
 
 Phase 1 does not implement live trading, a full backtesting engine, a plugin marketplace, or a mobile workflow.
 
+## Backtesting And AI Direction
+
+Backtesting and AI research are planned as downstream consumers of the data foundation, not parallel data pipelines.
+
+The intended order is:
+
+1. stabilize A-share stock, daily bar, calendar, news, quality, lineage, and dataset contracts;
+2. expose a small research data access layer, such as a `BarReader` or `DataPortal`, over API responses or silver/gold datasets;
+3. build factor, backtest, AI assistant, portfolio, and strategy modules on top of that access layer.
+
+These future modules must not call third-party providers directly, open SQLite/PostgreSQL tables directly, or construct Parquet paths in UI or research code. If a research workflow needs new data, add it to the governed ingest path first.
+
 ## Documentation
 
 Start from the documentation center:
@@ -85,3 +97,4 @@ The frontend npm scripts preload a small Windows Vite compatibility shim for loc
 - Long-running sync work is handled by worker tasks.
 - Formal data writes must pass normalization, schema validation, ingest batch recording, and quality checks.
 - Research, factor, backtest, strategy, and trading modules consume stable data services or silver/gold datasets, not third-party providers directly.
+- AI features can summarize, explain, search, and generate research workflows, but their persisted inputs must be traceable to governed datasets, news records, quality reports, tasks, and ingest batches.

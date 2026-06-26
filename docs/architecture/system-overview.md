@@ -115,6 +115,30 @@ React stock workbench
 
 前端、后续因子、回测、策略模块不得直接拼接 Parquet 路径或调用第三方 provider。
 
+## 研究、回测和 AI 边界
+
+后续量化回测和 AI 能力属于数据基础之上的消费层，不是新的数据接入主链路。
+
+推荐演进顺序：
+
+```text
+governed ingest
+  -> datasets / silver-gold lake
+  -> research data access layer
+  -> factors / backtest / AI assistant / strategy
+```
+
+第一步只需要定义稳定读取契约，例如 `BarReader` 或 `DataPortal`：按市场、股票、时间范围、复权口径读取已治理日线和后续指标。它可以由 FastAPI、DuckDB 或内部服务实现，但调用方不应该知道 provider、数据库表名或 Parquet 物理路径。
+
+AI 能力可以做四类事情：
+
+- 总结股票、新闻、质量和同步状态。
+- 解释数据缺口、来源、批次和质量报告。
+- 生成研究问题、因子草案和回测配置。
+- 调用受控工具执行查询或任务。
+
+AI 不能绕开数据治理直接抓外部数据写入结果。需要持久化的数据仍必须经过 `normalize -> schema_validate -> ingest_batches -> quality`。
+
 ## 后续新闻数据边界
 
 新闻能力进入正式建设时，建议保持和股票数据一致的治理口径：

@@ -38,6 +38,8 @@ outputs/
 .pytest_cache/
 .playwright-cli/
 .claude/
+.ai/
+data/
 
 # Node
 node_modules/
