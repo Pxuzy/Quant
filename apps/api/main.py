@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from apps.api.core.config import get_settings
 from apps.api.db.session import init_db
 from apps.api.routers import (
-    data_pipeline,
     data_quality,
     data_sources,
     datasets,
@@ -50,7 +49,6 @@ def create_app() -> FastAPI:
     app.include_router(sync_tasks.router)
     app.include_router(trading_calendars.router)
     app.include_router(watchlist.router)
-    app.include_router(data_pipeline.router)
     return app
 
 

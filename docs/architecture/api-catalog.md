@@ -89,3 +89,4 @@
 - 同步类 API 只创建任务，不在请求内执行长任务。
 - `daily_bars` 必须带 `symbol`。
 - 市场补齐必须走 `daily_bars_market_repair`。
+- 数据管线操作统一走 `market-data` / `sync-tasks` 正式任务链路，不注册脚本型 `/api/data-pipeline` 旁路。
