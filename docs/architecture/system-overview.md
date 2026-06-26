@@ -43,6 +43,7 @@ React stock workbench
 | datasets | `apps/api/routers/datasets.py` | 数据集目录 |
 | market_data | `apps/api/routers/market_data.py` | 日线查询、日线同步、市场补齐 |
 | stocks | `apps/api/routers/stocks.py` | 股票池、股票详情、股票同步 |
+| research_data | `apps/api/routers/research_data.py` | 研究数据读取契约 |
 | sync_tasks | `apps/api/routers/sync_tasks.py` | 同步任务、日志、批次、定时配置 |
 | trading_calendars | `apps/api/routers/trading_calendars.py` | 交易日历查询和同步 |
 
@@ -130,7 +131,7 @@ governed ingest
   -> factors / backtest / AI assistant / strategy
 ```
 
-第一步只需要定义稳定读取契约，例如 `BarReader` 或 `DataPortal`：按市场、股票、时间范围、复权口径读取已治理日线和后续指标。它可以由 FastAPI、DuckDB 或内部服务实现，但调用方不应该知道 provider、数据库表名或 Parquet 物理路径。
+第一步已经落地最小 `BarReader` 契约：`/api/research-data/bars` 按市场、股票和时间范围读取已治理日线，并返回 `contract` 元信息。后续可以扩展为 `DataPortal`，但调用方不应该知道 provider、数据库表名或 Parquet 物理路径。
 
 AI 能力可以做四类事情：
 

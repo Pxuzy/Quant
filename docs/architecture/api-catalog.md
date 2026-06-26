@@ -51,6 +51,12 @@
 | POST | `/api/market-data/daily-bars/market-repair/preview` | 预览市场级日线缺口补齐计划 |
 | POST | `/api/market-data/daily-bars/market-repair` | 创建市场级日线缺口补齐任务 |
 
+## 研究数据
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/api/research-data/bars` | 通过 `BarReader` 契约读取已治理日线，供后续研究、回测和 AI 消费 |
+
 ## 股票
 
 | 方法 | 路径 | 用途 |
@@ -90,3 +96,4 @@
 - `daily_bars` 必须带 `symbol`。
 - 市场补齐必须走 `daily_bars_market_repair`。
 - 数据管线操作统一走 `market-data` / `sync-tasks` 正式任务链路，不注册脚本型 `/api/data-pipeline` 旁路。
+- 研究、回测和 AI 读取日线数据时优先走 `research-data` 契约，不直接读取 provider、数据库表或 Parquet 物理路径。

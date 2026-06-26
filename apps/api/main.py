@@ -18,6 +18,7 @@ from apps.api.routers import (
     market,
     market_data,
     mcp_data,
+    research_data,
     stocks,
     sync_tasks,
     trading_calendars,
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     app.include_router(data_sources.router)
     app.include_router(datasets.router)
     app.include_router(market_data.router)
+    app.include_router(research_data.router)
     app.include_router(stocks.router)
     app.include_router(sync_tasks.router)
     app.include_router(trading_calendars.router)
