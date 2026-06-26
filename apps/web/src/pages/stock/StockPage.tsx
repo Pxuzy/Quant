@@ -48,6 +48,7 @@ const PERIOD_OPTIONS = [
 ] as const;
 
 const RANGE_OPTIONS = ['1M', '3M', '6M', '1Y', '3Y', '\u5168\u90e8'] as const;
+const KLINE_HISTORY_LIMIT = 10000;
 const DEFAULT_MA_PERIODS = [5, 10, 20, 60] as const;
 const MA_COLORS = ['#f59f00', '#1677ff', '#722ed1', '#a0d911'] as const;
 const RSI_COLORS = ['#1677ff', '#fa8c16', '#722ed1'] as const;
@@ -75,14 +76,14 @@ function fmt(v: number): string {
   return v.toFixed(0);
 }
 
-function countFromRange(range: RangeValue): number {
+function visibleCountFromRange(range: RangeValue): number | undefined {
   switch (range) {
     case '1M': return 22;
     case '3M': return 66;
     case '6M': return 132;
     case '1Y': return 250;
     case '3Y': return 750;
-    case '\u5168\u90e8': return 2000;
+    case '\u5168\u90e8': return undefined;
   }
 }
 
@@ -95,7 +96,7 @@ type StockKlineChartProps = {
 
 export function StockKlineChart({ code, title, embedded = false, minHeight = 520 }: StockKlineChartProps) {
   const [period, setPeriod] = useState<PeriodValue>('day');
-  const [range, setRange] = useState<RangeValue>('6M');
+  const [range, setRange] = useState<RangeValue>('全部');
   const [loading, setLoading] = useState(true);
   const [klineData, setKlineData] = useState<KLine[]>([]);
   const [enabledOverlays, setEnabledOverlays] = useState<OverlayValue[]>(
@@ -112,14 +113,36 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
   const requestIdRef = useRef(0);
   const shouldFitContentRef = useRef(true);
 
+  const applyVisibleRange = useCallback((nextRange: RangeValue, data: KLine[] = klineData) => {
+    const chart = chartApiRef.current;
+    if (!chart || !data.length) return;
+
+    const visibleCount = visibleCountFromRange(nextRange);
+    if (!visibleCount || data.length <= visibleCount) {
+      chart.timeScale().fitContent();
+      return;
+    }
+
+    const fromItem = data[Math.max(0, data.length - visibleCount)];
+    const toItem = data[data.length - 1];
+    if (!fromItem || !toItem) {
+      chart.timeScale().fitContent();
+      return;
+    }
+
+    chart.timeScale().setVisibleRange({
+      from: fromItem.date as Time,
+      to: toItem.date as Time,
+    });
+  }, [klineData]);
+
   const loadKline = useCallback(async (signal?: AbortSignal) => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     setLoading(true);
     try {
-      const count = countFromRange(range);
       const fullCode = detectPrefix(code) + code;
-      const data = await fetchKline(fullCode, period, count, signal);
+      const data = await fetchKline(fullCode, period, KLINE_HISTORY_LIMIT, signal);
       if (signal?.aborted || requestId !== requestIdRef.current) return;
       shouldFitContentRef.current = true;
       setKlineData(data);
@@ -131,7 +154,7 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
         setLoading(false);
       }
     }
-  }, [code, period, range]);
+  }, [code, period]);
 
   const renderMainIndicators = useCallback((chart: IChartApi, data: KLine[]) => {
     maPeriods.forEach((maPeriod, index) => {
@@ -362,7 +385,9 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
     renderMainIndicators(chart, data);
     renderLowerIndicator(chart, data);
 
-    if (!shouldFitContentRef.current && previousRange) {
+    if (shouldFitContentRef.current) {
+      applyVisibleRange(range, data);
+    } else if (previousRange) {
       try {
         chart.timeScale().setVisibleRange(previousRange);
       } catch {
@@ -374,7 +399,7 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
     shouldFitContentRef.current = false;
 
     attachTooltip(chart, container, candleSeries, data, w, h);
-  }, [attachTooltip, renderLowerIndicator, renderMainIndicators]);
+  }, [applyVisibleRange, attachTooltip, range, renderLowerIndicator, renderMainIndicators]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -405,8 +430,15 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
 
   const fitContent = useCallback(() => {
     shouldFitContentRef.current = true;
+    setRange('全部');
     chartApiRef.current?.timeScale().fitContent();
   }, []);
+
+  const handleRangeChange = useCallback((nextRange: RangeValue) => {
+    setRange(nextRange);
+    shouldFitContentRef.current = true;
+    applyVisibleRange(nextRange);
+  }, [applyVisibleRange]);
 
   const updateMaPeriod = useCallback((index: number, value: number | null) => {
     if (!value) return;
@@ -495,18 +527,32 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
   );
 
   const chartControls = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: embedded ? 0 : 12, flexWrap: 'wrap' }}>
+    <div className="stock-kline-controls" style={{ marginBottom: embedded ? 0 : 12 }}>
       <Typography.Title level={4} style={{ margin: 0 }}>{title ?? code.toUpperCase()}</Typography.Title>
-      <Segmented
-        value={period}
-        onChange={(v) => setPeriod(v as PeriodValue)}
-        options={[...PERIOD_OPTIONS]}
-      />
-      <Segmented
-        value={range}
-        onChange={(v) => setRange(v as RangeValue)}
-        options={[...RANGE_OPTIONS]}
-      />
+      <Space className="stock-kline-period-cards" size={6} wrap>
+        {PERIOD_OPTIONS.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            className={`stock-kline-control-card${period === item.value ? ' is-active' : ''}`}
+            onClick={() => setPeriod(item.value)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </Space>
+      <Space className="stock-kline-range-cards" size={6} wrap>
+        {RANGE_OPTIONS.map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={`stock-kline-control-card${range === item ? ' is-active' : ''}`}
+            onClick={() => handleRangeChange(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </Space>
       <Segmented
         value={lowerIndicator}
         onChange={(v) => setLowerIndicator(v as LowerIndicator)}
