@@ -832,7 +832,8 @@ class MarketDataSyncService:
             start_policy=start_policy,
             adjust_type=adjust_type,
         )
-        return self._repair_market_plan_with_adapter(task=task, adapter=adapter, plan=plan)
+        records_read, records_written, failed_count = self._repair_market_plan_with_adapter(task=task, adapter=adapter, plan=plan)
+        return records_read, records_written
 
     def _repair_market_plan_with_adapter(
         self,
@@ -863,6 +864,8 @@ class MarketDataSyncService:
         records_read = 0
         records_written = 0
         symbol_errors: list[str] = []
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError
+        _executor = ThreadPoolExecutor(max_workers=1)
         for item in plan.items:
             self.task_repo.add_log(
                 task,
@@ -878,13 +881,49 @@ class MarketDataSyncService:
                 },
             )
             try:
-                symbol_read, symbol_written = self._sync_symbol_with_adapter(
+                future = _executor.submit(
+                    self._sync_symbol_with_adapter,
                     task=task,
                     adapter=adapter,
                     symbol=item.symbol,
                     start_date=item.start_date,
                     end_date=item.end_date,
                 )
+                symbol_read, symbol_written = future.result(timeout=120)
+            except TimeoutError:
+                error_message = f"Timed out after 120s for {item.symbol}"
+                symbol_errors.append(f"{item.symbol}: {error_message}")
+                if not self._has_daily_bar_batch(
+                    task=task,
+                    adapter=adapter,
+                    symbol=item.symbol,
+                    start_date=item.start_date,
+                    end_date=item.end_date,
+                ):
+                    self._record_failed_market_repair_batch(
+                        task=task,
+                        adapter=adapter,
+                        market=market,
+                        symbol=item.symbol,
+                        start_date=item.start_date,
+                        end_date=item.end_date,
+                        message=error_message,
+                    )
+                self.task_repo.add_log(
+                    task,
+                    level="warning",
+                    message="Market repair symbol timed out.",
+                    payload={
+                        "source": adapter.code,
+                        "symbol": item.symbol,
+                        "start_date": item.start_date.isoformat(),
+                        "end_date": item.end_date.isoformat(),
+                        "missing_trade_days": item.missing_trade_days,
+                        "adjust_type": plan.adjust_type,
+                        "error": error_message,
+                    },
+                )
+                continue
             except Exception as exc:
                 error_message = str(exc)
                 symbol_errors.append(f"{item.symbol}: {error_message}")
@@ -925,7 +964,7 @@ class MarketDataSyncService:
         if plan.items and records_written == 0 and symbol_errors:
             raise RuntimeError(f"Market daily bars repair wrote no records: {'; '.join(symbol_errors)}")
 
-        return records_read, records_written
+        return records_read, records_written, len(symbol_errors)
 
     def _build_market_repair_plan(
         self,
