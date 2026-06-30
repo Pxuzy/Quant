@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 
 import pytest
+from sqlalchemy import delete
 from sqlalchemy import select
 
 from apps.api.adapters.base import (
@@ -15,9 +17,11 @@ from apps.api.adapters.base import (
 )
 from apps.api.adapters.registry import AdapterRegistry
 from apps.api.db.session import SessionLocal
-from apps.api.models import Dataset, IngestBatch, Stock, SyncTask, TradingCalendar
+from apps.api.models import Dataset, IngestBatch, Stock, SyncTask, SyncTaskLog, TradingCalendar
+from apps.api.repositories.daily_bars import DailyBarRepository
 from apps.api.services.market_data_query_service import MarketDataQueryService
 from apps.api.services.market_data_sync_service import MarketDataSyncService
+from apps.api.services.research_data_service import ResearchDataService
 
 
 class FailingDailyBarAdapter(StockDataSourceAdapter):
@@ -52,6 +56,9 @@ class SuccessDailyBarAdapter(StockDataSourceAdapter):
     name = "Success Daily"
     priority = 10
 
+    def __init__(self) -> None:
+        self.fetch_calls = 0
+
     def capabilities(self) -> AdapterCapability:
         return AdapterCapability(stock_list=False, daily_bars=True)
 
@@ -68,6 +75,7 @@ class SuccessDailyBarAdapter(StockDataSourceAdapter):
         return []
 
     def fetch_daily_bars(self, **kwargs) -> list[dict]:
+        self.fetch_calls += 1
         return [
             {"trade_date": date(2026, 6, 1), "close": 1675.0},
             {"trade_date": date(2026, 6, 2), "close": 1688.0},
@@ -79,7 +87,7 @@ class SuccessDailyBarAdapter(StockDataSourceAdapter):
                 symbol="600519",
                 exchange="SSE",
                 market="A_SHARE",
-                trade_date=record["trade_date"],
+                trade_date=date.fromisoformat(record["trade_date"]) if isinstance(record["trade_date"], str) else record["trade_date"],
                 open=record["close"] - 10.0,
                 high=record["close"] + 5.0,
                 low=record["close"] - 15.0,
@@ -122,7 +130,11 @@ class MultiSymbolDailyBarAdapter(SuccessDailyBarAdapter):
     code = "multi_symbol_daily"
     name = "Multi Symbol Daily"
 
+    def __init__(self) -> None:
+        self.fetch_calls: list[dict] = []
+
     def fetch_daily_bars(self, **kwargs) -> list[dict]:
+        self.fetch_calls.append(kwargs)
         symbol = kwargs["symbol"]
         return [
             {"symbol": symbol, "trade_date": date(2026, 6, 1), "close": 10.0 if symbol == "000001" else 20.0},
@@ -169,6 +181,7 @@ def test_daily_bars_sync_api_creates_pending_task(client):
             "symbol": "600519",
             "start_date": "2026-06-01",
             "end_date": "2026-06-02",
+            "adjust_type": "qfq",
         },
     )
 
@@ -178,6 +191,20 @@ def test_daily_bars_sync_api_creates_pending_task(client):
     assert payload["source"] == "auto"
     assert payload["symbol"] == "600519"
     assert payload["status"] == "pending"
+
+    db = SessionLocal()
+    try:
+        task = db.get(SyncTask, payload["id"])
+        logs = list(task.logs if task else [])
+    finally:
+        db.close()
+
+    assert any(
+        log.message == "Daily bars sync task created."
+        and log.payload_json
+        and log.payload_json.get("adjust_type") == "qfq"
+        for log in logs
+    )
 
 
 def test_market_daily_bars_repair_api_creates_explicit_market_task(client):
@@ -189,6 +216,7 @@ def test_market_daily_bars_repair_api_creates_explicit_market_task(client):
             "start_date": "2026-06-01",
             "end_date": "2026-06-02",
             "max_symbols": 2,
+            "adjust_type": "hfq",
         },
     )
 
@@ -201,6 +229,20 @@ def test_market_daily_bars_repair_api_creates_explicit_market_task(client):
     assert payload["start_date"] == "2026-06-01"
     assert payload["end_date"] == "2026-06-02"
     assert payload["status"] == "pending"
+
+    db = SessionLocal()
+    try:
+        task = db.get(SyncTask, payload["id"])
+        logs = list(task.logs if task else [])
+    finally:
+        db.close()
+
+    assert any(
+        log.message == "Market daily bars repair task created."
+        and log.payload_json
+        and log.payload_json.get("adjust_type") == "hfq"
+        for log in logs
+    )
 
 
 def test_market_daily_bars_repair_preview_does_not_create_sync_task(client, monkeypatch):
@@ -252,6 +294,7 @@ def test_market_daily_bars_repair_preview_does_not_create_sync_task(client, monk
             "start_date": "2099-06-01",
             "end_date": "2099-06-02",
             "max_symbols": 2,
+            "adjust_type": "qfq",
         },
     )
 
@@ -267,6 +310,7 @@ def test_market_daily_bars_repair_preview_does_not_create_sync_task(client, monk
     assert payload["selected_source"] == "multi_symbol_daily"
     assert payload["candidate_sources"] == ["multi_symbol_daily"]
     assert payload["market"] == "A_SHARE"
+    assert payload["adjust_type"] == "qfq"
     assert payload["stock_pool_count"] == 2
     assert payload["open_dates_count"] == 2
     assert payload["planned_symbols"] == 2
@@ -334,6 +378,72 @@ def test_market_daily_bars_repair_preview_limits_plan_by_max_symbols(client, mon
     assert payload["planned_missing_symbol_days"] == 2
     assert len(payload["sample_items"]) == 1
     assert payload["sample_items"][0]["symbol"] == "600519"
+
+
+def test_market_daily_bars_full_history_preview_starts_each_symbol_at_listing_date(client, monkeypatch):
+    registry = AdapterRegistry()
+    registry.register(MultiSymbolDailyBarAdapter())
+    monkeypatch.setattr("apps.api.services.market_data_sync_service.default_adapter_registry", lambda: registry)
+
+    db = SessionLocal()
+    try:
+        db.add_all(
+            [
+                Stock(
+                    symbol="000001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="平安银行",
+                    status="LISTED",
+                    listing_date=date(2026, 6, 2),
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="贵州茅台",
+                    status="LISTED",
+                    listing_date=date(2026, 6, 3),
+                    source="fixture",
+                ),
+            ]
+        )
+        db.add_all(
+            [
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 2), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 3), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 4), is_open=True, source="fixture"),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/api/market-data/daily-bars/market-repair/preview",
+        json={
+            "source": "auto",
+            "market": "A_SHARE",
+            "start_date": "2026-06-01",
+            "end_date": "2026-06-04",
+            "max_symbols": 2,
+            "start_policy": "listing_date",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    items = {item["symbol"]: item for item in payload["sample_items"]}
+    assert payload["start_policy"] == "listing_date"
+    assert payload["planned_missing_symbol_days"] == 5
+    assert items["000001"]["start_date"] == "2026-06-02"
+    assert items["000001"]["end_date"] == "2026-06-04"
+    assert items["000001"]["missing_trade_days"] == 3
+    assert items["600519"]["start_date"] == "2026-06-03"
+    assert items["600519"]["end_date"] == "2026-06-04"
+    assert items["600519"]["missing_trade_days"] == 2
 
 
 def test_market_daily_bars_repair_preview_skips_a_share_index_rows(client, monkeypatch):
@@ -443,7 +553,8 @@ def test_market_daily_bars_repair_rejects_service_limit_above_api_cap(client, tm
 
 def test_market_daily_bars_repair_expands_stock_pool_and_writes_per_symbol_batches(client, tmp_path):
     registry = AdapterRegistry()
-    registry.register(MultiSymbolDailyBarAdapter())
+    adapter = MultiSymbolDailyBarAdapter()
+    registry.register(adapter)
 
     db = SessionLocal()
     try:
@@ -484,8 +595,10 @@ def test_market_daily_bars_repair_expands_stock_pool_and_writes_per_symbol_batch
             start_date=date(2026, 6, 1),
             end_date=date(2026, 6, 2),
             max_symbols=2,
+            adjust_type="qfq",
         )
         batches = db.scalars(select(IngestBatch).where(IngestBatch.task_id == task.id).order_by(IngestBatch.symbol)).all()
+        logs = list(task.logs)
     finally:
         db.close()
 
@@ -510,6 +623,264 @@ def test_market_daily_bars_repair_expands_stock_pool_and_writes_per_symbol_batch
     assert all(batch.status == "success" for batch in batches)
     assert query["total"] == 4
     assert {item["symbol"] for item in query["items"]} == {"000001", "600519"}
+    assert {item["adjust_type"] for item in query["items"]} == {"qfq"}
+    assert {call["adjust_type"] for call in adapter.fetch_calls} == {"qfq"}
+    assert any(
+        log.message == "Market daily bars repair planned."
+        and log.payload_json
+        and log.payload_json.get("adjust_type") == "qfq"
+        for log in logs
+    )
+
+
+def test_market_daily_bars_repair_uses_adjust_type_when_checking_existing_rows(client, tmp_path):
+    registry = AdapterRegistry()
+    adapter = MultiSymbolDailyBarAdapter()
+    registry.register(adapter)
+
+    db = SessionLocal()
+    try:
+        db.add(
+            Stock(
+                symbol="600519",
+                exchange="SSE",
+                market="A_SHARE",
+                name="贵州茅台",
+                status="LISTED",
+                industry="白酒",
+                source="fixture",
+            )
+        )
+        db.add_all(
+            [
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 2), is_open=True, source="fixture"),
+            ]
+        )
+        db.commit()
+
+        existing_repo_service = MarketDataSyncService(db, registry, lake_root=tmp_path / "lake")
+        existing_repo_service.daily_bar_repo.write_many(
+            [
+                NormalizedDailyBar(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    trade_date=date(2026, 6, 1),
+                    open=19.5,
+                    high=20.5,
+                    low=19.0,
+                    close=20.0,
+                    pre_close=None,
+                    volume=1000.0,
+                    amount=20000.0,
+                    adjust_factor=1.0,
+                    adjust_type="none",
+                    source="fixture",
+                ),
+                NormalizedDailyBar(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    trade_date=date(2026, 6, 2),
+                    open=20.5,
+                    high=21.5,
+                    low=20.0,
+                    close=21.0,
+                    pre_close=None,
+                    volume=1000.0,
+                    amount=21000.0,
+                    adjust_factor=1.0,
+                    adjust_type="none",
+                    source="fixture",
+                ),
+            ]
+        )
+
+        task = existing_repo_service.run_market_daily_bars_repair(
+            source="multi_symbol_daily",
+            market="A_SHARE",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+            max_symbols=1,
+            adjust_type="qfq",
+        )
+    finally:
+        db.close()
+
+    query = MarketDataQueryService(lake_root=tmp_path / "lake").list_daily_bars(
+        symbol="600519",
+        market="A_SHARE",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 2),
+        page=1,
+        page_size=10,
+    )
+
+    assert task.status == "success"
+    assert task.records_written == 2
+    assert {item["adjust_type"] for item in query["items"]} == {"none", "qfq"}
+    assert {call["adjust_type"] for call in adapter.fetch_calls} == {"qfq"}
+
+
+def test_market_daily_bars_full_history_repair_uses_listing_date_batches(client, tmp_path):
+    registry = AdapterRegistry()
+    registry.register(MultiSymbolDailyBarAdapter())
+
+    db = SessionLocal()
+    try:
+        db.add_all(
+            [
+                Stock(
+                    symbol="000001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="平安银行",
+                    status="LISTED",
+                    listing_date=date(2026, 6, 2),
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="贵州茅台",
+                    status="LISTED",
+                    listing_date=date(2026, 6, 3),
+                    source="fixture",
+                ),
+            ]
+        )
+        db.add_all(
+            [
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 2), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 3), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 4), is_open=True, source="fixture"),
+            ]
+        )
+        db.commit()
+
+        service = MarketDataSyncService(db, registry, lake_root=tmp_path / "lake")
+        task = service.run_market_daily_bars_repair(
+            source="multi_symbol_daily",
+            market="A_SHARE",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 4),
+            max_symbols=2,
+            start_policy="listing_date",
+        )
+        batches = db.scalars(select(IngestBatch).where(IngestBatch.task_id == task.id).order_by(IngestBatch.symbol)).all()
+        logs = list(task.logs)
+    finally:
+        db.close()
+
+    query = MarketDataQueryService(lake_root=tmp_path / "lake").list_daily_bars(
+        symbol=None,
+        market="A_SHARE",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 4),
+        page=1,
+        page_size=10,
+    )
+
+    batches_by_symbol = {batch.symbol: batch for batch in batches}
+    assert task.status == "success"
+    assert batches_by_symbol["000001"].start_date == date(2026, 6, 2)
+    assert batches_by_symbol["600519"].start_date == date(2026, 6, 3)
+    assert batches_by_symbol["000001"].end_date == date(2026, 6, 4)
+    assert batches_by_symbol["600519"].end_date == date(2026, 6, 4)
+    assert any(
+        log.message == "Market daily bars repair task created."
+        and log.payload_json
+        and log.payload_json.get("start_policy") == "listing_date"
+        for log in logs
+    )
+    assert any(
+        log.message == "Market daily bars repair planned."
+        and log.payload_json
+        and log.payload_json.get("start_policy") == "listing_date"
+        for log in logs
+    )
+    assert query["total"] == 4
+    assert {item["symbol"] for item in query["items"]} == {"000001", "600519"}
+
+
+def test_market_repair_task_uses_structured_fields_without_creation_log(client, tmp_path):
+    registry = AdapterRegistry()
+    adapter = MultiSymbolDailyBarAdapter()
+    registry.register(adapter)
+
+    db = SessionLocal()
+    try:
+        db.add_all(
+            [
+                Stock(
+                    symbol="000001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="平安银行",
+                    status="LISTED",
+                    listing_date=date(2026, 6, 2),
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="贵州茅台",
+                    status="LISTED",
+                    listing_date=date(2026, 6, 3),
+                    source="fixture",
+                ),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 2), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 3), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 4), is_open=True, source="fixture"),
+            ]
+        )
+        db.commit()
+
+        service = MarketDataSyncService(db, registry, lake_root=tmp_path / "lake")
+        pending = service.create_market_daily_bars_repair_task(
+            source="multi_symbol_daily",
+            market="A_SHARE",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 4),
+            max_symbols=1,
+            start_policy="listing_date",
+            adjust_type="qfq",
+        )
+        db.execute(delete(SyncTaskLog).where(SyncTaskLog.task_id == pending.id))
+        db.commit()
+
+        task = service.run_market_daily_bars_repair_task(pending.id)
+        batches = db.scalars(select(IngestBatch).where(IngestBatch.task_id == task.id)).all()
+    finally:
+        db.close()
+
+    query = MarketDataQueryService(lake_root=tmp_path / "lake").list_daily_bars(
+        symbol=None,
+        market="A_SHARE",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 4),
+        page=1,
+        page_size=10,
+    )
+
+    assert task.status == "success"
+    assert task.max_symbols == 1
+    assert task.start_policy == "listing_date"
+    assert task.adjust_type == "qfq"
+    assert len(batches) == 1
+    expected_start_dates = {"000001": date(2026, 6, 2), "600519": date(2026, 6, 3)}
+    assert batches[0].symbol in expected_start_dates
+    assert batches[0].start_date == expected_start_dates[batches[0].symbol]
+    assert query["total"] == 2
+    assert {item["adjust_type"] for item in query["items"]} == {"qfq"}
+    assert len(adapter.fetch_calls) == 1
+    assert adapter.fetch_calls[0]["start_date"] == expected_start_dates[batches[0].symbol]
+    assert adapter.fetch_calls[0]["adjust_type"] == "qfq"
 
 
 def test_market_daily_bars_repair_skips_failed_symbol_and_continues(client, tmp_path):
@@ -589,7 +960,8 @@ def test_market_daily_bars_repair_skips_failed_symbol_and_continues(client, tmp_
 def test_auto_daily_bars_sync_falls_back_and_writes_parquet(client, tmp_path):
     registry = AdapterRegistry()
     registry.register(FailingDailyBarAdapter())
-    registry.register(SuccessDailyBarAdapter())
+    adapter = SuccessDailyBarAdapter()
+    registry.register(adapter)
 
     db = SessionLocal()
     try:
@@ -600,6 +972,7 @@ def test_auto_daily_bars_sync_falls_back_and_writes_parquet(client, tmp_path):
             symbol="600519",
             start_date=date(2026, 6, 1),
             end_date=date(2026, 6, 2),
+            adjust_type="hfq",
         )
         logs = list(task.logs)
         dataset = db.scalar(select(Dataset).where(Dataset.name == "daily_bars"))
@@ -636,13 +1009,188 @@ def test_auto_daily_bars_sync_falls_back_and_writes_parquet(client, tmp_path):
     assert query["total"] == 2
     assert query["items"][0]["symbol"] == "600519"
     assert query["items"][0]["source"] == "success_daily"
-    assert query["items"][0]["adjust_type"] == "none"
+    assert query["items"][0]["adjust_type"] == "hfq"
     assert query["items"][0]["ingested_at"] is not None
     assert any(log.message == "Provider attempt failed." and log.payload_json["source"] == "failing_daily" for log in logs)
     assert any(
         log.message == "Daily bars sync completed." and log.payload_json["selected_source"] == "success_daily"
         for log in logs
     )
+
+
+def test_daily_bars_sync_persists_raw_provider_records(client, tmp_path):
+    registry = AdapterRegistry()
+    registry.register(SuccessDailyBarAdapter())
+
+    db = SessionLocal()
+    try:
+        service = MarketDataSyncService(db, registry, lake_root=tmp_path / "lake")
+        task = service.run_daily_bars_sync(
+            source="success_daily",
+            market="A_SHARE",
+            symbol="600519",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+            adjust_type="none",
+        )
+        logs = list(task.logs)
+    finally:
+        db.close()
+
+    raw_files = sorted((tmp_path / "lake" / "raw" / "daily_bars").glob("**/*.jsonl"))
+    assert len(raw_files) == 1
+    raw_payloads = [json.loads(line) for line in raw_files[0].read_text(encoding="utf-8").splitlines()]
+    assert [row["trade_date"] for row in raw_payloads] == ["2026-06-01", "2026-06-02"]
+    assert raw_payloads[0]["close"] == 1675.0
+    assert any(
+        log.message == "Raw daily bar records persisted."
+        and log.payload_json
+        and log.payload_json.get("raw_path")
+        and log.payload_json.get("records") == 2
+        for log in logs
+    )
+
+
+def test_market_daily_bars_repair_persists_raw_provider_records_per_symbol(client, tmp_path):
+    registry = AdapterRegistry()
+    registry.register(MultiSymbolDailyBarAdapter())
+
+    db = SessionLocal()
+    try:
+        db.add_all(
+            [
+                Stock(symbol="000001", exchange="SZSE", market="A_SHARE", name="平安银行", status="LISTED", source="fixture"),
+                Stock(symbol="600519", exchange="SSE", market="A_SHARE", name="贵州茅台", status="LISTED", source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 2), is_open=True, source="fixture"),
+            ]
+        )
+        db.commit()
+
+        service = MarketDataSyncService(db, registry, lake_root=tmp_path / "lake")
+        task = service.run_market_daily_bars_repair(
+            source="multi_symbol_daily",
+            market="A_SHARE",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+            max_symbols=2,
+            adjust_type="qfq",
+        )
+        logs = list(task.logs)
+    finally:
+        db.close()
+
+    raw_files = sorted((tmp_path / "lake" / "raw" / "daily_bars").glob("**/*.jsonl"))
+    assert len(raw_files) == 2
+    assert {file.parent.name for file in raw_files} == {"symbol=000001", "symbol=600519"}
+    assert any(log.message == "Market repair batch summary." for log in logs)
+
+
+def test_replay_raw_daily_bars_normalizes_without_refetching_provider(client, tmp_path):
+    registry = AdapterRegistry()
+    adapter = SuccessDailyBarAdapter()
+    registry.register(adapter)
+
+    db = SessionLocal()
+    try:
+        service = MarketDataSyncService(db, registry, lake_root=tmp_path / "lake")
+        service.run_daily_bars_sync(
+            source="success_daily",
+            market="A_SHARE",
+            symbol="600519",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+            adjust_type="none",
+        )
+        assert adapter.fetch_calls == 1
+
+        service.daily_bar_repo = service.daily_bar_repo.__class__(dataset_dir=tmp_path / "replayed_silver")
+        records_read, records_written = service.replay_raw_daily_bars(
+            source="success_daily",
+            market="A_SHARE",
+            symbol="600519",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+            adjust_type="none",
+        )
+
+        replay_task = service.create_raw_daily_bars_replay_task(
+            source="success_daily",
+            market="A_SHARE",
+            symbol="600519",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+            adjust_type="none",
+        )
+        completed_task = service.run_raw_daily_bars_replay_task(replay_task.id)
+        payload = ResearchDataService(db, lake_root=tmp_path / "replayed_silver").read_bars(
+            symbol="600519",
+            market="A_SHARE",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+        )
+    finally:
+        db.close()
+
+    rows, total = DailyBarRepository(dataset_dir=tmp_path / "replayed_silver").list_daily_bars(
+        symbol="600519",
+        market="A_SHARE",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 2),
+        page=1,
+        page_size=10,
+    )
+    assert records_read == 2
+    assert records_written == 2
+    assert adapter.fetch_calls == 1
+    assert total == 2
+    assert [row["close"] for row in rows] == [1675.0, 1688.0]
+    assert completed_task.status == "success"
+    assert payload["contract"]["manifest"]["latest_ingest_batch"]["requested_source"] == "raw:success_daily"
+    assert payload["contract"]["manifest"]["latest_ingest_batch"]["source"] == "success_daily"
+    assert payload["contract"]["manifest"]["latest_ingest_batch"]["records_written"] == 2
+
+
+def test_raw_daily_bars_replay_task_uses_created_adjust_type(client, tmp_path):
+    registry = AdapterRegistry()
+    adapter = SuccessDailyBarAdapter()
+    registry.register(adapter)
+
+    db = SessionLocal()
+    try:
+        service = MarketDataSyncService(db, registry, lake_root=tmp_path / "lake")
+        service.run_daily_bars_sync(
+            source="success_daily",
+            market="A_SHARE",
+            symbol="600519",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+            adjust_type="qfq",
+        )
+
+        service.daily_bar_repo = service.daily_bar_repo.__class__(dataset_dir=tmp_path / "replayed_silver")
+        replay_task = service.create_raw_daily_bars_replay_task(
+            source="success_daily",
+            market="A_SHARE",
+            symbol="600519",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+            adjust_type="qfq",
+        )
+        completed_task = service.run_raw_daily_bars_replay_task(replay_task.id)
+    finally:
+        db.close()
+
+    rows = DailyBarRepository(dataset_dir=tmp_path / "replayed_silver").symbol_daily_bars(
+        symbol="600519",
+        market="A_SHARE",
+    )
+
+    assert completed_task.status == "success"
+    assert adapter.fetch_calls == 1
+    assert len(rows) == 2
+    assert {row["adjust_type"] for row in rows} == {"qfq"}
+
 
 
 def test_daily_bars_query_can_return_latest_rows_first(client, tmp_path):

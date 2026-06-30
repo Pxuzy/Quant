@@ -13,6 +13,8 @@ class Settings:
     database_url: str
     cors_origins: tuple[str, ...]
     data_lake_dir: str
+    duckdb_path: str
+    repair_parallelism: int
 
 
 @lru_cache
@@ -26,6 +28,8 @@ def get_settings() -> Settings:
             ("http://127.0.0.1:5173", "http://localhost:5173"),
         ),
         data_lake_dir=os.getenv("DATA_LAKE_DIR", "./storage/lake"),
+        duckdb_path=os.getenv("DUCKDB_PATH", "./storage/quant.duckdb"),
+        repair_parallelism=int(os.getenv("QUANT_REPAIR_PARALLELISM", "5")),
     )
 
 

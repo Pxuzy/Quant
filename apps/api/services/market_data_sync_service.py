@@ -861,108 +861,122 @@ class MarketDataSyncService:
             },
         )
 
+        if not plan.items:
+            return 0, 0, 0
+
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
+        from apps.api.core.config import get_settings
+
+        parallelism = get_settings().repair_parallelism
+        stock_timeout = 120
+
+        adjust_type = plan.adjust_type
+        market_name = plan.market
+
+        # 并行 fetch（纯网络操作，无需 DB session）
+        # 串行 write（需要 DB session，在主线程完成）
+        self._refresh_deep_modules()
+        executor = ThreadPoolExecutor(max_workers=parallelism)
+        raw_results: dict[str, Future] = {}
+        for item in plan.items:
+            future = executor.submit(
+                adapter.fetch_daily_bars,
+                symbol=item.symbol,
+                exchange=None,
+                market=market_name,
+                start_date=item.start_date,
+                end_date=item.end_date,
+                adjust_type=adjust_type,
+            )
+            raw_results[item.symbol] = (future, item)
+
         records_read = 0
         records_written = 0
         symbol_errors: list[str] = []
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError
-        _executor = ThreadPoolExecutor(max_workers=1)
-        for item in plan.items:
-            self.task_repo.add_log(
-                task,
-                level="info",
-                message="Market repair symbol started.",
-                payload={
-                    "source": adapter.code,
-                    "symbol": item.symbol,
-                    "start_date": item.start_date.isoformat(),
-                    "end_date": item.end_date.isoformat(),
-                    "missing_trade_days": item.missing_trade_days,
-                    "adjust_type": plan.adjust_type,
-                },
-            )
-            try:
-                future = _executor.submit(
-                    self._sync_symbol_with_adapter,
-                    task=task,
-                    adapter=adapter,
-                    symbol=item.symbol,
-                    start_date=item.start_date,
-                    end_date=item.end_date,
-                )
-                symbol_read, symbol_written = future.result(timeout=120)
-            except TimeoutError:
-                error_message = f"Timed out after 120s for {item.symbol}"
-                symbol_errors.append(f"{item.symbol}: {error_message}")
-                if not self._has_daily_bar_batch(
-                    task=task,
-                    adapter=adapter,
-                    symbol=item.symbol,
-                    start_date=item.start_date,
-                    end_date=item.end_date,
-                ):
+
+        try:
+            for future in as_completed([f for f, _ in raw_results.values()], timeout=stock_timeout * 2):
+                # 找到这个 future 对应的 item
+                symbol_item = None
+                for sym, (f, item) in raw_results.items():
+                    if f is future:
+                        symbol_item = item
+                        break
+                if symbol_item is None:
+                    continue
+
+                try:
+                    raw_records = future.result(timeout=stock_timeout)
+                except TimeoutError:
+                    symbol_errors.append(f"{symbol_item.symbol}: Timed out after {stock_timeout}s")
+                    self.task_repo.add_log(task, level="warning", message="Market repair symbol failed.",
+                                           payload={"symbol": symbol_item.symbol, "error": "Timeout"})
                     self._record_failed_market_repair_batch(
-                        task=task,
-                        adapter=adapter,
-                        market=market,
-                        symbol=item.symbol,
-                        start_date=item.start_date,
-                        end_date=item.end_date,
-                        message=error_message,
-                    )
-                self.task_repo.add_log(
-                    task,
-                    level="warning",
-                    message="Market repair symbol timed out.",
-                    payload={
-                        "source": adapter.code,
-                        "symbol": item.symbol,
-                        "start_date": item.start_date.isoformat(),
-                        "end_date": item.end_date.isoformat(),
-                        "missing_trade_days": item.missing_trade_days,
-                        "adjust_type": plan.adjust_type,
-                        "error": error_message,
-                    },
-                )
-                continue
-            except Exception as exc:
-                error_message = str(exc)
-                symbol_errors.append(f"{item.symbol}: {error_message}")
-                if not self._has_daily_bar_batch(
-                    task=task,
-                    adapter=adapter,
-                    symbol=item.symbol,
-                    start_date=item.start_date,
-                    end_date=item.end_date,
-                ):
+                        task=task, adapter=adapter, market=market_name,
+                        symbol=symbol_item.symbol, start_date=symbol_item.start_date,
+                        end_date=symbol_item.end_date, message="Timeout")
+                    continue
+                except Exception as exc:
+                    err = str(exc)
+                    symbol_errors.append(f"{symbol_item.symbol}: {err}")
+                    self.task_repo.add_log(task, level="warning", message="Market repair symbol failed.",
+                                           payload={"symbol": symbol_item.symbol, "error": err[:200]})
                     self._record_failed_market_repair_batch(
-                        task=task,
-                        adapter=adapter,
-                        market=market,
-                        symbol=item.symbol,
-                        start_date=item.start_date,
-                        end_date=item.end_date,
-                        message=error_message,
+                        task=task, adapter=adapter, market=market_name,
+                        symbol=symbol_item.symbol, start_date=symbol_item.start_date,
+                        end_date=symbol_item.end_date, message=err[:200])
+                    continue
+
+                # 串行写入（主线程，共享 self.db）
+                try:
+                    from dataclasses import replace
+
+                    # 先写 raw 层
+                    self.raw_daily_bar_repo.write_batch(
+                        raw_records,
+                        source=adapter.code,
+                        market=market_name,
+                        symbol=symbol_item.symbol,
+                        start_date=symbol_item.start_date,
+                        end_date=symbol_item.end_date,
+                        adjust_type=adjust_type,
+                        task_id=task.id,
                     )
-                self.task_repo.add_log(
-                    task,
-                    level="warning",
-                    message="Market repair symbol failed.",
-                    payload={
-                        "source": adapter.code,
-                        "symbol": item.symbol,
-                        "start_date": item.start_date.isoformat(),
-                        "end_date": item.end_date.isoformat(),
-                        "missing_trade_days": item.missing_trade_days,
-                        "adjust_type": plan.adjust_type,
-                        "error": error_message,
-                    },
-                )
-                continue
-            records_read += symbol_read
-            records_written += symbol_written
+
+                    normalized = [replace(record, adjust_type=adjust_type)
+                                  for record in adapter.normalize_daily_bars(raw_records)]
+                    written = self.ingest_pipeline.write_normalized(
+                        normalized=normalized,
+                        raw_records_count=len(raw_records),
+                        adapter=adapter,
+                        market=market_name,
+                        symbol=symbol_item.symbol,
+                        start_date=symbol_item.start_date,
+                        end_date=symbol_item.end_date,
+                        task=task,
+                        requested_source=adapter.code,
+                    )
+                    records_read += len(raw_records)
+                    records_written += written
+                except Exception as exc:
+                    symbol_errors.append(f"{symbol_item.symbol}(write): {exc}")
+                    self.task_repo.add_log(task, level="warning", message="Market repair symbol failed.",
+                                           payload={"symbol": symbol_item.symbol, "error": str(exc)[:200]})
+
+        finally:
+            executor.shutdown(wait=False)
+
+        self.task_repo.add_log(
+            task, level="info",
+            message="Market repair batch summary.",
+            payload={"symbols_planned": len(plan.items),
+                     "symbols_failed": len(symbol_errors),
+                     "records_read": records_read,
+                     "records_written": records_written},
+        )
 
         if plan.items and records_written == 0 and symbol_errors:
-            raise RuntimeError(f"Market daily bars repair wrote no records: {'; '.join(symbol_errors)}")
+            raise RuntimeError(f"Market daily bars repair wrote no records: {'; '.join(symbol_errors[:5])}")
 
         return records_read, records_written, len(symbol_errors)
 
