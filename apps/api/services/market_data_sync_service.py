@@ -1,58 +1,37 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from apps.api.adapters.base import HealthCheckResult, StockDataSourceAdapter
+from apps.api.adapters.base import HealthCheckResult, StockDataSourceAdapter, normalize_daily_bar_adjust_type
 from apps.api.adapters.registry import AdapterRegistry, default_adapter_registry
-from apps.api.core.market_symbols import is_common_stock_symbol
 from apps.api.models import SyncTask
 from apps.api.repositories.daily_bars import DailyBarRepository
 from apps.api.repositories.data_sources import DataSourceRepository
 from apps.api.repositories.datasets import DatasetRepository
 from apps.api.repositories.ingest_batches import IngestBatchRepository
+from apps.api.repositories.raw_daily_bars import RawDailyBarRepository
 from apps.api.repositories.stocks import StockRepository
 from apps.api.repositories.sync_tasks import SyncTaskRepository
 from apps.api.repositories.trading_calendars import TradingCalendarRepository
-from apps.api.services.database_integration_service import invalidate_coverage_cache
-from apps.api.services.normalized_data_validation import validate_daily_bar_records
+from apps.api.services.daily_bar_ingest_pipeline import DailyBarIngestPipeline
+from apps.api.services.market_repair_planner import (
+    DEFAULT_MARKET_REPAIR_START_POLICY,
+    LISTING_DATE_START_POLICY,
+    MarketRepairPlan,
+    MarketRepairPlanner,
+)
+from apps.api.services.raw_replay_runner import RawReplayRunner
 from apps.api.services.stock_sync_service import AUTO_SOURCE_CODE
 
 
 MARKET_REPAIR_TASK_TYPE = "daily_bars_market_repair"
+RAW_REPLAY_TASK_TYPE = "daily_bars_raw_replay"
 DEFAULT_MARKET_REPAIR_MAX_SYMBOLS = 20
 MAX_MARKET_REPAIR_SYMBOLS = 200
-
-
-@dataclass(frozen=True)
-class MarketRepairPlanItem:
-    symbol: str
-    exchange: str
-    name: str
-    start_date: date
-    end_date: date
-    missing_trade_days: int
-
-
-@dataclass(frozen=True)
-class MarketRepairPlan:
-    source: str
-    market: str
-    start_date: date
-    end_date: date
-    max_symbols: int
-    stock_pool_count: int
-    open_dates_count: int
-    planned_missing_symbol_days: int
-    supported_exchanges: list[str] | None
-    items: list[MarketRepairPlanItem]
-
-    @property
-    def planned_symbols(self) -> int:
-        return len(self.items)
+DEFAULT_ADJUST_TYPE = "none"
 
 
 class MarketDataSyncService:
@@ -69,9 +48,34 @@ class MarketDataSyncService:
         self.dataset_repo = DatasetRepository(db)
         self.ingest_batch_repo = IngestBatchRepository(db)
         self.daily_bar_repo = DailyBarRepository(lake_root=lake_root)
+        self.raw_daily_bar_repo = RawDailyBarRepository(lake_root=lake_root)
         self.stock_repo = StockRepository(db)
         self.task_repo = SyncTaskRepository(db)
         self.trading_calendar_repo = TradingCalendarRepository(db)
+        self.ingest_pipeline = DailyBarIngestPipeline(
+            task_repo=self.task_repo,
+            ingest_batch_repo=self.ingest_batch_repo,
+            dataset_repo=self.dataset_repo,
+            daily_bar_repo=self.daily_bar_repo,
+            raw_daily_bar_repo=self.raw_daily_bar_repo,
+            task_adjust_type=self._task_adjust_type,
+        )
+        self.market_repair_planner = MarketRepairPlanner(
+            stock_repo=self.stock_repo,
+            trading_calendar_repo=self.trading_calendar_repo,
+            daily_bar_repo=self.daily_bar_repo,
+        )
+        self.raw_replay_runner = RawReplayRunner(
+            registry=self.registry,
+            raw_daily_bar_repo=self.raw_daily_bar_repo,
+            ingest_pipeline=self.ingest_pipeline,
+        )
+
+    def _refresh_deep_modules(self) -> None:
+        self.ingest_pipeline.daily_bar_repo = self.daily_bar_repo
+        self.ingest_pipeline.raw_daily_bar_repo = self.raw_daily_bar_repo
+        self.market_repair_planner.daily_bar_repo = self.daily_bar_repo
+        self.raw_replay_runner.raw_daily_bar_repo = self.raw_daily_bar_repo
 
     def create_daily_bars_sync_task(
         self,
@@ -81,8 +85,10 @@ class MarketDataSyncService:
         symbol: str,
         start_date: date,
         end_date: date,
+        adjust_type: str = DEFAULT_ADJUST_TYPE,
     ) -> SyncTask:
         self._validate_date_range(start_date=start_date, end_date=end_date)
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
         source_code = source.strip().lower()
         symbol_code = symbol.strip()
         if not symbol_code:
@@ -100,6 +106,7 @@ class MarketDataSyncService:
                 symbol=symbol_code,
                 start_date=start_date,
                 end_date=end_date,
+                adjust_type=adjust_type_code,
                 candidate_sources=[adapter.code for adapter in candidates],
             )
             self.db.commit()
@@ -122,6 +129,7 @@ class MarketDataSyncService:
             symbol=symbol_code,
             start_date=start_date,
             end_date=end_date,
+            adjust_type=adjust_type_code,
         )
         self.db.commit()
         self.db.refresh(task)
@@ -139,6 +147,12 @@ class MarketDataSyncService:
             return None
         return self.run_market_daily_bars_repair_task(task.id)
 
+    def run_next_pending_raw_daily_bars_replay(self) -> SyncTask | None:
+        task = self.task_repo.get_next_pending_task(RAW_REPLAY_TASK_TYPE)
+        if task is None:
+            return None
+        return self.run_raw_daily_bars_replay_task(task.id)
+
     def create_market_daily_bars_repair_task(
         self,
         *,
@@ -147,9 +161,13 @@ class MarketDataSyncService:
         start_date: date,
         end_date: date,
         max_symbols: int = DEFAULT_MARKET_REPAIR_MAX_SYMBOLS,
+        start_policy: str = DEFAULT_MARKET_REPAIR_START_POLICY,
+        adjust_type: str = DEFAULT_ADJUST_TYPE,
     ) -> SyncTask:
         self._validate_date_range(start_date=start_date, end_date=end_date)
         self._validate_market_repair_limit(max_symbols=max_symbols)
+        start_policy_code = self._validate_market_repair_start_policy(start_policy=start_policy)
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
         source_code = source.strip().lower()
         market_code = market.strip().upper()
 
@@ -164,6 +182,8 @@ class MarketDataSyncService:
                 start_date=start_date,
                 end_date=end_date,
                 max_symbols=max_symbols,
+                start_policy=start_policy_code,
+                adjust_type=adjust_type_code,
                 candidate_sources=[adapter.code for adapter in candidates],
             )
             self.db.commit()
@@ -186,6 +206,8 @@ class MarketDataSyncService:
             start_date=start_date,
             end_date=end_date,
             max_symbols=max_symbols,
+            start_policy=start_policy_code,
+            adjust_type=adjust_type_code,
         )
         self.db.commit()
         self.db.refresh(task)
@@ -199,9 +221,13 @@ class MarketDataSyncService:
         start_date: date,
         end_date: date,
         max_symbols: int = DEFAULT_MARKET_REPAIR_MAX_SYMBOLS,
+        start_policy: str = DEFAULT_MARKET_REPAIR_START_POLICY,
+        adjust_type: str = DEFAULT_ADJUST_TYPE,
     ) -> dict:
         self._validate_date_range(start_date=start_date, end_date=end_date)
         self._validate_market_repair_limit(max_symbols=max_symbols)
+        start_policy_code = self._validate_market_repair_start_policy(start_policy=start_policy)
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
         source_code = source.strip().lower()
         market_code = market.strip().upper()
 
@@ -230,6 +256,8 @@ class MarketDataSyncService:
             start_date=start_date,
             end_date=end_date,
             max_symbols=max_symbols,
+            start_policy=start_policy_code,
+            adjust_type=adjust_type_code,
         )
         self.db.commit()
         return {
@@ -240,6 +268,8 @@ class MarketDataSyncService:
             "start_date": plan.start_date,
             "end_date": plan.end_date,
             "max_symbols": plan.max_symbols,
+            "start_policy": plan.start_policy,
+            "adjust_type": plan.adjust_type,
             "stock_pool_count": plan.stock_pool_count,
             "open_dates_count": plan.open_dates_count,
             "planned_symbols": plan.planned_symbols,
@@ -319,6 +349,7 @@ class MarketDataSyncService:
         symbol: str,
         start_date: date,
         end_date: date,
+        adjust_type: str = DEFAULT_ADJUST_TYPE,
     ) -> SyncTask:
         task = self.create_daily_bars_sync_task(
             source=source,
@@ -326,6 +357,7 @@ class MarketDataSyncService:
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
+            adjust_type=adjust_type,
         )
         return self.run_daily_bars_sync_task(task.id)
 
@@ -337,6 +369,8 @@ class MarketDataSyncService:
         start_date: date,
         end_date: date,
         max_symbols: int = DEFAULT_MARKET_REPAIR_MAX_SYMBOLS,
+        start_policy: str = DEFAULT_MARKET_REPAIR_START_POLICY,
+        adjust_type: str = DEFAULT_ADJUST_TYPE,
     ) -> SyncTask:
         task = self.create_market_daily_bars_repair_task(
             source=source,
@@ -344,8 +378,127 @@ class MarketDataSyncService:
             start_date=start_date,
             end_date=end_date,
             max_symbols=max_symbols,
+            start_policy=start_policy,
+            adjust_type=adjust_type,
         )
         return self.run_market_daily_bars_repair_task(task.id)
+
+    def create_raw_daily_bars_replay_task(
+        self,
+        *,
+        source: str,
+        market: str = "A_SHARE",
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        adjust_type: str = DEFAULT_ADJUST_TYPE,
+    ) -> SyncTask:
+        self._validate_date_range(start_date=start_date, end_date=end_date)
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
+        source_code = source.strip().lower()
+        symbol_code = symbol.strip()
+        if not symbol_code:
+            self.db.rollback()
+            raise ValueError("Raw daily bars replay requires a symbol.")
+
+        task = self.task_repo.create_task(
+            task_type=RAW_REPLAY_TASK_TYPE,
+            source=source_code,
+            market=market.strip().upper(),
+            symbol=symbol_code,
+            start_date=start_date,
+            end_date=end_date,
+            adjust_type=adjust_type_code,
+        )
+        self.task_repo.add_log(
+            task,
+            level="info",
+            message="Raw daily bars replay task created.",
+            payload={
+                "source": source_code,
+                "market": task.market,
+                "symbol": symbol_code,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "adjust_type": adjust_type_code,
+            },
+        )
+        self.db.commit()
+        self.db.refresh(task)
+        return task
+
+    def run_raw_daily_bars_replay_task(self, task_id: int) -> SyncTask:
+        task = self.task_repo.get_task(task_id)
+        if task is None:
+            raise ValueError(f"Sync task {task_id} does not exist.")
+        if task.task_type != RAW_REPLAY_TASK_TYPE:
+            raise ValueError(f"Sync task {task_id} is not a {RAW_REPLAY_TASK_TYPE} task.")
+        if task.status != "pending":
+            raise ValueError(f"Sync task {task_id} is {task.status}, expected pending.")
+        if task.symbol is None or task.start_date is None or task.end_date is None:
+            raise ValueError(f"Sync task {task_id} is missing symbol or date range.")
+
+        records_read = 0
+        records_written = 0
+        try:
+            self.task_repo.mark_running(task)
+            self.task_repo.add_log(
+                task,
+                level="info",
+                message="Raw daily bars replay started.",
+                payload=self._task_payload(task, source=task.source),
+            )
+            records_read, records_written = self.replay_raw_daily_bars(
+                source=task.source,
+                market=task.market or "A_SHARE",
+                symbol=task.symbol,
+                start_date=task.start_date,
+                end_date=task.end_date,
+                adjust_type=self._task_adjust_type(task),
+                task=task,
+            )
+            self.task_repo.complete(task, records_read=records_read, records_written=records_written)
+            self.task_repo.add_log(
+                task,
+                level="info",
+                message="Raw daily bars replay completed.",
+                payload={"records_read": records_read, "records_written": records_written},
+            )
+            self.db.commit()
+            self.db.refresh(task)
+            return task
+        except Exception as exc:
+            self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
+            self.task_repo.add_log(task, level="error", message="Raw daily bars replay failed.", payload={"error": str(exc)})
+            self.db.commit()
+            self.db.refresh(task)
+            return task
+
+    def replay_raw_daily_bars(
+        self,
+        *,
+        source: str,
+        market: str,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        adjust_type: str = DEFAULT_ADJUST_TYPE,
+        task: SyncTask | None = None,
+    ) -> tuple[int, int]:
+        self._validate_date_range(start_date=start_date, end_date=end_date)
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
+        self._refresh_deep_modules()
+        records_read, records_written = self.raw_replay_runner.replay(
+            source=source,
+            market=market,
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            adjust_type=adjust_type_code,
+            task=task,
+        )
+        self.db.commit()
+        return records_read, records_written
 
     def run_market_daily_bars_repair_task(self, task_id: int) -> SyncTask:
         task = self.task_repo.get_task(task_id)
@@ -406,6 +559,7 @@ class MarketDataSyncService:
         symbol: str,
         start_date: date,
         end_date: date,
+        adjust_type: str,
         candidate_sources: list[str] | None = None,
     ) -> SyncTask:
         task = self.task_repo.create_task(
@@ -415,6 +569,7 @@ class MarketDataSyncService:
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
+            adjust_type=adjust_type,
         )
         payload = {
             "source": source,
@@ -422,6 +577,7 @@ class MarketDataSyncService:
             "symbol": symbol,
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
+            "adjust_type": adjust_type,
         }
         if candidate_sources is not None:
             payload["candidate_sources"] = candidate_sources
@@ -436,6 +592,8 @@ class MarketDataSyncService:
         start_date: date,
         end_date: date,
         max_symbols: int,
+        start_policy: str,
+        adjust_type: str,
         candidate_sources: list[str] | None = None,
     ) -> SyncTask:
         task = self.task_repo.create_task(
@@ -445,6 +603,9 @@ class MarketDataSyncService:
             symbol=None,
             start_date=start_date,
             end_date=end_date,
+            max_symbols=max_symbols,
+            start_policy=start_policy,
+            adjust_type=adjust_type,
         )
         payload = {
             "source": source,
@@ -452,6 +613,8 @@ class MarketDataSyncService:
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
             "max_symbols": max_symbols,
+            "start_policy": start_policy,
+            "adjust_type": adjust_type,
         }
         if candidate_sources is not None:
             payload["candidate_sources"] = candidate_sources
@@ -466,9 +629,27 @@ class MarketDataSyncService:
                 adapter = self.registry.get(source.code)
             except ValueError:
                 continue
+            health = adapter.health_check()
+            self.data_source_repo.update_health(adapter.code, health)
+            if not health.healthy:
+                continue
             if bool(getattr(adapter.capabilities(), capability, False)):
                 candidates.append(adapter)
-        return candidates
+
+        # 智能排序：按历史成功率降序，成功率相同按静态 priority
+        scored = []
+        for adp in candidates:
+            ds = self.data_source_repo.get_by_code(adp.code)
+            rate = -1.0
+            if ds is not None:
+                cfg = ds.config_json if isinstance(ds.config_json, dict) else {}
+                cap_stats = cfg.get("usage_stats", {}).get(capability, {})
+                total = cap_stats.get("total", 0) or 0
+                if total > 0:
+                    rate = (cap_stats.get("success", 0) or 0) / total
+            scored.append((rate, adp.priority, adp))
+        scored.sort(key=lambda x: (-x[0], x[1]))
+        return [item[2] for item in scored]
 
     def _run_auto_daily_bars_sync_task(self, task: SyncTask) -> SyncTask:
         records_read = 0
@@ -514,9 +695,11 @@ class MarketDataSyncService:
                         message="Provider attempt failed.",
                         payload={"source": adapter.code, "error": error_message},
                     )
+                    self._record_adapter_result(adapter.code, success=False, capability="daily_bars")
                     continue
 
                 self.task_repo.complete(task, records_read=records_read, records_written=records_written)
+                self._record_adapter_result(adapter.code, success=True, capability="daily_bars")
                 self.task_repo.add_log(
                     task,
                     level="info",
@@ -584,9 +767,11 @@ class MarketDataSyncService:
                         message="Provider attempt failed.",
                         payload={"source": adapter.code, "error": error_message},
                     )
+                    self._record_adapter_result(adapter.code, success=False, capability="daily_bars")
                     continue
 
                 self.task_repo.complete(task, records_read=records_read, records_written=records_written)
+                self._record_adapter_result(adapter.code, success=True, capability="daily_bars")
                 self.task_repo.add_log(
                     task,
                     level="info",
@@ -636,12 +821,16 @@ class MarketDataSyncService:
 
         market = task.market or "A_SHARE"
         max_symbols = self._task_max_symbols(task)
+        start_policy = self._task_start_policy(task)
+        adjust_type = self._task_adjust_type(task)
         plan = self._build_market_repair_plan(
             adapter=adapter,
             market=market,
             start_date=task.start_date,
             end_date=task.end_date,
             max_symbols=max_symbols,
+            start_policy=start_policy,
+            adjust_type=adjust_type,
         )
         return self._repair_market_plan_with_adapter(task=task, adapter=adapter, plan=plan)
 
@@ -665,6 +854,8 @@ class MarketDataSyncService:
                 "planned_symbols": plan.planned_symbols,
                 "planned_missing_symbol_days": plan.planned_missing_symbol_days,
                 "max_symbols": plan.max_symbols,
+                "start_policy": plan.start_policy,
+                "adjust_type": plan.adjust_type,
                 "supported_exchanges": plan.supported_exchanges,
             },
         )
@@ -683,6 +874,7 @@ class MarketDataSyncService:
                     "start_date": item.start_date.isoformat(),
                     "end_date": item.end_date.isoformat(),
                     "missing_trade_days": item.missing_trade_days,
+                    "adjust_type": plan.adjust_type,
                 },
             )
             try:
@@ -722,6 +914,7 @@ class MarketDataSyncService:
                         "start_date": item.start_date.isoformat(),
                         "end_date": item.end_date.isoformat(),
                         "missing_trade_days": item.missing_trade_days,
+                        "adjust_type": plan.adjust_type,
                         "error": error_message,
                     },
                 )
@@ -742,51 +935,18 @@ class MarketDataSyncService:
         start_date: date,
         end_date: date,
         max_symbols: int,
+        start_policy: str = DEFAULT_MARKET_REPAIR_START_POLICY,
+        adjust_type: str = DEFAULT_ADJUST_TYPE,
     ) -> MarketRepairPlan:
-        supported_exchanges = self._daily_bar_exchanges(adapter)
-        stocks = [
-            stock
-            for stock in self.stock_repo.list_market_stocks(market=market, status="LISTED", common_only=True)
-            if supported_exchanges is None or stock.exchange in supported_exchanges
-            if is_common_stock_symbol(stock.symbol, stock.exchange, market)
-        ]
-        if not stocks:
-            raise RuntimeError(f"股票池没有 {market} 已上市股票，请先同步股票池。")
-
-        open_dates = self.trading_calendar_repo.open_dates(market=market, start_date=start_date, end_date=end_date)
-        if not open_dates:
-            raise RuntimeError("交易日历在该范围内没有开市日，请先同步交易日历。")
-
-        existing_pairs = self.daily_bar_repo.market_symbol_trade_date_pairs(market=market)
-        items: list[MarketRepairPlanItem] = []
-        for stock in stocks:
-            missing_dates = [trade_date for trade_date in open_dates if (stock.symbol, trade_date) not in existing_pairs]
-            if not missing_dates:
-                continue
-            items.append(
-                MarketRepairPlanItem(
-                    symbol=stock.symbol,
-                    exchange=stock.exchange,
-                    name=stock.name,
-                    start_date=min(missing_dates),
-                    end_date=max(missing_dates),
-                    missing_trade_days=len(missing_dates),
-                )
-            )
-            if len(items) >= max_symbols:
-                break
-
-        return MarketRepairPlan(
-            source=adapter.code,
+        self._refresh_deep_modules()
+        return self.market_repair_planner.build_plan(
+            adapter=adapter,
             market=market,
             start_date=start_date,
             end_date=end_date,
             max_symbols=max_symbols,
-            stock_pool_count=len(stocks),
-            open_dates_count=len(open_dates),
-            planned_missing_symbol_days=sum(item.missing_trade_days for item in items),
-            supported_exchanges=sorted(supported_exchanges) if supported_exchanges is not None else None,
-            items=items,
+            start_policy=start_policy,
+            adjust_type=adjust_type,
         )
 
     def _sync_symbol_with_adapter(
@@ -798,67 +958,40 @@ class MarketDataSyncService:
         start_date: date,
         end_date: date,
     ) -> tuple[int, int]:
-        raw_records = adapter.fetch_daily_bars(
+        self._refresh_deep_modules()
+        return self.ingest_pipeline.sync_symbol(
+            task=task,
+            adapter=adapter,
             symbol=symbol,
-            exchange=None,
-            market=task.market or "A_SHARE",
             start_date=start_date,
             end_date=end_date,
         )
-        records_read = len(raw_records)
-        self.task_repo.add_log(
-            task,
-            level="info",
-            message="Raw daily bar records fetched.",
-            payload={"source": adapter.code, "records": records_read},
-        )
 
-        normalized = adapter.normalize_daily_bars(raw_records)
-        market = task.market or "A_SHARE"
-        validation_errors = validate_daily_bar_records(normalized, source=adapter.code, market=market)
-        batch = self.ingest_batch_repo.create_batch(
-            task=task,
-            dataset_name="daily_bars",
-            source=adapter.code,
-            requested_source=task.source,
+    def _write_normalized_daily_bars(
+        self,
+        *,
+        normalized: list,
+        raw_records_count: int,
+        adapter: StockDataSourceAdapter,
+        market: str,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+        task: SyncTask | None = None,
+        requested_source: str | None = None,
+    ) -> int:
+        self._refresh_deep_modules()
+        return self.ingest_pipeline.write_normalized(
+            normalized=normalized,
+            raw_records_count=raw_records_count,
+            adapter=adapter,
             market=market,
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
-            raw_records=records_read,
-            normalized_records=len(normalized),
-            validation_errors=validation_errors,
+            task=task,
+            requested_source=requested_source,
         )
-        self.task_repo.add_log(
-            task,
-            level="info" if not validation_errors else "error",
-            message="Normalized daily bar records validated.",
-            payload={
-                "batch_id": batch.id,
-                "source": adapter.code,
-                "normalized_records": len(normalized),
-                "validation_errors": validation_errors[:5],
-            },
-        )
-        if validation_errors:
-            raise RuntimeError(f"Daily bars schema validation failed: {validation_errors[0]}")
-
-        try:
-            records_written = self.daily_bar_repo.write_many(normalized)
-            total_rows = self.daily_bar_repo.count(market=task.market)
-            latest_trade_date = self.daily_bar_repo.latest_trade_date(market=task.market)
-            dataset = self.dataset_repo.upsert_daily_bars_dataset(
-                source=adapter.code,
-                row_count=total_rows,
-                latest_data_date=latest_trade_date,
-                path=str(self.daily_bar_repo.dataset_dir),
-            )
-            self.ingest_batch_repo.complete_batch(batch, records_written=records_written, quality_status=dataset.quality_status)
-        except Exception as exc:
-            self.ingest_batch_repo.fail_batch(batch, message=str(exc))
-            raise
-        invalidate_coverage_cache((task.market or "A_SHARE").strip().upper())
-        return records_read, records_written
 
     def _has_daily_bar_batch(
         self,
@@ -922,26 +1055,53 @@ class MarketDataSyncService:
         if max_symbols > MAX_MARKET_REPAIR_SYMBOLS:
             raise ValueError(f"max_symbols must be less than or equal to {MAX_MARKET_REPAIR_SYMBOLS}.")
 
+    @staticmethod
+    def _validate_market_repair_start_policy(*, start_policy: str) -> str:
+        value = start_policy.strip().lower()
+        if value not in {DEFAULT_MARKET_REPAIR_START_POLICY, LISTING_DATE_START_POLICY}:
+            raise ValueError("start_policy must be requested_start or listing_date.")
+        return value
+
     def _task_max_symbols(self, task: SyncTask) -> int:
-        for log in task.logs:
-            payload = log.payload_json or {}
-            if log.message == "Market daily bars repair task created." and "max_symbols" in payload:
-                return int(payload["max_symbols"])
+        if task.max_symbols is not None:
+            return int(task.max_symbols)
         return DEFAULT_MARKET_REPAIR_MAX_SYMBOLS
 
-    @staticmethod
-    def _daily_bar_exchanges(adapter: StockDataSourceAdapter) -> set[str] | None:
-        exchanges = adapter.capabilities().daily_bar_exchanges
-        if exchanges is None:
-            return None
-        return {exchange.strip().upper() for exchange in exchanges if exchange.strip()}
+    def _task_start_policy(self, task: SyncTask) -> str:
+        if task.start_policy:
+            return self._validate_market_repair_start_policy(start_policy=task.start_policy)
+        return DEFAULT_MARKET_REPAIR_START_POLICY
 
     @staticmethod
-    def _task_payload(task: SyncTask, *, source: str) -> dict:
+    def _task_adjust_type(task: SyncTask) -> str:
+        if task.adjust_type:
+            return normalize_daily_bar_adjust_type(task.adjust_type)
+        return DEFAULT_ADJUST_TYPE
+
+    def _task_payload(self, task: SyncTask, *, source: str) -> dict:
         return {
             "source": source,
             "market": task.market,
             "symbol": task.symbol,
             "start_date": task.start_date.isoformat() if task.start_date else None,
             "end_date": task.end_date.isoformat() if task.end_date else None,
+            "adjust_type": self._task_adjust_type(task),
         }
+
+    def _record_adapter_result(self, code: str, *, success: bool, capability: str) -> None:
+        """记录一次数据源调用结果到 config_json.usage_stats，用于动态排序。"""
+        source = self.data_source_repo.get_by_code(code)
+        if source is None:
+            return
+        config = source.config_json if isinstance(source.config_json, dict) else {}
+        stats = config.get("usage_stats", {})
+        cap_stats = stats.get(capability, {"total": 0, "success": 0})
+        cap_stats["total"] = cap_stats.get("total", 0) + 1
+        if success:
+            cap_stats["success"] = cap_stats.get("success", 0) + 1
+            cap_stats["last_success"] = datetime.now().isoformat()
+        else:
+            cap_stats["last_failure"] = datetime.now().isoformat()
+        stats[capability] = cap_stats
+        source.config_json = {**config, "usage_stats": stats}
+        self.db.flush()

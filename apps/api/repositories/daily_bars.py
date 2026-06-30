@@ -12,7 +12,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised only in partial inst
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from apps.api.adapters.base import NormalizedDailyBar
+from apps.api.adapters.base import NormalizedDailyBar, normalize_daily_bar_adjust_type
 from apps.api.core.config import get_settings
 
 
@@ -49,26 +49,35 @@ class DailyBarRepository:
             return 0
 
         rows = [_normalize_row(asdict(record)) for record in records]
-        rows_by_partition: dict[tuple[str, date], list[dict]] = {}
-        for row in rows:
-            rows_by_partition.setdefault((row["market"], row["trade_date"]), []).append(row)
 
-        for (market, trade_date), group in rows_by_partition.items():
-            partition_dir = self.dataset_dir / f"market={market}" / f"trade_date={trade_date.isoformat()}"
-            partition_dir.mkdir(parents=True, exist_ok=True)
-            file_path = partition_dir / "part-000.parquet"
+        # Primary write: DuckDB persistent store (幂等去重)
+        from apps.api.db.duckdb_store import write_daily_bars
+        written = write_daily_bars(rows)
 
-            if file_path.exists():
-                group = [_normalize_row(row) for row in _read_parquet_file(file_path)] + group
+        # Archive: Parquet 湖存储 (best-effort, 非阻塞)
+        try:
+            rows_by_partition: dict[tuple[str, date], list[dict]] = {}
+            for row in rows:
+                rows_by_partition.setdefault((row["market"], row["trade_date"]), []).append(row)
 
-            deduped = {
-                (row["symbol"], row["exchange"], row["market"], row["trade_date"], row["adjust_type"]): row
-                for row in group
-            }
-            sorted_rows = sorted(deduped.values(), key=lambda row: (row["symbol"], row["exchange"], row["adjust_type"]))
-            pq.write_table(pa.Table.from_pylist(sorted_rows, schema=DAILY_BAR_ARROW_SCHEMA), file_path)
+            for (market, trade_date), group in rows_by_partition.items():
+                partition_dir = self.dataset_dir / f"market={market}" / f"trade_date={trade_date.isoformat()}"
+                partition_dir.mkdir(parents=True, exist_ok=True)
+                file_path = partition_dir / "part-000.parquet"
 
-        return len(records)
+                if file_path.exists():
+                    group = [_normalize_row(row) for row in _read_parquet_file(file_path)] + group
+
+                deduped = {
+                    (row["symbol"], row["exchange"], row["market"], row["trade_date"], row["adjust_type"]): row
+                    for row in group
+                }
+                sorted_rows = sorted(deduped.values(), key=lambda row: (row["symbol"], row["exchange"], row["adjust_type"]))
+                pq.write_table(pa.Table.from_pylist(sorted_rows, schema=DAILY_BAR_ARROW_SCHEMA), file_path)
+        except Exception:
+            pass  # DuckDB 已有数据，Parquet 归档失败不影响业务
+
+        return written if written else len(records)
 
     def list_daily_bars(
         self,
@@ -181,10 +190,11 @@ class DailyBarRepository:
             key=lambda row: (row["trade_date"], row.get("adjust_type") or "none"),
         )
 
-    def market_symbol_trade_date_pairs(self, *, market: str) -> set[tuple[str, date]]:
+    def market_symbol_trade_date_pairs(self, *, market: str, adjust_type: str | None = None) -> set[tuple[str, date]]:
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type) if adjust_type is not None else None
         if self._can_query_with_duckdb():
             try:
-                return self._market_symbol_trade_date_pairs_duckdb(market=market)
+                return self._market_symbol_trade_date_pairs_duckdb(market=market, adjust_type=adjust_type_code)
             except (duckdb.Error, duckdb.IOException):
                 pass
 
@@ -193,6 +203,7 @@ class DailyBarRepository:
             (str(row["symbol"]), row["trade_date"])
             for row in rows
             if row.get("symbol") and isinstance(row.get("trade_date"), date)
+            if adjust_type_code is None or (row.get("adjust_type") or "none") == adjust_type_code
         }
 
     def read_all(self) -> list[dict]:
@@ -438,13 +449,20 @@ class DailyBarRepository:
 
         return [_normalize_row(dict(zip(DAILY_BAR_COLUMNS, row))) for row in rows]
 
-    def _market_symbol_trade_date_pairs_duckdb(self, *, market: str) -> set[tuple[str, date]]:
+    def _market_symbol_trade_date_pairs_duckdb(self, *, market: str, adjust_type: str | None = None) -> set[tuple[str, date]]:
         if duckdb is None:
             return {
                 (str(row["symbol"]), row["trade_date"])
                 for row in self._read_partition_rows(market=market)
                 if row.get("symbol") and isinstance(row.get("trade_date"), date)
+                if adjust_type is None or (row.get("adjust_type") or "none") == adjust_type
             }
+
+        conditions = ["market = ?"]
+        params: list[object] = [str(self.dataset_dir / "market=*" / "trade_date=*" / "part-*.parquet"), market]
+        if adjust_type is not None:
+            conditions.append("coalesce(adjust_type, 'none') = ?")
+            params.append(adjust_type)
 
         con = _duckdb_connect_with_timeout()
         try:
@@ -452,9 +470,9 @@ class DailyBarRepository:
                 f"""
                 select distinct symbol, trade_date
                 from {self._duckdb_scan()}
-                where market = ?
+                where {" and ".join(conditions)}
                 """,
-                [str(self.dataset_dir / "market=*" / "trade_date=*" / "part-*.parquet"), market],
+                params,
             ).fetchall()
         finally:
             con.close()

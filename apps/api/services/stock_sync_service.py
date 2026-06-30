@@ -174,7 +174,21 @@ class StockSyncService:
                 continue
             if bool(getattr(adapter.capabilities(), capability, False)):
                 candidates.append(adapter)
-        return candidates
+
+        # 智能排序：按历史成功率降序，成功率相同按静态 priority
+        scored = []
+        for adp in candidates:
+            ds = self.data_source_repo.get_by_code(adp.code)
+            rate = -1.0
+            if ds is not None:
+                cfg = ds.config_json if isinstance(ds.config_json, dict) else {}
+                cap_stats = cfg.get("usage_stats", {}).get(capability, {})
+                total = cap_stats.get("total", 0) or 0
+                if total > 0:
+                    rate = (cap_stats.get("success", 0) or 0) / total
+            scored.append((rate, adp.priority, adp))
+        scored.sort(key=lambda x: (-x[0], x[1]))
+        return [item[2] for item in scored]
 
     def _run_auto_stock_sync_task(self, task: SyncTask, *, market: str) -> SyncTask:
         records_read = 0
@@ -220,6 +234,7 @@ class StockSyncService:
                         message="Provider attempt failed.",
                         payload={"source": adapter.code, "error": error_message},
                     )
+                    self._record_adapter_result(adapter.code, success=False, capability="stock_list")
                     continue
 
                 self.task_repo.complete(task, records_read=records_read, records_written=records_written)
@@ -234,6 +249,7 @@ class StockSyncService:
                         "records_written": records_written,
                     },
                 )
+                self._record_adapter_result(adapter.code, success=True, capability="stock_list")
                 self.db.commit()
                 self.db.refresh(task)
                 invalidate_coverage_cache(market)
@@ -246,6 +262,24 @@ class StockSyncService:
             self.db.commit()
             self.db.refresh(task)
             return task
+
+    def _record_adapter_result(self, code: str, *, success: bool, capability: str) -> None:
+        """记录一次数据源调用结果到 config_json.usage_stats，用于动态排序。"""
+        source = self.data_source_repo.get_by_code(code)
+        if source is None:
+            return
+        config = source.config_json if isinstance(source.config_json, dict) else {}
+        stats = config.get("usage_stats", {})
+        cap_stats = stats.get(capability, {"total": 0, "success": 0})
+        cap_stats["total"] = cap_stats.get("total", 0) + 1
+        if success:
+            cap_stats["success"] = cap_stats.get("success", 0) + 1
+            cap_stats["last_success"] = datetime.now().isoformat()
+        else:
+            cap_stats["last_failure"] = datetime.now().isoformat()
+        stats[capability] = cap_stats
+        source.config_json = {**config, "usage_stats": stats}
+        self.db.flush()
 
     def _sync_with_adapter(self, *, task: SyncTask, adapter: StockDataSourceAdapter, market: str) -> tuple[int, int]:
         health = adapter.health_check()

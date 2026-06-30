@@ -2,10 +2,19 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, TypeDecorator, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.api.db.base import Base
+
+
+def _vector_or_json(dim: int):
+    """Return pgvector Vector type if available, else JSON for SQLite compat."""
+    try:
+        from pgvector.sqlalchemy import Vector
+        return Vector(dim)
+    except ImportError:
+        return JSON
 
 
 def utcnow() -> datetime:
@@ -121,6 +130,9 @@ class SyncTask(Base):
     symbol: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    max_symbols: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    start_policy: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    adjust_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_read: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -303,3 +315,7 @@ class NewsArticle(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    # embedding 向量列 — PG 上使用 pgvector 类型，SQLite 保持兼容
+    embedding: Mapped[list[float] | None] = mapped_column(
+        _vector_or_json(1536), nullable=True
+    )

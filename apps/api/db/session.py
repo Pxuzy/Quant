@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -32,6 +32,10 @@ def get_database_url() -> str:
     return _database_url_override or get_settings().database_url
 
 
+def _is_pg(url: str) -> bool:
+    return url.startswith("postgresql")
+
+
 def get_engine() -> Engine:
     global _engine, _engine_url
 
@@ -40,13 +44,21 @@ def get_engine() -> Engine:
         return _engine
 
     ensure_database_parent(database_url)
-    connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    _engine = create_engine(database_url, connect_args=connect_args, future=True)
-    _engine_url = database_url
-    
-    # Set SQLite busy timeout to 30 seconds (30000ms)
-    # This prevents "database is locked" errors during concurrent writes
-    if database_url.startswith("sqlite"):
+    connect_args = {"check_same_thread": False} if not _is_pg(database_url) else {}
+
+    if _is_pg(database_url):
+        _engine = create_engine(
+            database_url,
+            connect_args=connect_args,
+            pool_size=5,
+            max_overflow=10,
+            future=True,
+        )
+    else:
+        _engine = create_engine(database_url, connect_args=connect_args, future=True)
+
+        # Set SQLite busy timeout to 30 seconds (30000ms)
+        # This prevents "database is locked" errors during concurrent writes
         from sqlalchemy import event
 
         @event.listens_for(_engine, "connect")
@@ -55,18 +67,72 @@ def get_engine() -> Engine:
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA busy_timeout=30000")
             cursor.close()
-    
+
+    _engine_url = database_url
     SessionLocal.configure(bind=_engine)
     return _engine
+
+
+def _ensure_pg_extensions(engine: Engine) -> None:
+    """Ensure PostgreSQL extensions exist."""
+    if not _is_pg(engine.url.render_as_string(hide_password=False)):
+        return
+    with engine.begin() as connection:
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+
+
+def _run_alembic_upgrade(engine: Engine) -> None:
+    """Run Alembic migrations against the given engine."""
+    from alembic.config import Config
+    from alembic import command
+
+    alembic_cfg = Config()
+    alembic_cfg.set_main_option("script_location", "apps/api/alembic")
+    # Point Alembic at our URL so it doesn't re-read env.py's hardcoded URL
+    alembic_cfg.set_main_option("sqlalchemy.url", engine.url.render_as_string(hide_password=False))
+    command.upgrade(alembic_cfg, "head")
 
 
 def init_db(*, drop_all: bool = False) -> None:
     from apps.api.models import entities  # noqa: F401
 
     engine = get_engine()
-    if drop_all:
-        Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+
+    if _is_pg(engine.url.render_as_string(hide_password=False)):
+        _ensure_pg_extensions(engine)
+        _run_alembic_upgrade(engine)
+    else:
+        if drop_all:
+            Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        _ensure_sqlite_sync_task_columns(engine)
+
+
+def _ensure_sqlite_sync_task_columns(engine: Engine) -> None:
+    if not engine.url.drivername.startswith("sqlite"):
+        return
+
+    inspector = inspect(engine)
+    if "sync_tasks" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("sync_tasks")}
+    required_columns = {
+        "max_symbols": "INTEGER",
+        "start_policy": "VARCHAR(32)",
+        "adjust_type": "VARCHAR(16)",
+    }
+    missing_columns = [
+        (name, column_type)
+        for name, column_type in required_columns.items()
+        if name not in existing_columns
+    ]
+    if not missing_columns:
+        return
+
+    with engine.begin() as connection:
+        for name, column_type in missing_columns:
+            connection.execute(text(f"ALTER TABLE sync_tasks ADD COLUMN {name} {column_type}"))
 
 
 def get_db() -> Iterator[Session]:
@@ -76,4 +142,3 @@ def get_db() -> Iterator[Session]:
         yield db
     finally:
         db.close()
-

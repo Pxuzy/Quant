@@ -39,6 +39,45 @@ class DataSourceService:
     def list_catalog(self) -> list[dict]:
         return DATA_SOURCE_CATALOG
 
+    def record_sync_result(self, code: str, *, success: bool, capability: str) -> None:
+        """记录一次 auto 同步的结果，用于动态排序。"""
+        source = self.data_source_repo.get_by_code(code)
+        if source is None:
+            return
+        config = source.config_json if isinstance(source.config_json, dict) else {}
+        stats = config.get("usage_stats", {})
+        cap_stats = stats.get(capability, {"total": 0, "success": 0})
+        cap_stats["total"] = cap_stats.get("total", 0) + 1
+        if success:
+            cap_stats["success"] = cap_stats.get("success", 0) + 1
+            cap_stats["last_success"] = datetime.now(timezone.utc).isoformat()
+        else:
+            cap_stats["last_failure"] = datetime.now(timezone.utc).isoformat()
+        stats[capability] = cap_stats
+        source.config_json = {**config, "usage_stats": stats}
+        self.db.flush()
+
+    def score_adapters(self, candidates: list, capability: str) -> list:
+        """按历史成功率对候选适配器排序（成功率高优先），无历史数据按静态 priority 排。"""
+        scored = []
+        for adapter in candidates:
+            source = self.data_source_repo.get_by_code(adapter.code)
+            if source is not None:
+                config = source.config_json if isinstance(source.config_json, dict) else {}
+                cap_stats = config.get("usage_stats", {}).get(capability, {})
+                total = cap_stats.get("total", 0) or 0
+                success = cap_stats.get("success", 0) or 0
+                if total > 0:
+                    rate = success / total
+                else:
+                    rate = -1  # 无历史数据，按 priority 排
+            else:
+                rate = -1
+            scored.append((rate, adapter.priority, adapter))
+        # 降序：成功率高的先尝试；相同成功率下 priority 小的优先
+        scored.sort(key=lambda x: (-x[0], x[1]))
+        return [item[2] for item in scored]
+
     def update_source(self, code: str, *, enabled: bool | None = None, priority: int | None = None) -> DataSource | None:
         self.data_source_repo.sync_registered_adapters(self.registry)
         data_source = self.data_source_repo.update_source(code, enabled=enabled, priority=priority)
