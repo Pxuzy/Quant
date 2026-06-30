@@ -8,7 +8,6 @@ from apps.api.models import SyncTask
 from apps.api.repositories.daily_bars import DailyBarRepository
 from apps.api.repositories.datasets import DatasetRepository
 from apps.api.repositories.ingest_batches import IngestBatchRepository
-from apps.api.repositories.raw_daily_bars import RawDailyBarRepository
 from apps.api.repositories.sync_tasks import SyncTaskRepository
 from apps.api.services.database_integration_service import invalidate_coverage_cache
 from apps.api.services.normalized_data_validation import validate_daily_bar_records
@@ -22,14 +21,12 @@ class DailyBarIngestPipeline:
         ingest_batch_repo: IngestBatchRepository,
         dataset_repo: DatasetRepository,
         daily_bar_repo: DailyBarRepository,
-        raw_daily_bar_repo: RawDailyBarRepository,
         task_adjust_type,
     ) -> None:
         self.task_repo = task_repo
         self.ingest_batch_repo = ingest_batch_repo
         self.dataset_repo = dataset_repo
         self.daily_bar_repo = daily_bar_repo
-        self.raw_daily_bar_repo = raw_daily_bar_repo
         self.task_adjust_type = task_adjust_type
 
     def sync_symbol(
@@ -57,29 +54,6 @@ class DailyBarIngestPipeline:
             message="Raw daily bar records fetched.",
             payload={"source": adapter.code, "records": records_read, "adjust_type": adjust_type},
         )
-        raw_path = self.raw_daily_bar_repo.write_batch(
-            raw_records,
-            source=adapter.code,
-            market=task.market or "A_SHARE",
-            symbol=symbol,
-            start_date=start_date,
-            end_date=end_date,
-            adjust_type=adjust_type,
-            task_id=task.id,
-        )
-        if raw_path is not None:
-            self.task_repo.add_log(
-                task,
-                level="info",
-                message="Raw daily bar records persisted.",
-                payload={
-                    "source": adapter.code,
-                    "symbol": symbol,
-                    "records": records_read,
-                    "adjust_type": adjust_type,
-                    "raw_path": str(raw_path),
-                },
-            )
 
         market = task.market or "A_SHARE"
         normalized = [replace(record, adjust_type=adjust_type) for record in adapter.normalize_daily_bars(raw_records)]

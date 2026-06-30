@@ -23,6 +23,9 @@ class SyncTaskRepository:
         symbol: str | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
+        max_symbols: int | None = None,
+        start_policy: str | None = None,
+        adjust_type: str | None = None,
     ) -> SyncTask:
         task = SyncTask(
             task_type=task_type,
@@ -31,6 +34,9 @@ class SyncTaskRepository:
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
+            max_symbols=max_symbols,
+            start_policy=start_policy,
+            adjust_type=adjust_type,
         )
         self.db.add(task)
         self.db.flush()

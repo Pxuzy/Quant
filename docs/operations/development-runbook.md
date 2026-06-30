@@ -131,6 +131,12 @@ python -m apps.worker.sync_stocks --task-type daily_bars --source auto --market 
 python -m apps.worker.sync_stocks --task-type daily_bars_market_repair --source auto --market A_SHARE --start-date 2024-01-01 --end-date 2024-01-31 --max-symbols 20
 ```
 
+从 raw/staging 重跑单股日线标准化：
+
+```powershell
+python -m apps.worker.sync_stocks --task-type daily_bars_raw_replay --source baostock --market A_SHARE --symbol 600519 --start-date 2024-01-01 --end-date 2024-12-31 --adjust-type none
+```
+
 执行最早的 pending 任务：
 
 ```powershell

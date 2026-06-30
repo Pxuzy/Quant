@@ -242,6 +242,68 @@ def test_worker_cli_run_next_pending_claims_market_repair_without_task_type(tmp_
     assert dataset.storage_type == "parquet"
 
 
+def test_worker_cli_run_next_pending_claims_raw_daily_bars_replay(tmp_path, capsys, monkeypatch):
+    install_fake_baostock(monkeypatch)
+    monkeypatch.setenv("DATA_LAKE_DIR", str(tmp_path / "lake"))
+    reset_settings_cache()
+    database_url = f"sqlite:///{tmp_path / 'worker-raw-replay.db'}"
+
+    raw_task = main(
+        [
+            "--database-url",
+            database_url,
+            "--task-type",
+            "daily_bars",
+            "--source",
+            "baostock",
+            "--symbol",
+            "600519",
+            "--start-date",
+            "2026-06-01",
+            "--end-date",
+            "2026-06-02",
+        ]
+    )
+    assert raw_task == 0
+
+    pending_task = enqueue_raw_daily_bars_replay(
+        source="baostock",
+        market="A_SHARE",
+        symbol="600519",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 2),
+        adjust_type="none",
+        database_url=database_url,
+    )
+
+    exit_code = main(
+        [
+            "--database-url",
+            database_url,
+            "--run-next-pending",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    db = SessionLocal()
+    try:
+        task = db.get(SyncTask, pending_task.id)
+        dataset = db.scalar(select(Dataset).where(Dataset.name == "daily_bars"))
+    finally:
+        db.close()
+        reset_settings_cache()
+
+    assert exit_code == 0
+    assert '"task_type": "daily_bars_raw_replay"' in captured.out
+    assert '"status": "success"' in captured.out
+    assert task is not None
+    assert task.status == "success"
+    assert task.records_read == 2
+    assert task.records_written == 2
+    assert dataset is not None
+    assert dataset.storage_type == "parquet"
+
+
 def test_worker_cli_run_next_pending_keeps_explicit_stock_list_mode(tmp_path, capsys, monkeypatch):
     install_fake_akshare(monkeypatch)
     database_url = f"sqlite:///{tmp_path / 'worker-explicit-stock-list.db'}"
@@ -263,6 +325,90 @@ def test_worker_cli_run_next_pending_keeps_explicit_stock_list_mode(tmp_path, ca
     assert f'"id": {pending_task.id}' in captured.out
     assert '"task_type": "stock_list"' in captured.out
     assert '"status": "success"' in captured.out
+
+
+def test_worker_cli_enqueues_daily_bars_with_adjust_type(tmp_path, capsys, monkeypatch):
+    install_fake_akshare(monkeypatch)
+    database_url = f"sqlite:///{tmp_path / 'worker-daily-adjust.db'}"
+
+    exit_code = main(
+        [
+            "--database-url",
+            database_url,
+            "--task-type",
+            "daily_bars",
+            "--source",
+            "akshare",
+            "--symbol",
+            "600519",
+            "--start-date",
+            "2026-06-01",
+            "--end-date",
+            "2026-06-02",
+            "--adjust-type",
+            "qfq",
+            "--enqueue",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    db = SessionLocal()
+    try:
+        task = db.scalar(select(SyncTask).where(SyncTask.task_type == "daily_bars"))
+        logs = list(task.logs if task else [])
+    finally:
+        db.close()
+
+    assert exit_code == 0
+    assert '"task_type": "daily_bars"' in captured.out
+    assert task is not None
+    assert any(
+        log.message == "Daily bars sync task created."
+        and log.payload_json
+        and log.payload_json.get("adjust_type") == "qfq"
+        for log in logs
+    )
+
+
+def test_worker_cli_enqueues_market_repair_with_start_policy(tmp_path, capsys, monkeypatch):
+    install_fake_akshare(monkeypatch)
+    database_url = f"sqlite:///{tmp_path / 'worker-market-start-policy.db'}"
+
+    exit_code = main(
+        [
+            "--database-url",
+            database_url,
+            "--task-type",
+            "daily_bars_market_repair",
+            "--source",
+            "akshare",
+            "--start-date",
+            "2026-06-01",
+            "--end-date",
+            "2026-06-04",
+            "--max-symbols",
+            "2",
+            "--start-policy",
+            "listing_date",
+            "--adjust-type",
+            "qfq",
+            "--enqueue",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    db = SessionLocal()
+    try:
+        task = db.scalar(select(SyncTask).where(SyncTask.task_type == "daily_bars_market_repair"))
+    finally:
+        db.close()
+
+    assert exit_code == 0
+    assert '"task_type": "daily_bars_market_repair"' in captured.out
+    assert task is not None
+    assert task.max_symbols == 2
+    assert task.start_policy == "listing_date"
+    assert task.adjust_type == "qfq"
 
 
 def test_worker_claims_pending_calendar_sync_task(tmp_path, monkeypatch):

@@ -6,6 +6,16 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 
+DAILY_BAR_ADJUST_TYPES = {"none", "qfq", "hfq"}
+
+
+def normalize_daily_bar_adjust_type(adjust_type: str | None = None) -> str:
+    value = (adjust_type or "none").strip().lower()
+    if value not in DAILY_BAR_ADJUST_TYPES:
+        raise ValueError("adjust_type must be one of: none, qfq, hfq.")
+    return value
+
+
 @dataclass(frozen=True)
 class AdapterCapability:
     """Adapter capability: what data this source can provide."""
@@ -250,6 +260,7 @@ class StockDataSourceAdapter(ABC):
         market: str,
         start_date: date,
         end_date: date,
+        adjust_type: str = "none",
     ) -> list[dict[str, Any]]:
         """
         获取某只股票在某个日期范围内的日K线原始数据。
@@ -260,6 +271,7 @@ class StockDataSourceAdapter(ABC):
           market     — 市场类型（如 "A_SHARE"）
           start_date — 开始日期（含）
           end_date   — 结束日期（含）
+          adjust_type — 复权口径：none / qfq / hfq
         """
         raise NotImplementedError
 

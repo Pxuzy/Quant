@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # ── 抓取配置 ──
 DEFAULT_KEYWORDS = ["A股", "股市", "财经", "央行", "新能源", "半导体"]
 MAX_PER_KEYWORD = 20
-NEWS_SOURCES = ["sina"]
+NEWS_SOURCES = ["sina", "cls"]
 
 # ── 辅助函数 ──
 
@@ -64,36 +64,41 @@ def fetch_news_from_sina(keyword: str, limit: int = 20) -> list[dict]:
     return results
 
 
-def fetch_news_from_cls(keyword: str, limit: int = 20) -> list[dict]:
-    """从财联社拉取新闻（fallback 源）"""
+def fetch_news_from_cls(keyword: str = "", limit: int = 20) -> list[dict]:
+    """从财联社拉取新闻（telegraph API，实时快讯流）"""
     params = urlencode({
-        "app": "CailianpressWeb", "os": "web", "sv": "8.4.6",
-        "type": "all", "q": keyword, "page": "1", "rn": str(min(limit, 50)),
+        "app": "CailianpressWeb", "os": "web", "sv": "8.7.9",
     })
-    url = f"https://www.cls.cn/api/sw?{params}"
+    url = f"https://www.cls.cn/api/cache?{params}&name=telegraph"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+               "Referer": "https://www.cls.cn/telegraph"}
     try:
-        data = json.loads(_request(url))
+        data = json.loads(_request(url, headers=headers, timeout=15))
     except Exception as e:
         logger.error(f"财联社请求失败 [{keyword}]: {e}")
         return []
 
+    items = data.get("data", {}).get("roll_data", [])
     results = []
-    for item in data.get("data", {}).get("items", [])[:limit]:
-        title = item.get("title", "").strip()
+    for item in items[:limit]:
+        title = (item.get("title", "") or "").strip()
+        brief = (item.get("brief", "") or "").strip()
+        if not title:
+            title = brief[:80] if brief else ""
         if not title:
             continue
-        update_time = item.get("update_time", 0)
-        if isinstance(update_time, (int, float)) and update_time > 1e12:
-            update_time = update_time / 1000
+        ctime = item.get("ctime", 0)
+        if isinstance(ctime, (int, float)) and ctime > 1e12:
+            ctime = ctime / 1000
         results.append({
             "title": title,
-            "url": item.get("url", "") or f"https://www.cls.cn/telegraph/{item.get('id', '')}",
-            "summary": item.get("digest", "")[:200].strip(),
+            "url": f"https://www.cls.cn/telegraph/{item.get('id', '')}",
+            "summary": brief[:200].strip(),
             "source": "cls",
-            "category": _classify_news(title, item.get("digest", "")),
+            "category": _classify_news(title, brief),
             "external_id": str(item.get("id", "")) or _dedup_key(title, ""),
             "published_at": (
-                datetime.fromtimestamp(update_time, tz=timezone.utc) if update_time else None
+                datetime.fromtimestamp(ctime, tz=timezone.utc) if ctime else None
             ),
         })
     return results

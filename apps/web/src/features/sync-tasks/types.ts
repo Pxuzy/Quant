@@ -17,6 +17,12 @@ export type SyncTask = {
   candidateSources?: string[] | null;
   selected_source?: string | null;
   selectedSource?: string | null;
+  max_symbols?: number | null;
+  maxSymbols?: number | null;
+  start_policy?: 'requested_start' | 'listing_date' | string | null;
+  startPolicy?: 'requested_start' | 'listing_date' | string | null;
+  adjust_type?: 'none' | 'qfq' | 'hfq' | string | null;
+  adjustType?: 'none' | 'qfq' | 'hfq' | string | null;
   error_message?: string | null;
   errorMessage?: string | null;
   started_at?: string | null;

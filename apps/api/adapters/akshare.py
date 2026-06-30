@@ -16,6 +16,7 @@ from apps.api.adapters.base import (
     NormalizedStock,
     ProviderMetadata,
     StockDataSourceAdapter,
+    normalize_daily_bar_adjust_type,
 )
 
 # =============================================================================
@@ -517,6 +518,7 @@ class AkShareAdapter(StockDataSourceAdapter):
         market: str,
         start_date: date,
         end_date: date,
+        adjust_type: str = "none",
     ) -> list[dict[str, Any]]:
         """
         从 AKShare 获取某只股票的历史日K线数据。
@@ -539,6 +541,8 @@ class AkShareAdapter(StockDataSourceAdapter):
             raise ValueError(
                 "AKShare daily bars adapter currently supports A_SHARE only."
             )
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
+        adjust = "" if adjust_type_code == "none" else adjust_type_code
 
         client = self._get_client()
 
@@ -558,7 +562,7 @@ class AkShareAdapter(StockDataSourceAdapter):
                 "period": "daily",        # 日线数据（不是周线或月线）
                 "start_date": start_text,
                 "end_date": end_text,
-                "adjust": "",             # 不复权（用原始价格）
+                "adjust": adjust,
             }
 
             # 如果这个版本的 AKShare 支持 timeout 参数，就加上（防网络超时）
@@ -580,7 +584,7 @@ class AkShareAdapter(StockDataSourceAdapter):
                         symbol=_to_sina_symbol(symbol, exchange),
                         start_date=start_text,
                         end_date=end_text,
-                        adjust="",
+                        adjust=adjust,
                     ),
                     symbol,   # 补上 symbol，因为这个函数返回的数据里可能没有
                 ),
@@ -592,7 +596,7 @@ class AkShareAdapter(StockDataSourceAdapter):
             )
 
         try:
-            return _try_fetch(candidates)
+            return [{**record, "__adjust_type": adjust_type_code} for record in _try_fetch(candidates)]
         except RuntimeError as exc:
             raise RuntimeError(f"AKShare daily-bars fetch failed: {exc}") from exc
 
@@ -683,7 +687,9 @@ class AkShareAdapter(StockDataSourceAdapter):
                     volume=volume,
                     amount=amount,
                     adjust_factor=1.0,           # 不复权数据，因子固定为 1
-                    adjust_type="none",          # 标记为未复权
+                    adjust_type=normalize_daily_bar_adjust_type(
+                        record.get("__adjust_type") or record.get("adjust_type")
+                    ),
                     source=self.code,
                 )
             )

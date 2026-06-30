@@ -38,7 +38,7 @@ BATCH_SIZE = 100
 def get_last_trade_date() -> date | None:
     """查 silver 最新交易日"""
     import duckdb
-    silver_path = (SILVER_DIR / "market=*" / "trade_date=*" / "part-000.parquet").resolve().as_posix()
+    silver_path = (SILVER_DIR / "market=*" / "trade_date=*" / "*.parquet").resolve().as_posix()
     con = duckdb.connect()
     try:
         con.execute("SET threads TO 2;")

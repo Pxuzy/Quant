@@ -14,7 +14,7 @@ from apps.api.schemas.market_data import (
     PaginatedDailyBars,
 )
 from apps.api.schemas.sync_tasks import SyncTaskRead
-from apps.api.services.market_data_query_service import MarketDataQueryService
+from apps.api.repositories.daily_bars import DailyBarRepository
 from apps.api.services.market_data_sync_service import MarketDataSyncService
 
 router = APIRouter(prefix="/api/market-data", tags=["market-data"])
@@ -30,7 +30,7 @@ def list_daily_bars(
     page_size: int = Query(default=200, ge=1, le=1000),
     sort_order: str = Query(default="asc", pattern="^(asc|desc)$"),
 ) -> dict:
-    return MarketDataQueryService().list_daily_bars(
+    return _list_daily_bars(
         symbol=symbol,
         market=market,
         start_date=start_date,
@@ -41,17 +41,17 @@ def list_daily_bars(
     )
 
 
-@router.get("/daily-bars/{symbol}", response_model=PaginatedDailyBars)
-def list_daily_bars_by_symbol(
-    symbol: str,
-    market: str | None = Query(default=None),
-    start_date: date | None = Query(default=None),
-    end_date: date | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=200, ge=1, le=1000),
-    sort_order: str = Query(default="asc", pattern="^(asc|desc)$"),
+def _list_daily_bars(
+    symbol: str | None,
+    market: str | None,
+    start_date: date | None,
+    end_date: date | None,
+    page: int,
+    page_size: int,
+    sort_order: str,
 ) -> dict:
-    return MarketDataQueryService().list_daily_bars(
+    repo = DailyBarRepository()
+    items, total = repo.list_daily_bars(
         symbol=symbol,
         market=market,
         start_date=start_date,
@@ -60,6 +60,14 @@ def list_daily_bars_by_symbol(
         page_size=page_size,
         sort_order=sort_order,
     )
+    from math import ceil
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": ceil(total / page_size) if total else 0,
+    }
 
 
 @router.post("/daily-bars/sync", response_model=SyncTaskRead, status_code=status.HTTP_201_CREATED)
@@ -71,6 +79,7 @@ def sync_daily_bars(request: DailyBarsSyncRequest, db: Session = Depends(get_db)
             symbol=request.symbol,
             start_date=request.start_date,
             end_date=request.end_date,
+            adjust_type=request.adjust_type,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -85,6 +94,8 @@ def preview_market_daily_bars_repair(request: DailyBarsMarketRepairRequest, db: 
             start_date=request.start_date,
             end_date=request.end_date,
             max_symbols=request.max_symbols,
+            start_policy=request.start_policy,
+            adjust_type=request.adjust_type,
         )
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -99,6 +110,8 @@ def repair_market_daily_bars(request: DailyBarsMarketRepairRequest, db: Session 
             start_date=request.start_date,
             end_date=request.end_date,
             max_symbols=request.max_symbols,
+            start_policy=request.start_policy,
+            adjust_type=request.adjust_type,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

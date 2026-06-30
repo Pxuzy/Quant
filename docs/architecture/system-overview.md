@@ -74,6 +74,7 @@ React stock workbench
   -> FastAPI 创建 sync_tasks 记录
   -> worker 领取任务或直接执行
   -> provider adapter 拉取外部数据
+  -> raw/staging 保存原始 provider 响应
   -> normalize 标准化
   -> schema_validate 校验
   -> 写入 stocks / trading_calendars / Parquet
@@ -94,6 +95,18 @@ React stock workbench
 日线补齐默认以最近半年为管理窗口。覆盖计算以本地交易日历最新日期为锚点，不凭空推断未知交易日。
 
 脚本型全量拉取、合并和增量更新不作为前端可调用 API 暴露。需要长时间执行的数据操作必须先落到 `sync_tasks`，再由 worker 执行，并留下日志、入库批次、数据集和质量记录。
+
+数据管线的长期目标按 Qlib 的思路收敛为三段：
+
+```text
+download/fetch raw
+  -> raw/staging 可回放留痕
+  -> normalize/schema_validate
+  -> silver/gold/research datasets
+  -> BarReader/DataPortal
+```
+
+当前日线同步已经先把 provider 原始记录保存到 `storage/lake/raw/daily_bars`，再写入 `silver/daily_bars`；`daily_bars_raw_replay` 会从 raw/staging 重跑标准化，并生成新的 success ingest batch。后续修复复权、字段映射或 normalize 版本时，应优先走 replay，而不是每次重新请求第三方 provider。
 
 ## 数据源架构
 
@@ -131,7 +144,7 @@ governed ingest
   -> factors / backtest / AI assistant / strategy
 ```
 
-第一步已经落地最小 `BarReader` 契约：`/api/research-data/bars` 按市场、股票和时间范围读取已治理日线，并返回 `contract` 元信息。后续可以扩展为 `DataPortal`，但调用方不应该知道 provider、数据库表名或 Parquet 物理路径。
+第一步已经落地最小 `BarReader` 契约：`/api/research-data/bars` 按市场、股票和时间范围读取已治理日线，并在 `contract.manifest` 返回 `daily_bars` 数据集的行数、最新数据日、质量状态、来源、更新时间和最新成功入库批次。后续可以扩展为 `DataPortal`，但调用方不应该知道 provider、数据库表名或 Parquet 物理路径。
 
 AI 能力可以做四类事情：
 

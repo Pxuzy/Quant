@@ -28,6 +28,13 @@ Thumbs.db
 # Project specific - data files
 *.db
 *.sqlite
+
+# Temp / generated
+tmp/
+tmp-debug-lake/
+screenshots/
+outputs/
+quant_frontend.png
 *.sqlite3
 *.parquet
 storage/

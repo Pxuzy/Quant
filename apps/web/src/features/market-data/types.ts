@@ -32,6 +32,7 @@ export type DailyBarsSyncRequest = {
   symbol: string;
   start_date: string;
   end_date: string;
+  adjust_type?: 'none' | 'qfq' | 'hfq';
 };
 
 export type DailyBarsMarketRepairRequest = {
@@ -40,6 +41,8 @@ export type DailyBarsMarketRepairRequest = {
   start_date: string;
   end_date: string;
   max_symbols?: number;
+  start_policy?: 'requested_start' | 'listing_date';
+  adjust_type?: 'none' | 'qfq' | 'hfq';
 };
 
 export type DailyBarsMarketRepairPreviewItem = {
@@ -59,6 +62,8 @@ export type DailyBarsMarketRepairPreviewResponse = {
   start_date?: string | null;
   end_date?: string | null;
   max_symbols?: number | null;
+  start_policy?: 'requested_start' | 'listing_date' | null;
+  adjust_type?: 'none' | 'qfq' | 'hfq' | null;
   stock_pool_count?: number | null;
   open_dates_count?: number | null;
   planned_symbols?: number | null;

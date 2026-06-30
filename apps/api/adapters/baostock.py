@@ -17,6 +17,7 @@ from apps.api.adapters.base import (
     NormalizedTradingCalendar,
     ProviderMetadata,
     StockDataSourceAdapter,
+    normalize_daily_bar_adjust_type,
 )
 
 
@@ -135,6 +136,10 @@ def _to_baostock_code(symbol: str, exchange: str | None) -> str:
             prefix = "sz"
 
     return f"{prefix}.{symbol}"
+
+
+def _adjust_type_from_adjustflag(value: Any) -> str:
+    return {"1": "hfq", "2": "qfq", "3": "none"}.get(_clean_text(value) or "", "none")
 
 
 def _result_set_to_records(result_set: Any) -> list[dict[str, Any]]:
@@ -429,6 +434,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
         market: str,
         start_date: date,
         end_date: date,
+        adjust_type: str = "none",
     ) -> list[dict[str, Any]]:
         """
         从 BaoStock 获取某只股票的日K线数据。
@@ -446,6 +452,8 @@ class BaoStockAdapter(StockDataSourceAdapter):
             raise ValueError(
                 "BaoStock daily bars adapter currently supports A_SHARE only."
             )
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
+        adjustflag = {"none": "3", "qfq": "2", "hfq": "1"}[adjust_type_code]
 
         client = self._get_client()
 
@@ -464,7 +472,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
                 start_date=start_date.isoformat(),
                 end_date=end_date.isoformat(),
                 frequency="d",       # 日线
-                adjustflag="3",      # 不复权
+                adjustflag=adjustflag,
             )
             if getattr(result_set, "error_code", "0") != "0":
                 raise RuntimeError(
@@ -474,7 +482,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
                         "BaoStock query_history_k_data_plus failed.",
                     )
                 )
-            return _result_set_to_records(result_set)
+            return [{**record, "__adjust_type": adjust_type_code} for record in _result_set_to_records(result_set)]
         finally:
             # 无论成功失败都要登出
             if hasattr(client, "logout"):
@@ -530,7 +538,9 @@ class BaoStockAdapter(StockDataSourceAdapter):
                     volume=_to_float(record.get("volume"), default=0.0) or 0.0,
                     amount=_to_float(record.get("amount"), default=0.0) or 0.0,
                     adjust_factor=1.0,
-                    adjust_type="none",
+                    adjust_type=normalize_daily_bar_adjust_type(
+                        record.get("__adjust_type") or _adjust_type_from_adjustflag(record.get("adjustflag"))
+                    ),
                     source=self.code,
                 )
             )

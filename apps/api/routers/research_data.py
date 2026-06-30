@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
+from apps.api.db.session import get_db
 from apps.api.schemas.research_data import ResearchBarsRead
 from apps.api.services.research_data_service import ResearchDataService
 
@@ -18,9 +20,10 @@ def read_bars(
     end_date: date = Query(),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=5000, ge=1, le=10000),
+    db: Session = Depends(get_db),
 ) -> dict:
     try:
-        return ResearchDataService().read_bars(
+        return ResearchDataService(db).read_bars(
             symbol=symbol,
             market=market,
             start_date=start_date,

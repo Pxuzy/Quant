@@ -12,7 +12,6 @@ from apps.api.repositories.daily_bars import DailyBarRepository
 from apps.api.repositories.data_sources import DataSourceRepository
 from apps.api.repositories.datasets import DatasetRepository
 from apps.api.repositories.ingest_batches import IngestBatchRepository
-from apps.api.repositories.raw_daily_bars import RawDailyBarRepository
 from apps.api.repositories.stocks import StockRepository
 from apps.api.repositories.sync_tasks import SyncTaskRepository
 from apps.api.repositories.trading_calendars import TradingCalendarRepository
@@ -23,12 +22,10 @@ from apps.api.services.market_repair_planner import (
     MarketRepairPlan,
     MarketRepairPlanner,
 )
-from apps.api.services.raw_replay_runner import RawReplayRunner
 from apps.api.services.stock_sync_service import AUTO_SOURCE_CODE
 
 
 MARKET_REPAIR_TASK_TYPE = "daily_bars_market_repair"
-RAW_REPLAY_TASK_TYPE = "daily_bars_raw_replay"
 DEFAULT_MARKET_REPAIR_MAX_SYMBOLS = 20
 MAX_MARKET_REPAIR_SYMBOLS = 200
 DEFAULT_ADJUST_TYPE = "none"
@@ -48,7 +45,6 @@ class MarketDataSyncService:
         self.dataset_repo = DatasetRepository(db)
         self.ingest_batch_repo = IngestBatchRepository(db)
         self.daily_bar_repo = DailyBarRepository(lake_root=lake_root)
-        self.raw_daily_bar_repo = RawDailyBarRepository(lake_root=lake_root)
         self.stock_repo = StockRepository(db)
         self.task_repo = SyncTaskRepository(db)
         self.trading_calendar_repo = TradingCalendarRepository(db)
@@ -57,7 +53,6 @@ class MarketDataSyncService:
             ingest_batch_repo=self.ingest_batch_repo,
             dataset_repo=self.dataset_repo,
             daily_bar_repo=self.daily_bar_repo,
-            raw_daily_bar_repo=self.raw_daily_bar_repo,
             task_adjust_type=self._task_adjust_type,
         )
         self.market_repair_planner = MarketRepairPlanner(
@@ -65,17 +60,10 @@ class MarketDataSyncService:
             trading_calendar_repo=self.trading_calendar_repo,
             daily_bar_repo=self.daily_bar_repo,
         )
-        self.raw_replay_runner = RawReplayRunner(
-            registry=self.registry,
-            raw_daily_bar_repo=self.raw_daily_bar_repo,
-            ingest_pipeline=self.ingest_pipeline,
-        )
 
     def _refresh_deep_modules(self) -> None:
         self.ingest_pipeline.daily_bar_repo = self.daily_bar_repo
-        self.ingest_pipeline.raw_daily_bar_repo = self.raw_daily_bar_repo
         self.market_repair_planner.daily_bar_repo = self.daily_bar_repo
-        self.raw_replay_runner.raw_daily_bar_repo = self.raw_daily_bar_repo
 
     def create_daily_bars_sync_task(
         self,
@@ -146,12 +134,6 @@ class MarketDataSyncService:
         if task is None:
             return None
         return self.run_market_daily_bars_repair_task(task.id)
-
-    def run_next_pending_raw_daily_bars_replay(self) -> SyncTask | None:
-        task = self.task_repo.get_next_pending_task(RAW_REPLAY_TASK_TYPE)
-        if task is None:
-            return None
-        return self.run_raw_daily_bars_replay_task(task.id)
 
     def create_market_daily_bars_repair_task(
         self,
@@ -382,123 +364,6 @@ class MarketDataSyncService:
             adjust_type=adjust_type,
         )
         return self.run_market_daily_bars_repair_task(task.id)
-
-    def create_raw_daily_bars_replay_task(
-        self,
-        *,
-        source: str,
-        market: str = "A_SHARE",
-        symbol: str,
-        start_date: date,
-        end_date: date,
-        adjust_type: str = DEFAULT_ADJUST_TYPE,
-    ) -> SyncTask:
-        self._validate_date_range(start_date=start_date, end_date=end_date)
-        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
-        source_code = source.strip().lower()
-        symbol_code = symbol.strip()
-        if not symbol_code:
-            self.db.rollback()
-            raise ValueError("Raw daily bars replay requires a symbol.")
-
-        task = self.task_repo.create_task(
-            task_type=RAW_REPLAY_TASK_TYPE,
-            source=source_code,
-            market=market.strip().upper(),
-            symbol=symbol_code,
-            start_date=start_date,
-            end_date=end_date,
-            adjust_type=adjust_type_code,
-        )
-        self.task_repo.add_log(
-            task,
-            level="info",
-            message="Raw daily bars replay task created.",
-            payload={
-                "source": source_code,
-                "market": task.market,
-                "symbol": symbol_code,
-                "start_date": start_date.isoformat(),
-                "end_date": end_date.isoformat(),
-                "adjust_type": adjust_type_code,
-            },
-        )
-        self.db.commit()
-        self.db.refresh(task)
-        return task
-
-    def run_raw_daily_bars_replay_task(self, task_id: int) -> SyncTask:
-        task = self.task_repo.get_task(task_id)
-        if task is None:
-            raise ValueError(f"Sync task {task_id} does not exist.")
-        if task.task_type != RAW_REPLAY_TASK_TYPE:
-            raise ValueError(f"Sync task {task_id} is not a {RAW_REPLAY_TASK_TYPE} task.")
-        if task.status != "pending":
-            raise ValueError(f"Sync task {task_id} is {task.status}, expected pending.")
-        if task.symbol is None or task.start_date is None or task.end_date is None:
-            raise ValueError(f"Sync task {task_id} is missing symbol or date range.")
-
-        records_read = 0
-        records_written = 0
-        try:
-            self.task_repo.mark_running(task)
-            self.task_repo.add_log(
-                task,
-                level="info",
-                message="Raw daily bars replay started.",
-                payload=self._task_payload(task, source=task.source),
-            )
-            records_read, records_written = self.replay_raw_daily_bars(
-                source=task.source,
-                market=task.market or "A_SHARE",
-                symbol=task.symbol,
-                start_date=task.start_date,
-                end_date=task.end_date,
-                adjust_type=self._task_adjust_type(task),
-                task=task,
-            )
-            self.task_repo.complete(task, records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(
-                task,
-                level="info",
-                message="Raw daily bars replay completed.",
-                payload={"records_read": records_read, "records_written": records_written},
-            )
-            self.db.commit()
-            self.db.refresh(task)
-            return task
-        except Exception as exc:
-            self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(task, level="error", message="Raw daily bars replay failed.", payload={"error": str(exc)})
-            self.db.commit()
-            self.db.refresh(task)
-            return task
-
-    def replay_raw_daily_bars(
-        self,
-        *,
-        source: str,
-        market: str,
-        symbol: str,
-        start_date: date,
-        end_date: date,
-        adjust_type: str = DEFAULT_ADJUST_TYPE,
-        task: SyncTask | None = None,
-    ) -> tuple[int, int]:
-        self._validate_date_range(start_date=start_date, end_date=end_date)
-        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
-        self._refresh_deep_modules()
-        records_read, records_written = self.raw_replay_runner.replay(
-            source=source,
-            market=market,
-            symbol=symbol,
-            start_date=start_date,
-            end_date=end_date,
-            adjust_type=adjust_type_code,
-            task=task,
-        )
-        self.db.commit()
-        return records_read, records_written
 
     def run_market_daily_bars_repair_task(self, task_id: int) -> SyncTask:
         task = self.task_repo.get_task(task_id)
@@ -930,18 +795,6 @@ class MarketDataSyncService:
                 # 串行写入（主线程，共享 self.db）
                 try:
                     from dataclasses import replace
-
-                    # 先写 raw 层
-                    self.raw_daily_bar_repo.write_batch(
-                        raw_records,
-                        source=adapter.code,
-                        market=market_name,
-                        symbol=symbol_item.symbol,
-                        start_date=symbol_item.start_date,
-                        end_date=symbol_item.end_date,
-                        adjust_type=adjust_type,
-                        task_id=task.id,
-                    )
 
                     normalized = [replace(record, adjust_type=adjust_type)
                                   for record in adapter.normalize_daily_bars(raw_records)]

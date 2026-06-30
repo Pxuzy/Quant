@@ -58,6 +58,9 @@ class SyncTaskRead(BaseModel):
     symbol: str | None
     start_date: date | None
     end_date: date | None
+    max_symbols: int | None = None
+    start_policy: str | None = None
+    adjust_type: str | None = None
     status: str
     progress: int
     records_read: int
@@ -84,6 +87,9 @@ class SyncTaskRead(BaseModel):
             "symbol": _task_field_value(value, "symbol"),
             "start_date": _task_field_value(value, "start_date"),
             "end_date": _task_field_value(value, "end_date"),
+            "max_symbols": _task_field_value(value, "max_symbols"),
+            "start_policy": _task_field_value(value, "start_policy"),
+            "adjust_type": _task_field_value(value, "adjust_type"),
             "status": _task_field_value(value, "status"),
             "progress": _task_field_value(value, "progress"),
             "records_read": _task_field_value(value, "records_read"),

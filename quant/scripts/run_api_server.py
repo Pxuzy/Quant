@@ -107,6 +107,75 @@ def is_process_running(pid: int) -> bool:
     return True
 
 
+def process_command_line(pid: int) -> str:
+    if pid <= 0:
+        return ""
+    if os.name == "nt":
+        command = [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine",
+        ]
+        try:
+            completed = subprocess.run(command, check=False, capture_output=True, text=True, timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        return completed.stdout.strip()
+
+    proc_cmdline = Path(f"/proc/{pid}/cmdline")
+    try:
+        return proc_cmdline.read_text(encoding="utf-8", errors="replace").replace("\x00", " ").strip()
+    except OSError:
+        try:
+            completed = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "args="],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        return completed.stdout.strip()
+
+
+def is_managed_api_process(pid: int) -> bool:
+    command_line = process_command_line(pid).lower()
+    return APP_IMPORT.lower() in command_line and str(api_port()) in command_line
+
+
+def is_pid_safe_to_stop(pid: int) -> bool:
+    return is_process_running(pid) and is_managed_api_process(pid)
+
+
+def listening_process_id() -> int | None:
+    if os.name != "nt":
+        return None
+    try:
+        completed = subprocess.run(
+            ["netstat", "-ano", "-p", "tcp"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    port_suffix = f":{api_port()}"
+    for line in completed.stdout.splitlines():
+        parts = line.split()
+        if len(parts) < 5 or parts[0] != "TCP" or parts[3] != "LISTENING":
+            continue
+        if parts[1].endswith(port_suffix):
+            try:
+                return int(parts[4])
+            except ValueError:
+                return None
+    return None
+
+
 def wait_until_healthy(pid: int, timeout_seconds: float) -> bool:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
@@ -138,9 +207,11 @@ def start_background() -> int:
     existing_pid = read_pid()
     if existing_pid is not None and is_process_running(existing_pid):
         healthy, _ = api_health_state()
-        if healthy:
+        if is_managed_api_process(existing_pid):
             return existing_pid
         pid_path().unlink(missing_ok=True)
+        if healthy:
+            return -1
     elif existing_pid is not None:
         pid_path().unlink(missing_ok=True)
 
@@ -148,6 +219,10 @@ def start_background() -> int:
     if healthy:
         pid_path().unlink(missing_ok=True)
         return -1
+
+    owner_pid = listening_process_id()
+    if owner_pid is not None:
+        raise SystemExit(f"API port {api_port()} is already owned by unmanaged pid={owner_pid}.")
 
     log_file: IO[bytes] | None = None
     command = [
@@ -190,6 +265,9 @@ def stop_background() -> bool:
     if not is_process_running(pid):
         pid_path().unlink(missing_ok=True)
         return False
+    if not is_pid_safe_to_stop(pid):
+        pid_path().unlink(missing_ok=True)
+        return False
 
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], check=False, capture_output=True)
@@ -204,12 +282,16 @@ def status_text() -> str:
     pid = read_pid()
     healthy, api_state = api_health_state()
     if healthy:
-        if pid is not None and is_process_running(pid):
+        if pid is not None and is_process_running(pid) and is_managed_api_process(pid):
             process_state = f"running pid={pid}"
         else:
             if pid is not None:
                 pid_path().unlink(missing_ok=True)
-            process_state = "running"
+            owner_pid = listening_process_id()
+            if owner_pid is not None:
+                process_state = f"running pid={owner_pid} (unmanaged)"
+            else:
+                process_state = "running"
     else:
         process_state = "stopped"
     return f"{process_state}; {api_state}; url={health_url()}"

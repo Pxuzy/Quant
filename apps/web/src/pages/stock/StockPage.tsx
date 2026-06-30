@@ -9,12 +9,9 @@ import {
   HistogramSeries,
   LineSeries,
   type IChartApi,
-  type CandlestickData,
   type HistogramData,
   type IRange,
-  type ISeriesApi,
   type LineData,
-  type SeriesType,
   type Time,
   CrosshairMode,
   LineStyle,
@@ -47,8 +44,11 @@ const PERIOD_OPTIONS = [
   { label: '\u6708\u7ebf', value: 'month' },
 ] as const;
 
-const RANGE_OPTIONS = ['1M', '3M', '6M', '1Y', '3Y', '\u5168\u90e8'] as const;
 const KLINE_HISTORY_LIMIT = 10000;
+const LINE_MODE_VISIBLE_YEARS = 4;
+const CANDLE_MODE_VISIBLE_YEARS = 3.75;
+const YEAR_IN_DAYS = 365.25;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_MA_PERIODS = [5, 10, 20, 60] as const;
 const MA_COLORS = ['#f59f00', '#1677ff', '#722ed1', '#a0d911'] as const;
 const RSI_COLORS = ['#1677ff', '#fa8c16', '#722ed1'] as const;
@@ -59,10 +59,9 @@ const DEFAULT_RSI_PERIODS: RSISettings = [6, 12, 24];
 const DEFAULT_KDJ_SETTINGS: KDJSettings = { period: 9, k: 3, d: 3 };
 
 type PeriodValue = (typeof PERIOD_OPTIONS)[number]['value'];
-type RangeValue = (typeof RANGE_OPTIONS)[number];
 type OverlayValue = `MA${number}` | 'BOLL';
 type LowerIndicator = 'volume' | 'macd' | 'rsi' | 'kdj';
-type AnySeries = ISeriesApi<SeriesType, Time>;
+type KlineViewMode = 'candles' | 'line';
 
 function detectPrefix(code: string): string {
   if (code.startsWith('sh') || code.startsWith('sz') || code.startsWith('bj')) return '';
@@ -76,15 +75,24 @@ function fmt(v: number): string {
   return v.toFixed(0);
 }
 
-function visibleCountFromRange(range: RangeValue): number | undefined {
-  switch (range) {
-    case '1M': return 22;
-    case '3M': return 66;
-    case '6M': return 132;
-    case '1Y': return 250;
-    case '3Y': return 750;
-    case '\u5168\u90e8': return undefined;
+function buildCloseLineData(data: KLine[]): LineData[] {
+  return data.map((item) => ({ time: item.date, value: item.close } as LineData));
+}
+
+function getVisibleYears(data: KLine[], from: number, to: number): number {
+  const fromIndex = Math.max(0, Math.floor(from));
+  const toIndex = Math.min(data.length - 1, Math.ceil(to));
+  const fromDate = data[fromIndex]?.date;
+  const toDate = data[toIndex]?.date;
+  if (!fromDate || !toDate) return 0;
+  return Math.abs(new Date(toDate).getTime() - new Date(fromDate).getTime()) / MS_PER_DAY / YEAR_IN_DAYS;
+}
+
+function getNextKlineViewMode(currentMode: KlineViewMode, visibleYears: number): KlineViewMode {
+  if (currentMode === 'line') {
+    return visibleYears <= CANDLE_MODE_VISIBLE_YEARS ? 'candles' : 'line';
   }
+  return visibleYears >= LINE_MODE_VISIBLE_YEARS ? 'line' : 'candles';
 }
 
 type StockKlineChartProps = {
@@ -92,11 +100,17 @@ type StockKlineChartProps = {
   title?: string;
   embedded?: boolean;
   minHeight?: number;
+  historyLimit?: number;
 };
 
-export function StockKlineChart({ code, title, embedded = false, minHeight = 520 }: StockKlineChartProps) {
+export function StockKlineChart({
+  code,
+  title,
+  embedded = false,
+  minHeight = 520,
+  historyLimit = KLINE_HISTORY_LIMIT,
+}: StockKlineChartProps) {
   const [period, setPeriod] = useState<PeriodValue>('day');
-  const [range, setRange] = useState<RangeValue>('全部');
   const [loading, setLoading] = useState(true);
   const [klineData, setKlineData] = useState<KLine[]>([]);
   const [enabledOverlays, setEnabledOverlays] = useState<OverlayValue[]>(
@@ -112,29 +126,7 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
   const chartApiRef = useRef<IChartApi>();
   const requestIdRef = useRef(0);
   const shouldFitContentRef = useRef(true);
-
-  const applyVisibleRange = useCallback((nextRange: RangeValue, data: KLine[] = klineData) => {
-    const chart = chartApiRef.current;
-    if (!chart || !data.length) return;
-
-    const visibleCount = visibleCountFromRange(nextRange);
-    if (!visibleCount || data.length <= visibleCount) {
-      chart.timeScale().fitContent();
-      return;
-    }
-
-    const fromItem = data[Math.max(0, data.length - visibleCount)];
-    const toItem = data[data.length - 1];
-    if (!fromItem || !toItem) {
-      chart.timeScale().fitContent();
-      return;
-    }
-
-    chart.timeScale().setVisibleRange({
-      from: fromItem.date as Time,
-      to: toItem.date as Time,
-    });
-  }, [klineData]);
+  const klineViewModeRef = useRef<KlineViewMode>('candles');
 
   const loadKline = useCallback(async (signal?: AbortSignal) => {
     const requestId = requestIdRef.current + 1;
@@ -142,7 +134,7 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
     setLoading(true);
     try {
       const fullCode = detectPrefix(code) + code;
-      const data = await fetchKline(fullCode, period, KLINE_HISTORY_LIMIT, signal);
+      const data = await fetchKline(fullCode, period, historyLimit, signal);
       if (signal?.aborted || requestId !== requestIdRef.current) return;
       shouldFitContentRef.current = true;
       setKlineData(data);
@@ -154,7 +146,7 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
         setLoading(false);
       }
     }
-  }, [code, period]);
+  }, [code, historyLimit, period]);
 
   const renderMainIndicators = useCallback((chart: IChartApi, data: KLine[]) => {
     maPeriods.forEach((maPeriod, index) => {
@@ -163,6 +155,7 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
         chart.addSeries(LineSeries, {
           color: MA_COLORS[index % MA_COLORS.length],
           lineWidth: 1,
+          priceScaleId: 'left',
           priceLineVisible: false,
           title: key,
         }).setData(calcMA(data, maPeriod));
@@ -172,16 +165,17 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
     if (!enabledOverlays.includes('BOLL') || data.length < bollSettings.period) return;
 
     const boll = calcBOLL(data, bollSettings);
-    chart.addSeries(LineSeries, { color: '#13c2c2', lineWidth: 1, priceLineVisible: false, title: 'BOLL U' })
+    chart.addSeries(LineSeries, { color: '#13c2c2', lineWidth: 1, priceScaleId: 'left', priceLineVisible: false, title: 'BOLL U' })
       .setData(boll.map((item) => ({ time: item.time, value: item.upper })));
     chart.addSeries(LineSeries, {
       color: '#13c2c2',
       lineWidth: 1,
+      priceScaleId: 'left',
       priceLineVisible: false,
       lineStyle: LineStyle.Dotted,
       title: 'BOLL',
     }).setData(boll.map((item) => ({ time: item.time, value: item.mid })));
-    chart.addSeries(LineSeries, { color: '#13c2c2', lineWidth: 1, priceLineVisible: false, title: 'BOLL L' })
+    chart.addSeries(LineSeries, { color: '#13c2c2', lineWidth: 1, priceScaleId: 'left', priceLineVisible: false, title: 'BOLL L' })
       .setData(boll.map((item) => ({ time: item.time, value: item.lower })));
   }, [bollSettings, enabledOverlays, maPeriods]);
 
@@ -283,7 +277,6 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
   const attachTooltip = useCallback((
     chart: IChartApi,
     container: HTMLDivElement,
-    candleSeries: AnySeries,
     data: KLine[],
     width: number,
     height: number,
@@ -297,29 +290,28 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
         tooltip.style.display = 'none';
         return;
       }
-      const cd = param.seriesData.get(candleSeries) as CandlestickData | undefined;
-      if (!cd) {
+      const currentIndex = data.findIndex((item) => item.date === String(param.time));
+      const current = currentIndex >= 0 ? data[currentIndex] : undefined;
+      if (!current) {
         tooltip.style.display = 'none';
         return;
       }
 
-      const currentIndex = data.findIndex((item) => item.date === String(cd.time));
-      const current = currentIndex >= 0 ? data[currentIndex] : undefined;
       const previous = currentIndex > 0 ? data[currentIndex - 1] : undefined;
-      const change = current && previous ? current.close - previous.close : cd.close - cd.open;
-      const base = previous?.close ?? cd.open;
+      const change = previous ? current.close - previous.close : current.close - current.open;
+      const base = previous?.close ?? current.open;
       const pct = base === 0 ? 0 : (change / base) * 100;
-      const direction = current ? getKlineDirection(current, previous) : cd.close >= cd.open ? 'up' : 'down';
+      const direction = getKlineDirection(current, previous);
       const color = direction === 'up' ? UP_COLOR : DOWN_COLOR;
 
       tooltip.style.display = 'block';
       tooltip.style.left = `${Math.min(param.point.x + 12, Math.max(0, width - 240))}px`;
       tooltip.style.top = `${Math.max(8, Math.min(param.point.y - 90, height - 126))}px`;
       tooltip.innerHTML = `
-        <div><b>${cd.time}</b></div>
-        <div>\u5f00 ${cd.open.toFixed(2)} \u9ad8 ${cd.high.toFixed(2)} \u4f4e ${cd.low.toFixed(2)} \u6536 ${cd.close.toFixed(2)}</div>
+        <div><b>${current.date}</b></div>
+        <div>\u5f00 ${current.open.toFixed(2)} \u9ad8 ${current.high.toFixed(2)} \u4f4e ${current.low.toFixed(2)} \u6536 ${current.close.toFixed(2)}</div>
         <div>\u6da8\u8dcc\u989d <span style="color:${color}">${change.toFixed(2)}</span> \u6da8\u8dcc\u5e45 <span style="color:${color}">${pct.toFixed(2)}%</span></div>
-        <div>\u6210\u4ea4\u91cf ${fmt(current?.volume ?? 0)}</div>
+        <div>\u6210\u4ea4\u91cf ${fmt(current.volume)}</div>
       `;
     });
   }, []);
@@ -349,9 +341,10 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
         borderColor: '#e0e0e0',
         rightOffset: 8,
         barSpacing: 8,
-        minBarSpacing: 3,
+        minBarSpacing: 0.2,
       },
-      rightPriceScale: { borderColor: '#e0e0e0', scaleMargins: { top: 0.05, bottom: 0.08 } },
+      leftPriceScale: { visible: true, borderColor: '#e0e0e0', scaleMargins: { top: 0.05, bottom: 0.08 } },
+      rightPriceScale: { visible: false, borderColor: '#e0e0e0', scaleMargins: { top: 0.05, bottom: 0.08 } },
       crosshair: { mode: CrosshairMode.Normal },
       handleScroll: {
         mouseWheel: true,
@@ -368,25 +361,37 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
     chartApiRef.current = chart;
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
+      priceScaleId: 'left',
       upColor: UP_COLOR,
       downColor: DOWN_COLOR,
       borderUpColor: UP_COLOR,
       borderDownColor: DOWN_COLOR,
       wickUpColor: UP_COLOR,
       wickDownColor: DOWN_COLOR,
+      visible: klineViewModeRef.current === 'candles',
     });
     candleSeries.setData(buildCandleData(data));
+
+    const closeLineSeries = chart.addSeries(LineSeries, {
+      color: UP_COLOR,
+      lineWidth: 1,
+      priceScaleId: 'left',
+      priceLineVisible: false,
+      title: '\u6536\u76d8',
+      visible: klineViewModeRef.current === 'line',
+    });
+    closeLineSeries.setData(buildCloseLineData(data));
 
     const lowerPane = chart.addPane();
     chart.panes()[0]?.setStretchFactor(0.74);
     lowerPane.setStretchFactor(0.26);
-    chart.priceScale('right', LOWER_PANE_INDEX).applyOptions({ borderColor: '#e0e0e0' });
+    chart.priceScale('right', LOWER_PANE_INDEX).applyOptions({ visible: true, borderColor: '#e0e0e0' });
 
     renderMainIndicators(chart, data);
     renderLowerIndicator(chart, data);
 
     if (shouldFitContentRef.current) {
-      applyVisibleRange(range, data);
+      chart.timeScale().fitContent();
     } else if (previousRange) {
       try {
         chart.timeScale().setVisibleRange(previousRange);
@@ -398,8 +403,22 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
     }
     shouldFitContentRef.current = false;
 
-    attachTooltip(chart, container, candleSeries, data, w, h);
-  }, [applyVisibleRange, attachTooltip, range, renderLowerIndicator, renderMainIndicators]);
+    const updateKlineViewMode = () => {
+      const visibleRange = chart.timeScale().getVisibleLogicalRange();
+      if (!visibleRange) return;
+      const visibleYears = getVisibleYears(data, visibleRange.from, visibleRange.to);
+      const nextMode = getNextKlineViewMode(klineViewModeRef.current, visibleYears);
+      if (nextMode !== klineViewModeRef.current) {
+        klineViewModeRef.current = nextMode;
+        candleSeries.applyOptions({ visible: nextMode === 'candles' });
+        closeLineSeries.applyOptions({ visible: nextMode === 'line' });
+      }
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(updateKlineViewMode);
+    updateKlineViewMode();
+
+    attachTooltip(chart, container, data, w, h);
+  }, [attachTooltip, renderLowerIndicator, renderMainIndicators]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -430,15 +449,8 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
 
   const fitContent = useCallback(() => {
     shouldFitContentRef.current = true;
-    setRange('全部');
     chartApiRef.current?.timeScale().fitContent();
   }, []);
-
-  const handleRangeChange = useCallback((nextRange: RangeValue) => {
-    setRange(nextRange);
-    shouldFitContentRef.current = true;
-    applyVisibleRange(nextRange);
-  }, [applyVisibleRange]);
 
   const updateMaPeriod = useCallback((index: number, value: number | null) => {
     if (!value) return;
@@ -538,18 +550,6 @@ export function StockKlineChart({ code, title, embedded = false, minHeight = 520
             onClick={() => setPeriod(item.value)}
           >
             {item.label}
-          </button>
-        ))}
-      </Space>
-      <Space className="stock-kline-range-cards" size={6} wrap>
-        {RANGE_OPTIONS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            className={`stock-kline-control-card${range === item ? ' is-active' : ''}`}
-            onClick={() => handleRangeChange(item)}
-          >
-            {item}
           </button>
         ))}
       </Space>

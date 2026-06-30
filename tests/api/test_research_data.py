@@ -5,6 +5,9 @@ from datetime import date
 import pytest
 
 from apps.api.adapters.base import NormalizedDailyBar
+from apps.api.db.session import SessionLocal
+from apps.api.models import IngestBatch, SyncTask
+from apps.api.repositories.datasets import DatasetRepository
 from apps.api.services.research_data_service import ResearchDataService
 
 
@@ -50,6 +53,17 @@ def test_bar_reader_returns_governed_daily_bars_with_contract_metadata(tmp_path)
         "layer": "silver",
         "adjust_type": "none",
         "source_policy": "governed_only",
+        "manifest": {
+            "dataset_name": "daily_bars",
+            "layer": "silver",
+            "storage_type": "parquet",
+            "source": "unknown",
+            "row_count": 0,
+            "latest_data_date": None,
+            "quality_status": "unknown",
+            "updated_at": None,
+            "latest_ingest_batch": None,
+        },
     }
     assert payload["symbol"] == "600519"
     assert payload["market"] == "A_SHARE"
@@ -96,6 +110,44 @@ def test_research_bars_api_reads_governed_daily_bars(client, tmp_path, monkeypat
             make_bar("000001", date(2026, 6, 1), 12.0),
         ]
     )
+    with SessionLocal() as db:
+        DatasetRepository(db).upsert_daily_bars_dataset(
+            source="fixture",
+            row_count=3,
+            latest_data_date=date(2026, 6, 2),
+            path=str(tmp_path / "lake" / "silver" / "daily_bars"),
+        )
+        task = SyncTask(
+            task_type="daily_bars",
+            source="fixture",
+            market="A_SHARE",
+            symbol="600519",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+            status="success",
+        )
+        db.add(task)
+        db.flush()
+        db.add(
+            IngestBatch(
+                task_id=task.id,
+                dataset_name="daily_bars",
+                source="fixture",
+                requested_source="auto",
+                market="A_SHARE",
+                symbol="600519",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 2),
+                status="success",
+                schema_version="v1",
+                normalize_version="v1",
+                raw_records=3,
+                normalized_records=3,
+                records_written=3,
+                quality_status="good",
+            )
+        )
+        db.commit()
 
     response = client.get(
         "/api/research-data/bars",
@@ -112,6 +164,28 @@ def test_research_bars_api_reads_governed_daily_bars(client, tmp_path, monkeypat
     payload = response.json()
     assert payload["contract"]["name"] == "BarReader"
     assert payload["contract"]["source_policy"] == "governed_only"
+    assert payload["contract"]["manifest"]["dataset_name"] == "daily_bars"
+    assert payload["contract"]["manifest"]["storage_type"] == "parquet"
+    assert payload["contract"]["manifest"]["source"] == "fixture"
+    assert payload["contract"]["manifest"]["row_count"] == 3
+    assert payload["contract"]["manifest"]["latest_data_date"] == "2026-06-02"
+    assert payload["contract"]["manifest"]["quality_status"] == "good"
+    assert payload["contract"]["manifest"]["updated_at"] is not None
+    assert payload["contract"]["manifest"]["latest_ingest_batch"] == {
+        "id": 1,
+        "task_id": 1,
+        "source": "fixture",
+        "requested_source": "auto",
+        "market": "A_SHARE",
+        "symbol": "600519",
+        "start_date": "2026-06-01",
+        "end_date": "2026-06-02",
+        "status": "success",
+        "schema_version": "v1",
+        "normalize_version": "v1",
+        "records_written": 3,
+        "quality_status": "good",
+    }
     assert payload["symbol"] == "600519"
     assert payload["market"] == "A_SHARE"
     assert payload["total"] == 2

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 from apps.api.db.session import SessionLocal, get_engine
+from apps.api.repositories.daily_bars import DailyBarRepository
 from apps.api.repositories.stock_boards import StockBoardRepository
 from apps.api.repositories.stocks import StockRepository
 
@@ -271,8 +272,8 @@ def _parse_kline_response(text: str, code: str, period: str, count: int) -> List
         for k in klines[-safe_count:]:
             try:
                 results.append({
-                    "date": k[0], "open": float(k[1]), "high": float(k[2]),
-                    "close": float(k[3]), "low": float(k[4]),
+                    "date": k[0], "open": float(k[1]), "high": float(k[3]),
+                    "close": float(k[2]), "low": float(k[4]),
                     "volume": int(float(k[5])) if len(k) > 5 else 0,
                 })
             except (ValueError, IndexError):
@@ -288,8 +289,48 @@ def _kline_start_date(end_at: datetime, period: str, count: int) -> str:
     return (end_at - timedelta(days=count * 60)).strftime("%Y-%m-%d")
 
 
+def _strip_stock_prefix(code: str) -> str:
+    value = code.strip().lower()
+    if value.startswith(("sh", "sz", "bj")):
+        return value[2:]
+    return value
+
+
+def _daily_bar_to_kline(row: dict) -> Dict:
+    trade_date = row["trade_date"]
+    return {
+        "date": trade_date.isoformat() if hasattr(trade_date, "isoformat") else str(trade_date),
+        "open": round(float(row["open"]), 6),
+        "high": round(float(row["high"]), 6),
+        "close": round(float(row["close"]), 6),
+        "low": round(float(row["low"]), 6),
+        "volume": int(float(row.get("volume") or 0)),
+    }
+
+
+def _get_governed_daily_kline(code: str, count: int) -> List[Dict]:
+    symbol = _strip_stock_prefix(code)
+    if not symbol:
+        return []
+
+    rows = [
+        row
+        for row in DailyBarRepository().symbol_daily_bars(symbol=symbol, market="A_SHARE")
+        if (row.get("adjust_type") or "none") == "none"
+    ]
+    if not rows:
+        return []
+
+    return [_daily_bar_to_kline(row) for row in rows[-max(1, count):]]
+
+
 def get_history_kline(code: str, period: str = "day", count: int = 100, adjust: str = "qfq") -> List[Dict]:
     """获取历史K线（腾讯API直连）"""
+    if period == "day":
+        governed_rows = _get_governed_daily_kline(code, count)
+        if governed_rows:
+            return governed_rows
+
     remaining = max(1, count)
     end_at = datetime.now()
     by_date: dict[str, Dict] = {}

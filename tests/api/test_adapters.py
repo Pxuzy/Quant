@@ -384,6 +384,7 @@ def test_akshare_adapter_fetches_and_normalizes_daily_bars():
 
     assert client.daily_query["symbol"] == "600519"
     assert client.daily_query["start_date"] == "20260602"
+    assert client.daily_query["adjust"] == ""
     assert len(normalized) == 2
     assert normalized[0].symbol == "600519"
     assert normalized[0].exchange == "SSE"
@@ -412,8 +413,25 @@ def test_akshare_adapter_falls_back_within_provider_for_stock_list_and_daily_bar
     assert client.stock_list_fallback_used is True
     assert normalized_stocks[0].symbol == "600519"
     assert client.daily_fallback_query["symbol"] == "sh600519"
+    assert client.daily_fallback_query["adjust"] == ""
     assert normalized_daily[0].symbol == "600519"
     assert normalized_daily[0].close == 1307.22
+
+
+def test_akshare_adapter_maps_adjust_type_to_provider_adjust_parameter():
+    client = FakeAkShareClient()
+    adapter = AkShareAdapter(client=client)
+
+    adapter.fetch_daily_bars(
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        start_date=date(2026, 6, 2),
+        end_date=date(2026, 6, 3),
+        adjust_type="qfq",
+    )
+
+    assert client.daily_query["adjust"] == "qfq"
 
 
 def test_akshare_adapter_reports_missing_optional_dependency_as_unavailable(monkeypatch):
@@ -497,6 +515,7 @@ def test_baostock_adapter_fetches_and_normalizes_daily_bars():
     assert client.logged_out is True
     assert client.daily_query["code"] == "sh.600519"
     assert client.daily_query["start_date"] == "2026-06-01"
+    assert client.daily_query["adjustflag"] == "3"
     assert len(normalized) == 2
     assert normalized[0].symbol == "600519"
     assert normalized[0].exchange == "SSE"
@@ -504,6 +523,22 @@ def test_baostock_adapter_fetches_and_normalizes_daily_bars():
     assert normalized[0].trade_date == date(2026, 6, 1)
     assert normalized[0].close == 1675.0
     assert normalized[0].source == "baostock"
+
+
+def test_baostock_adapter_maps_adjust_type_to_adjustflag():
+    client = FakeBaoStockClient()
+    adapter = BaoStockAdapter(client=client)
+
+    adapter.fetch_daily_bars(
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 2),
+        adjust_type="hfq",
+    )
+
+    assert client.daily_query["adjustflag"] == "1"
 
 
 def test_baostock_adapter_fetches_and_normalizes_trading_calendar():

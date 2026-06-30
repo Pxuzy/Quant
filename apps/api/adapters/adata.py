@@ -12,6 +12,7 @@ from apps.api.adapters.base import (
     NormalizedStock,
     ProviderMetadata,
     StockDataSourceAdapter,
+    normalize_daily_bar_adjust_type,
 )
 
 
@@ -456,6 +457,7 @@ class ADataAdapter(StockDataSourceAdapter):
         market: str,
         start_date: date,
         end_date: date,
+        adjust_type: str = "none",
     ) -> list[dict[str, Any]]:
         """
         从 AData 获取日K线数据。
@@ -471,6 +473,9 @@ class ADataAdapter(StockDataSourceAdapter):
             raise ValueError(
                 "AData daily bars adapter currently supports A_SHARE only."
             )
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
+        if adjust_type_code != "none":
+            raise ValueError("AData daily bars adapter currently supports unadjusted bars only.")
 
         client = self._get_client()
         market_api = getattr(

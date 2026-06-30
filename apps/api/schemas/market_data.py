@@ -11,6 +11,7 @@ class DailyBarsSyncRequest(BaseModel):
     symbol: str = Field(min_length=1)
     start_date: date
     end_date: date
+    adjust_type: str = Field(default="none", pattern="^(none|qfq|hfq)$")
 
 
 class DailyBarsMarketRepairRequest(BaseModel):
@@ -19,6 +20,8 @@ class DailyBarsMarketRepairRequest(BaseModel):
     start_date: date
     end_date: date
     max_symbols: int = Field(default=20, ge=1, le=200)
+    start_policy: str = Field(default="requested_start", pattern="^(requested_start|listing_date)$")
+    adjust_type: str = Field(default="none", pattern="^(none|qfq|hfq)$")
 
 
 class DailyBarsMarketRepairPreviewItem(BaseModel):
@@ -38,6 +41,8 @@ class DailyBarsMarketRepairPreviewResponse(BaseModel):
     start_date: date
     end_date: date
     max_symbols: int
+    start_policy: str
+    adjust_type: str
     stock_pool_count: int
     open_dates_count: int
     planned_symbols: int

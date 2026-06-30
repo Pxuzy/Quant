@@ -16,6 +16,7 @@ from apps.api.adapters.base import (
     NormalizedTradingCalendar,
     ProviderMetadata,
     StockDataSourceAdapter,
+    normalize_daily_bar_adjust_type,
 )
 
 
@@ -340,6 +341,7 @@ class TushareAdapter(StockDataSourceAdapter):
         market: str,
         start_date: date,
         end_date: date,
+        adjust_type: str = "none",
     ) -> list[dict[str, Any]]:
         """
         从 Tushare 获取日K线数据。
@@ -351,6 +353,9 @@ class TushareAdapter(StockDataSourceAdapter):
             raise ValueError(
                 "Tushare daily bars adapter currently supports A_SHARE only."
             )
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
+        if adjust_type_code != "none":
+            raise ValueError("Tushare daily bars adapter currently supports unadjusted bars only.")
 
         client = self._get_client()
         frame = client.daily(

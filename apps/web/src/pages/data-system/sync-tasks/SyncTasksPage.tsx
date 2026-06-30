@@ -24,6 +24,7 @@ import {
   Statistic,
   Switch,
   Table,
+  Tabs,
   Tag,
   Timeline,
   Tooltip,
@@ -70,8 +71,11 @@ import { useSyncTradingCalendarsMutation } from '../../../features/trading-calen
 import { ErrorState } from '../../../shared/components/ErrorState';
 import { formatDate, formatDateTime, formatNumber } from '../../../shared/components/formatters';
 import { StatusTag } from '../../../shared/components/StatusTag';
-import { formatLogLevel, formatMarket, formatSourceMode, formatTaskType } from '../../../shared/domain/labels';
+import { formatAdjustType, formatLogLevel, formatMarket, formatSourceMode, formatTaskType } from '../../../shared/domain/labels';
 import { fadeInUp, useGSAP } from '../../../shared/motion/gsapMotion';
+import { SyncConsolePanel as SyncConsolePanelCard } from './components/SyncConsolePanel';
+import { SyncOperationTabs as SyncOperationTabsCard } from './components/SyncOperationTabs';
+import { TaskDetailDrawer as SyncTaskDetailDrawer } from './components/TaskDetailDrawer';
 
 const DEFAULT_PAGE_SIZE = 10;
 const DEFAULT_MARKET = 'A_SHARE';
@@ -79,6 +83,13 @@ const SYMBOL_EXAMPLE = '600519';
 const DEFAULT_DATE_RANGE: [Dayjs, Dayjs] = [dayjs().subtract(90, 'day'), dayjs()];
 const DEFAULT_MARKET_REPAIR_MAX_SYMBOLS = 20;
 const MAX_MARKET_REPAIR_SYMBOLS = 200;
+const DEFAULT_MARKET_REPAIR_START_POLICY = 'requested_start';
+const DEFAULT_ADJUST_TYPE: 'none' | 'qfq' | 'hfq' = 'none';
+const adjustTypeOptions = [
+  { label: '不复权', value: 'none' },
+  { label: '前复权', value: 'qfq' },
+  { label: '后复权', value: 'hfq' },
+];
 const syncFocusLabels: Record<string, string> = {
   'stock-list': '手动同步股票池',
   'daily-bars': '手动同步日线',
@@ -87,12 +98,15 @@ const syncFocusLabels: Record<string, string> = {
 };
 
 type DailyBarsMode = 'single' | 'market-repair';
+type SyncOperationTab = 'daily-bars' | 'stock-list' | 'calendars';
 
 type MarketRepairFormValues = {
   source?: string;
   market?: string;
   dateRange?: [Dayjs, Dayjs];
   maxSymbols?: number;
+  startPolicy?: 'requested_start' | 'listing_date';
+  adjustType?: 'none' | 'qfq' | 'hfq';
 };
 
 type TaskCreatedSearch = Pick<
@@ -131,7 +145,6 @@ function getTaskType(task?: SyncTask | null) {
   const type = task?.task_type ?? task?.taskType ?? '-';
   return formatTaskType(type);
 }
-
 function normalizeMarketRepairMaxSymbols(value?: number) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -435,6 +448,24 @@ function formatValueList(values: string[], fallback = '-') {
   return values.length ? values.join(' / ') : fallback;
 }
 
+function formatMarketRepairStartPolicy(value?: string | null) {
+  return value === 'listing_date' ? '从上市日起' : '按填写起始日';
+}
+
+function getValidDateRangeOrDefault(startDate?: Dayjs, endDate?: Dayjs): [Dayjs, Dayjs] {
+  return startDate?.isValid() && endDate?.isValid() ? [startDate, endDate] : DEFAULT_DATE_RANGE;
+}
+
+function getSyncOperationTab(focus?: string): SyncOperationTab {
+  if (focus === 'stock-list') {
+    return 'stock-list';
+  }
+  if (focus === 'calendars') {
+    return 'calendars';
+  }
+  return 'daily-bars';
+}
+
 function buildMarketRepairPreviewColumns(): ColumnsType<NonNullable<DailyBarsMarketRepairPreviewResponse['sample_items']>[number]> {
   return [
     {
@@ -533,6 +564,7 @@ function MarketRepairPreviewPanel({
         <Descriptions.Item label="日期范围">
           {formatDate(preview.start_date)} ~ {formatDate(preview.end_date)}
         </Descriptions.Item>
+        <Descriptions.Item label="补齐起点">{formatMarketRepairStartPolicy(preview.start_policy)}</Descriptions.Item>
         <Descriptions.Item label="股票池">{formatNumber(preview.stock_pool_count)} 只</Descriptions.Item>
         <Descriptions.Item label="预览来源">
           请求 {formatTaskSource(preview.source)} / 实际 {formatTaskSource(preview.selected_source)}
@@ -884,125 +916,6 @@ function buildBatchColumns(): ColumnsType<IngestBatch> {
   ];
 }
 
-function RunnerStatusPanel({
-  status,
-  loading,
-  error,
-  onRefresh,
-  onOpenTask,
-}: {
-  status?: SyncRunnerStatus;
-  loading: boolean;
-  error: unknown;
-  onRefresh: () => void;
-  onOpenTask: (taskId: number) => void;
-}) {
-  return (
-    <Card
-      className="sync-runner-card stock-detail-panel"
-      title="同步执行器状态"
-      extra={
-        <Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={onRefresh}>
-          刷新
-        </Button>
-      }
-    >
-      {error ? (
-        <Alert type="error" showIcon message="执行器状态加载失败" description="后端同步状态接口暂不可用。" />
-      ) : (
-        <Space className="sync-runner-layout" direction="vertical" size={14}>
-          <div className="sync-runner-head">
-            <Space direction="vertical" size={4}>
-              <Tag color={getRunnerStatusColor(status?.status)}>{getRunnerStatusLabel(status?.status)}</Tag>
-              <Typography.Text strong>{formatRunnerMode(status?.mode)}</Typography.Text>
-            </Space>
-            <Space size={18} wrap>
-              <Statistic title="等待" value={status?.pending_count ?? 0} />
-              <Statistic title="运行" value={status?.running_count ?? 0} />
-              <Statistic title="失败" value={status?.failed_count ?? 0} />
-            </Space>
-          </div>
-          <Alert
-            type={status?.status === 'warning' || status?.status === 'pending' ? 'warning' : 'info'}
-            showIcon
-            message={status?.message ?? '正在读取同步执行器状态'}
-          />
-          {status?.worker_command ? (
-            <div className="sync-runner-worker">
-              <Space direction="vertical" size={8}>
-                <Typography.Text type="secondary">{status.worker_note ?? '创建任务后，请启动本地轻量 worker 执行待处理任务。'}</Typography.Text>
-                <Typography.Text className="sync-runner-command" code copyable>
-                  {status.worker_command}
-                </Typography.Text>
-                {status.supported_task_types?.length ? (
-                  <Space size={[6, 6]} wrap>
-                    <Typography.Text type="secondary">支持任务</Typography.Text>
-                    {status.supported_task_types.map((taskType) => (
-                      <Tag key={taskType}>{formatTaskType(taskType)}</Tag>
-                    ))}
-                  </Space>
-                ) : null}
-              </Space>
-            </div>
-          ) : null}
-          <div className="sync-runner-task-grid">
-            <RunnerTaskRefItem
-              label="当前运行"
-              task={status?.current_task}
-              emptyText="暂无运行中任务"
-              onOpenTask={onOpenTask}
-            />
-            <RunnerTaskRefItem
-              label="下一条待执行"
-              task={status?.next_pending_task}
-              emptyText="暂无待执行任务"
-              onOpenTask={onOpenTask}
-            />
-            <RunnerTaskRefItem
-              label="最近成功"
-              task={status?.latest_success_task}
-              emptyText="暂无成功记录"
-              onOpenTask={onOpenTask}
-            />
-            <RunnerTaskRefItem
-              label="最近失败"
-              task={status?.latest_failed_task}
-              emptyText="暂无失败记录"
-              onOpenTask={onOpenTask}
-            />
-          </div>
-          <div className="sync-runner-meta">
-            <div>
-              <Typography.Text type="secondary">定时规则</Typography.Text>
-              <Typography.Text strong>
-                {formatNumber(status?.enabled_schedules ?? 0)} / {formatNumber(status?.total_schedules ?? 0)} 已启用
-              </Typography.Text>
-            </div>
-            <div>
-              <Typography.Text type="secondary">最近创建任务</Typography.Text>
-              <Typography.Text strong>
-                {status?.latest_task_id ? `#${status.latest_task_id} / ${getTaskStatusLabel(status.latest_task_status)}` : '-'}
-              </Typography.Text>
-            </div>
-            <div>
-              <Typography.Text type="secondary">最近创建</Typography.Text>
-              <Typography.Text strong>{formatDateTime(status?.latest_task_created_at)}</Typography.Text>
-            </div>
-            <div>
-              <Typography.Text type="secondary">最近 worker 活动</Typography.Text>
-              <Typography.Text strong>{formatDateTime(status?.latest_worker_activity_at)}</Typography.Text>
-            </div>
-            <div>
-              <Typography.Text type="secondary">最近定时触发</Typography.Text>
-              <Typography.Text strong>{formatDateTime(status?.latest_triggered_at)}</Typography.Text>
-            </div>
-          </div>
-        </Space>
-      )}
-    </Card>
-  );
-}
-
 function getSyncEvidenceDecision({
   overview,
   watermarks,
@@ -1068,19 +981,35 @@ function getSyncEvidenceDecision({
   };
 }
 
-function SyncEvidencePanel({
+function SyncConsolePanel({
+  total,
+  runningCount,
+  failedCount,
+  status,
+  runnerLoading,
+  runnerError,
   overview,
   watermarks,
   failedBatches,
-  loading,
-  error,
+  evidenceLoading,
+  evidenceError,
+  onRefresh,
+  onOpenTask,
   onOpenFailedTask,
 }: {
+  total: number;
+  runningCount: number;
+  failedCount: number;
+  status?: SyncRunnerStatus;
+  runnerLoading: boolean;
+  runnerError: unknown;
   overview?: DatabaseIntegrationOverview;
   watermarks: SyncWatermark[];
   failedBatches: RecentIngestBatch[];
-  loading: boolean;
-  error: boolean;
+  evidenceLoading: boolean;
+  evidenceError: boolean;
+  onRefresh: () => void;
+  onOpenTask: (taskId: number) => void;
   onOpenFailedTask: (taskId: number) => void;
 }) {
   const summary = overview?.summary;
@@ -1100,65 +1029,98 @@ function SyncEvidencePanel({
     : undefined;
 
   return (
-    <Card className="sync-evidence-card stock-detail-panel" title="执行证据总览">
-      {error ? (
-        <Alert type="error" showIcon message="同步证据加载失败" description="后端数据库整合总览接口暂不可用。" />
-      ) : (
-        <Space className="sync-evidence-layout" direction="vertical" size={14}>
-          <div className="sync-evidence-decision">
-            <Space direction="vertical" size={8}>
+    <Card
+      className="sync-console-panel stock-detail-panel"
+      title={
+        <Space size={8}>
+          <SyncOutlined />
+          <span>同步控制台</span>
+        </Space>
+      }
+      extra={
+        <Space size={8} wrap>
+          <Tag color={getRunnerStatusColor(status?.status)}>{getRunnerStatusLabel(status?.status)}</Tag>
+          <Button size="small" icon={<ReloadOutlined />} loading={runnerLoading || evidenceLoading} onClick={onRefresh}>
+            刷新
+          </Button>
+        </Space>
+      }
+    >
+      <div className="sync-console-grid" aria-busy={runnerLoading || evidenceLoading}>
+        <div className="sync-console-decision">
+          {evidenceError ? (
+            <Alert type="error" showIcon message="同步证据加载失败" description="后端数据库整合总览接口暂不可用。" />
+          ) : (
+            <>
               <Space wrap size={[8, 8]}>
                 <StatusTag value={decision.status} />
                 <Tag>{formatMarket(coverage?.market, '中国 A 股')}</Tag>
                 {fallbackSuccesses > 0 ? <Tag color="blue">fallback {formatNumber(fallbackSuccesses)} 次</Tag> : null}
               </Space>
               <div>
-                <Typography.Title level={5}>{decision.title}</Typography.Title>
+                <Typography.Title level={4}>{decision.title}</Typography.Title>
                 <Typography.Text type="secondary">{decision.description}</Typography.Text>
               </div>
-            </Space>
-            <Space wrap>
-              {failedTaskId && !actionSearch ? (
-                <Button type="primary" danger onClick={() => onOpenFailedTask(failedTaskId)}>
-                  {decision.actionLabel}
-                </Button>
-              ) : actionSearch ? (
-                <Link to="/data-system/sync-tasks" search={actionSearch}>
-                  <Button type="primary">{decision.actionLabel}</Button>
-                </Link>
+              <Space wrap>
+                {failedTaskId && !actionSearch ? (
+                  <Button type="primary" danger onClick={() => onOpenFailedTask(failedTaskId)}>
+                    {decision.actionLabel}
+                  </Button>
+                ) : actionSearch ? (
+                  <Link to="/data-system/sync-tasks" search={actionSearch}>
+                    <Button type="primary">{decision.actionLabel}</Button>
+                  </Link>
+                ) : null}
+              </Space>
+            </>
+          )}
+        </div>
+
+        <div className="sync-console-kpis">
+          <Statistic title="任务结果" value={total} prefix={<FileTextOutlined />} />
+          <Statistic title="等待/运行" value={runningCount} />
+          <Statistic title="失败任务" value={failedCount} />
+          <Statistic title="市场缺口" value={coverage?.daily_missing_symbol_days ?? 0} />
+          <Statistic title="水位线" value={watermarks.length} />
+          <Statistic title="最近批次" value={latestBatch ? `#${latestBatch.id}` : '-'} />
+        </div>
+
+        <div className="sync-console-runner">
+          {runnerError ? (
+            <Alert type="error" showIcon message="执行器状态加载失败" description="后端同步状态接口暂不可用。" />
+          ) : (
+            <>
+              <div className="sync-console-runner-head">
+                <Space direction="vertical" size={2}>
+                  <Typography.Text type="secondary">执行器</Typography.Text>
+                  <Typography.Text strong>{formatRunnerMode(status?.mode)}</Typography.Text>
+                </Space>
+                <Space size={16} wrap>
+                  <Statistic title="待执行" value={status?.pending_count ?? 0} />
+                  <Statistic title="运行" value={status?.running_count ?? 0} />
+                  <Statistic title="失败" value={status?.failed_count ?? 0} />
+                </Space>
+              </div>
+              <Alert
+                type={status?.status === 'warning' || status?.status === 'pending' ? 'warning' : 'info'}
+                showIcon
+                message={status?.message ?? '正在读取同步执行器状态'}
+              />
+              {status?.worker_command ? (
+                <Typography.Text className="sync-runner-command" code copyable>
+                  {status.worker_command}
+                </Typography.Text>
               ) : null}
-            </Space>
-          </div>
-          <div className="sync-evidence-grid" aria-busy={loading}>
-            <div>
-              <Typography.Text type="secondary">最近批次</Typography.Text>
-              <Typography.Text strong>{latestBatch ? `#${latestBatch.id}` : '-'}</Typography.Text>
-              <Typography.Text type="secondary">
-                {latestBatch
-                  ? `${formatTaskType(latestBatch.dataset_name)} / ${formatNumber(latestBatch.records_written)} 条`
-                  : '暂无正式写入'}
-              </Typography.Text>
-            </div>
-            <div>
-              <Typography.Text type="secondary">缺口规模</Typography.Text>
-              <Typography.Text strong>{formatNumber(coverage?.daily_missing_symbol_days ?? 0)}</Typography.Text>
-              <Typography.Text type="secondary">
-                覆盖 {formatNumber(coverage?.daily_covered_stock_count ?? 0)} / {formatNumber(coverage?.stock_pool_total ?? 0)} 只
-              </Typography.Text>
-            </div>
-            <div>
-              <Typography.Text type="secondary">失败批次</Typography.Text>
-              <Typography.Text strong>{formatNumber(summary?.failed_batches_total ?? failedBatches.length)}</Typography.Text>
-              <Typography.Text type="secondary">{failedBatches[0]?.error_message || '暂无最近失败'}</Typography.Text>
-            </div>
-            <div>
-              <Typography.Text type="secondary">同步水位线</Typography.Text>
-              <Typography.Text strong>{formatNumber(watermarks.length)}</Typography.Text>
-              <Typography.Text type="secondary">记录最新成功、失败和待补范围</Typography.Text>
-            </div>
-          </div>
-        </Space>
-      )}
+              <div className="sync-console-task-strip">
+                <RunnerTaskRefItem label="当前运行" task={status?.current_task} emptyText="暂无运行" onOpenTask={onOpenTask} />
+                <RunnerTaskRefItem label="下一条" task={status?.next_pending_task} emptyText="暂无待执行" onOpenTask={onOpenTask} />
+                <RunnerTaskRefItem label="最近成功" task={status?.latest_success_task} emptyText="暂无成功" onOpenTask={onOpenTask} />
+                <RunnerTaskRefItem label="最近失败" task={status?.latest_failed_task} emptyText="暂无失败" onOpenTask={onOpenTask} />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }
@@ -1425,12 +1387,14 @@ export function SyncTasksPage() {
   const [dailyBarsMode, setDailyBarsMode] = useState<DailyBarsMode>(
     search.focus === 'daily-bars-market-repair' ? 'market-repair' : 'single',
   );
+  const [operationTab, setOperationTab] = useState<SyncOperationTab>(getSyncOperationTab(search.focus));
   const [stockForm] = Form.useForm<{ source?: string; market?: string }>();
   const [dailyBarsForm] = Form.useForm<{
     source?: string;
     market?: string;
     symbol?: string;
     dateRange?: [Dayjs, Dayjs];
+    adjustType?: 'none' | 'qfq' | 'hfq';
   }>();
   const [marketRepairForm] = Form.useForm<MarketRepairFormValues>();
   const [calendarForm] = Form.useForm<{
@@ -1577,17 +1541,17 @@ export function SyncTasksPage() {
         return;
       }
 
-      fadeInUp(root.querySelectorAll('.motion-summary-card'), { stagger: 0.05, y: 8 });
-
-      const tableCard = root.querySelector('.sync-table-card');
-      if (tableCard) {
-        fadeInUp(tableCard, { delay: 0.08, y: 8 });
-      }
+      fadeInUp(root.querySelectorAll('.sync-console-panel, .sync-operations-card, .sync-tracking-card'), {
+        stagger: 0.05,
+        y: 8,
+      });
     },
     { scope: pageRef },
   );
 
   useEffect(() => {
+    setOperationTab(getSyncOperationTab(search.focus));
+
     const targetRef =
       search.focus === 'stock-list'
         ? stockCardRef
@@ -1622,6 +1586,7 @@ export function SyncTasksPage() {
         market: search.market || DEFAULT_MARKET,
         symbol: search.symbol ?? '',
         dateRange: startDate?.isValid() && endDate?.isValid() ? [startDate, endDate] : undefined,
+        adjustType: DEFAULT_ADJUST_TYPE,
       });
     }
 
@@ -1631,8 +1596,10 @@ export function SyncTasksPage() {
       marketRepairForm.setFieldsValue({
         source: search.syncSource || 'auto',
         market: search.market || DEFAULT_MARKET,
-        dateRange: startDate?.isValid() && endDate?.isValid() ? [startDate, endDate] : undefined,
+        dateRange: getValidDateRangeOrDefault(startDate, endDate),
         maxSymbols: normalizeMarketRepairMaxSymbols(search.maxSymbols),
+        startPolicy: DEFAULT_MARKET_REPAIR_START_POLICY,
+        adjustType: DEFAULT_ADJUST_TYPE,
       });
     }
 
@@ -1745,6 +1712,7 @@ export function SyncTasksPage() {
     market?: string;
     symbol?: string;
     dateRange?: [Dayjs, Dayjs];
+    adjustType?: 'none' | 'qfq' | 'hfq';
   }) => {
     const [startDate, endDate] = values.dateRange ?? DEFAULT_DATE_RANGE;
     const symbol = values.symbol?.trim();
@@ -1760,6 +1728,7 @@ export function SyncTasksPage() {
         symbol,
         start_date: startDate.format('YYYY-MM-DD'),
         end_date: endDate.format('YYYY-MM-DD'),
+        adjust_type: values.adjustType || DEFAULT_ADJUST_TYPE,
       },
       {
         onSuccess: (task) =>
@@ -1778,13 +1747,9 @@ export function SyncTasksPage() {
     );
   };
 
-  const handleMarketDailyBarsRepair = (values: {
-    source?: string;
-    market?: string;
-    dateRange?: [Dayjs, Dayjs];
-    maxSymbols?: number;
-  }) => {
+  const handleMarketDailyBarsRepair = (values: MarketRepairFormValues) => {
     const [startDate, endDate] = values.dateRange ?? DEFAULT_DATE_RANGE;
+    const startPolicy = values.startPolicy || DEFAULT_MARKET_REPAIR_START_POLICY;
     syncDailyBarsMarketRepairMutation.mutate(
       {
         source: values.source || 'auto',
@@ -1792,6 +1757,8 @@ export function SyncTasksPage() {
         start_date: startDate.format('YYYY-MM-DD'),
         end_date: endDate.format('YYYY-MM-DD'),
         max_symbols: normalizeMarketRepairMaxSymbols(values.maxSymbols),
+        start_policy: startPolicy,
+        adjust_type: values.adjustType || DEFAULT_ADJUST_TYPE,
       },
       {
         onSuccess: (task) =>
@@ -1814,6 +1781,7 @@ export function SyncTasksPage() {
     try {
       const values = await marketRepairForm.validateFields();
       const [startDate, endDate] = values.dateRange ?? DEFAULT_DATE_RANGE;
+      const startPolicy = values.startPolicy || DEFAULT_MARKET_REPAIR_START_POLICY;
       previewDailyBarsMarketRepairMutation.mutate(
         {
           source: values.source || 'auto',
@@ -1821,6 +1789,8 @@ export function SyncTasksPage() {
           start_date: startDate.format('YYYY-MM-DD'),
           end_date: endDate.format('YYYY-MM-DD'),
           max_symbols: normalizeMarketRepairMaxSymbols(values.maxSymbols),
+          start_policy: startPolicy,
+          adjust_type: values.adjustType || DEFAULT_ADJUST_TYPE,
         },
         {
           onError: (error) => {
@@ -1928,6 +1898,517 @@ export function SyncTasksPage() {
     );
   };
 
+  const stockListPane = (
+    <div className={`sync-operation-pane${search.focus === 'stock-list' ? ' is-focused' : ''}`} ref={stockCardRef}>
+      <div className="sync-operation-intro">
+        <Space size={8}>
+          <SyncOutlined />
+          <Typography.Title level={5}>股票池</Typography.Title>
+        </Space>
+        <Typography.Text type="secondary">从启用来源更新 A 股基础列表，作为日线补齐和交易日历校验的入口数据。</Typography.Text>
+      </div>
+      <Form
+        className="sync-operation-form"
+        form={stockForm}
+        layout="vertical"
+        initialValues={{ source: 'auto', market: DEFAULT_MARKET }}
+        onFinish={handleStockSync}
+      >
+        <Row gutter={12}>
+          <Col span={12}>
+            <Form.Item label="数据源" name="source">
+              <Select options={stockSourceOptions} loading={dataSourcesQuery.isFetching} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="市场" name="market">
+              <Select options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Button type="primary" htmlType="submit" loading={syncStocksMutation.isPending}>
+          更新股票池
+        </Button>
+      </Form>
+    </div>
+  );
+
+  const dailyBarsPane = (
+    <div
+      className={`sync-operation-pane sync-operation-pane-primary${
+        search.focus === 'daily-bars' || search.focus === 'daily-bars-market-repair' ? ' is-focused' : ''
+      }`}
+      ref={dailyBarsCardRef}
+    >
+      <div className="sync-operation-intro">
+        <Space size={8}>
+          <FileTextOutlined />
+          <Typography.Title level={5}>日线同步</Typography.Title>
+        </Space>
+        <Typography.Text type="secondary">
+          {dailyBarsMode === 'single'
+            ? '指定单只股票和日期范围，写入标准日线行情与整合批次。'
+            : '按市场和日期范围创建受控补齐任务，由后端逐只修复股票-交易日缺口。'}
+        </Typography.Text>
+      </div>
+      <Segmented
+        className="sync-operation-mode"
+        block
+        value={dailyBarsMode}
+        onChange={(value) => {
+          setDailyBarsMode(value as DailyBarsMode);
+          if (value !== 'market-repair') {
+            previewDailyBarsMarketRepairMutation.reset();
+          }
+        }}
+        options={[
+          { label: '单股日线', value: 'single' },
+          { label: '市场缺口补齐', value: 'market-repair' },
+        ]}
+      />
+      {dailyBarsMode === 'single' ? (
+        <Form
+          className="sync-operation-form"
+          form={dailyBarsForm}
+          layout="vertical"
+          initialValues={{
+            source: 'auto',
+            market: DEFAULT_MARKET,
+            symbol: '',
+            dateRange: DEFAULT_DATE_RANGE,
+            adjustType: DEFAULT_ADJUST_TYPE,
+          }}
+          onFinish={handleDailyBarsSync}
+        >
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item label="股票代码" name="symbol" rules={[{ required: true, message: '请输入股票代码' }]}>
+                <Input placeholder={`例如 ${SYMBOL_EXAMPLE}`} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="市场" name="market">
+                <Select options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item label="日期范围" name="dateRange" rules={[{ required: true, message: '请选择日期范围' }]}>
+                <DatePicker.RangePicker className="full-width-control" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="数据源" name="source">
+                <Select options={dailyBarsSourceOptions} loading={dataSourcesQuery.isFetching} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item label="复权口径" name="adjustType">
+            <Segmented block options={adjustTypeOptions} />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={syncDailyBarsMutation.isPending}>
+            同步单股日线
+          </Button>
+        </Form>
+      ) : (
+        <Form
+          className="sync-operation-form"
+          form={marketRepairForm}
+          layout="vertical"
+          initialValues={{
+            source: 'auto',
+            market: DEFAULT_MARKET,
+            dateRange: DEFAULT_DATE_RANGE,
+            maxSymbols: DEFAULT_MARKET_REPAIR_MAX_SYMBOLS,
+            startPolicy: DEFAULT_MARKET_REPAIR_START_POLICY,
+            adjustType: DEFAULT_ADJUST_TYPE,
+          }}
+          onFinish={handleMarketDailyBarsRepair}
+          onValuesChange={() => previewDailyBarsMarketRepairMutation.reset()}
+        >
+          <Row gutter={12}>
+            <Col span={8}>
+              <Form.Item label="市场" name="market">
+                <Select options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                label="最大股票数"
+                name="maxSymbols"
+                rules={[{ required: true, message: '请设置本次最多处理的股票数' }]}
+              >
+                <InputNumber className="full-width-control" min={1} max={MAX_MARKET_REPAIR_SYMBOLS} precision={0} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="数据源" name="source">
+                <Select options={dailyBarsSourceOptions} loading={dataSourcesQuery.isFetching} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item label="日期范围" name="dateRange" rules={[{ required: true, message: '请选择日期范围' }]}>
+                <DatePicker.RangePicker className="full-width-control" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="补齐起点" name="startPolicy">
+                <Segmented
+                  block
+                  options={[
+                    { label: '按填写起始日', value: 'requested_start' },
+                    { label: '从上市日', value: 'listing_date' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item label="复权口径" name="adjustType">
+            <Segmented block options={adjustTypeOptions} />
+          </Form.Item>
+          <Alert
+            type="info"
+            showIcon
+            message="市场级补齐不填写股票代码，建议先预览股票池、开市日和缺口计划，再创建任务。"
+            description={
+              marketRepairDateRangeLabel
+                ? `当前补齐范围 ${marketRepairDateRangeLabel}；选择“从上市日”时，每只股票会从上市日与填写起始日中较晚的一天开始补齐。`
+                : undefined
+            }
+          />
+          <MarketRepairPreviewPanel
+            preview={previewDailyBarsMarketRepairMutation.data}
+            loading={previewDailyBarsMarketRepairMutation.isPending}
+            error={previewDailyBarsMarketRepairMutation.error}
+          />
+          <Space className="market-repair-actions">
+            <Button loading={previewDailyBarsMarketRepairMutation.isPending} onClick={() => void handleMarketDailyBarsRepairPreview()}>
+              预览补齐计划
+            </Button>
+            <Button type="primary" htmlType="submit" loading={syncDailyBarsMarketRepairMutation.isPending}>
+              创建市场补齐任务
+            </Button>
+          </Space>
+        </Form>
+      )}
+    </div>
+  );
+
+  const calendarPane = (
+    <div className={`sync-operation-pane${search.focus === 'calendars' ? ' is-focused' : ''}`} ref={calendarCardRef}>
+      <div className="sync-operation-intro">
+        <Space size={8}>
+          <CalendarOutlined />
+          <Typography.Title level={5}>交易日历</Typography.Title>
+        </Space>
+        <Typography.Text type="secondary">补齐交易日历覆盖，供日线缺口检查和后续调度判断使用。</Typography.Text>
+      </div>
+      <Form
+        className="sync-operation-form"
+        form={calendarForm}
+        layout="vertical"
+        initialValues={{ source: 'auto', market: DEFAULT_MARKET, dateRange: DEFAULT_DATE_RANGE }}
+        onFinish={handleCalendarSync}
+      >
+        <Row gutter={12}>
+          <Col span={8}>
+            <Form.Item label="市场" name="market">
+              <Select options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]} />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="日期范围" name="dateRange" rules={[{ required: true, message: '请选择日期范围' }]}>
+              <DatePicker.RangePicker className="full-width-control" />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item label="数据源" name="source">
+              <Select options={calendarSourceOptions} loading={dataSourcesQuery.isFetching} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Button type="primary" htmlType="submit" loading={syncCalendarsMutation.isPending}>
+          同步交易日历
+        </Button>
+      </Form>
+    </div>
+  );
+
+  const schedulePane = schedulesQuery.isError ? (
+    <Alert type="error" showIcon message="定时规则加载失败" description="后端同步计划配置接口暂不可用。" />
+  ) : (
+    <Row gutter={[12, 12]}>
+      {schedules.map((schedule) => (
+        <Col span={8} key={schedule.code}>
+          <div className="sync-schedule-item">
+            <div className="sync-schedule-heading">
+              <Typography.Text strong>{schedule.name}</Typography.Text>
+              <Space size={8}>
+                <Tooltip title={canTriggerSchedule(schedule) ? '按当前规则创建一次同步任务' : '请先在配置规则里填写股票代码'}>
+                  <Button
+                    size="small"
+                    icon={<SyncOutlined />}
+                    disabled={!canTriggerSchedule(schedule)}
+                    loading={triggerScheduleMutation.isPending && triggerScheduleMutation.variables?.code === schedule.code}
+                    onClick={() => handleScheduleTrigger(schedule)}
+                  >
+                    立即触发
+                  </Button>
+                </Tooltip>
+                <Switch
+                  size="small"
+                  checked={schedule.enabled}
+                  checkedChildren="启用"
+                  unCheckedChildren="停用"
+                  loading={updateScheduleMutation.isPending}
+                  onChange={(checked) => handleScheduleToggle(schedule, checked)}
+                />
+              </Space>
+            </div>
+            <Typography.Text type="secondary">{getScheduleNote(schedule)}</Typography.Text>
+            <div className="sync-schedule-meta">
+              <Tag color={schedule.enabled ? 'success' : 'default'}>{schedule.enabled ? '已启用' : '未启用'}</Tag>
+              <Tag>{getScheduleCron(schedule)}</Tag>
+            </div>
+            <Typography.Text type="secondary">{getScheduleScope(schedule)}</Typography.Text>
+            <Typography.Text type="secondary">最近触发：{formatDateTime(getScheduleLastTriggeredAt(schedule))}</Typography.Text>
+            <Collapse
+              ghost
+              size="small"
+              className="sync-schedule-config"
+              items={[
+                {
+                  key: 'config',
+                  label: '配置规则',
+                  children: (
+                    <Form<ScheduleFormValues>
+                      layout="vertical"
+                      initialValues={getScheduleInitialValues(schedule)}
+                      onFinish={(values) => handleScheduleSave(schedule, values)}
+                    >
+                      <Form.Item label="数据源" name="source">
+                        <Select options={sourceOptionsForCapability(getScheduleCapability(schedule))} loading={dataSourcesQuery.isFetching} />
+                      </Form.Item>
+                      <Row gutter={8}>
+                        <Col span={12}>
+                          <Form.Item label="市场" name="market">
+                            <Select options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]} />
+                          </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                          <Form.Item
+                            label="股票代码"
+                            name="symbol"
+                            tooltip={
+                              getScheduleTaskType(schedule) === 'daily_bars'
+                                ? '第一阶段日线规则需要单只股票代码，后续再扩展全市场批量。'
+                                : '股票池和交易日历规则可留空。'
+                            }
+                          >
+                            <Input placeholder={getScheduleTaskType(schedule) === 'daily_bars' ? SYMBOL_EXAMPLE : '可留空'} />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                      <Form.Item label="Cron 表达式" name="cron_expression" rules={[{ required: true, message: '请输入 cron 表达式' }]}>
+                        <Input placeholder="30 18 * * 1-5" />
+                      </Form.Item>
+                      <Button size="small" type="primary" htmlType="submit" loading={updateScheduleMutation.isPending} block>
+                        保存配置
+                      </Button>
+                    </Form>
+                  ),
+                },
+              ]}
+            />
+          </div>
+        </Col>
+      ))}
+      {schedules.length === 0 ? (
+        <Col span={24}>
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无定时规则" />
+        </Col>
+      ) : null}
+    </Row>
+  );
+
+  const watermarkPane = (
+    <Row gutter={[16, 16]} align="stretch" className="sync-watermark-row">
+      <Col span={15}>
+        {integrationOverviewQuery.isError ? (
+          <Alert type="error" showIcon message="同步水位线加载失败" description="后端数据整合总览接口暂不可用。" />
+        ) : (
+          <Table<SyncWatermark>
+            rowKey={(record) => `${record.dataset_name}-${record.source}-${record.market}-${record.symbol}-${record.batch_id}`}
+            columns={watermarkColumns}
+            dataSource={watermarks}
+            loading={integrationOverviewQuery.isFetching}
+            pagination={false}
+            size="small"
+            scroll={{ x: 1340 }}
+            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无成功水位线" /> }}
+          />
+        )}
+      </Col>
+      <Col span={9}>
+        {integrationOverviewQuery.isError ? (
+          <Alert type="error" showIcon message="失败批次加载失败" />
+        ) : (
+          <Table<RecentIngestBatch>
+            rowKey={(record) => String(record.id)}
+            columns={recentFailureColumns}
+            dataSource={failedBatches}
+            loading={integrationOverviewQuery.isFetching}
+            pagination={false}
+            size="small"
+            scroll={{ x: 720 }}
+            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无失败批次" /> }}
+          />
+        )}
+      </Col>
+    </Row>
+  );
+
+  const recentTasksPane = (
+    <>
+      <Form
+        key={[params.status, params.source, params.taskType, params.market, params.symbol, params.startDate, params.endDate].join('|')}
+        className="stock-filters sync-task-filters"
+        layout="inline"
+        initialValues={{
+          status: params.status,
+          source: params.source,
+          taskType: params.taskType,
+          market: params.market,
+          symbol: params.symbol,
+          dateRange: params.startDate && params.endDate ? [dayjs(params.startDate), dayjs(params.endDate)] : undefined,
+        }}
+        onFinish={(values: {
+          status?: string;
+          source?: string;
+          taskType?: string;
+          market?: string;
+          symbol?: string;
+          dateRange?: [Dayjs, Dayjs];
+        }) => {
+          const [startDate, endDate] = values.dateRange ?? [];
+          void navigate({
+            search: {
+              status: values.status || undefined,
+              source: values.source?.trim() || undefined,
+              taskType: values.taskType || undefined,
+              market: values.market || undefined,
+              symbol: values.symbol?.trim() || undefined,
+              startDate: startDate?.format('YYYY-MM-DD'),
+              endDate: endDate?.format('YYYY-MM-DD'),
+              page: 1,
+              pageSize: params.pageSize,
+            },
+          });
+        }}
+      >
+        <Form.Item name="status">
+          <Select className="filter-select" options={statusOptions} />
+        </Form.Item>
+        <Form.Item name="taskType">
+          <Select className="filter-select" options={taskTypeOptions} />
+        </Form.Item>
+        <Form.Item name="market">
+          <Select
+            allowClear
+            className="filter-select"
+            options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]}
+            placeholder="市场"
+          />
+        </Form.Item>
+        <Form.Item name="source" className="filter-keyword">
+          <Input allowClear placeholder="数据源，如 akshare" />
+        </Form.Item>
+        <Form.Item name="symbol" className="filter-keyword">
+          <Input allowClear placeholder={`股票代码，如 ${SYMBOL_EXAMPLE}`} />
+        </Form.Item>
+        <Form.Item name="dateRange">
+          <DatePicker.RangePicker className="full-width-control" />
+        </Form.Item>
+        <Form.Item className="filter-actions">
+          <Space wrap>
+            <Button type="primary" htmlType="submit">
+              查询
+            </Button>
+            <Button
+              onClick={() => {
+                void navigate({
+                  search: {
+                    page: 1,
+                    pageSize: params.pageSize,
+                  },
+                });
+              }}
+            >
+              重置
+            </Button>
+            <Button icon={<ReloadOutlined />} loading={tasksQuery.isFetching || isCreatingTask} onClick={refreshTasks}>
+              刷新
+            </Button>
+          </Space>
+        </Form.Item>
+      </Form>
+
+      {tasksQuery.isError ? (
+        <ErrorState error={tasksQuery.error} onRetry={() => void tasksQuery.refetch()} />
+      ) : (
+        <Table<SyncTask>
+          className="sync-tasks-table"
+          rowKey={(record) => String(record.id)}
+          columns={columns}
+          dataSource={tasks}
+          loading={tasksQuery.isFetching}
+          scroll={{ x: 1290 }}
+          locale={{
+            emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无同步记录" />,
+          }}
+          pagination={{
+            current: params.page,
+            pageSize: params.pageSize,
+            total: tasksQuery.data?.total ?? 0,
+            showSizeChanger: false,
+            showTotal: (totalValue, range) => `${range[0]}-${range[1]} / 共 ${totalValue} 条`,
+            onChange: (page, pageSize) => {
+              void navigate({
+                search: {
+                  status: params.status || undefined,
+                  source: params.source || undefined,
+                  taskType: params.taskType || undefined,
+                  market: params.market || undefined,
+                  symbol: params.symbol || undefined,
+                  startDate: params.startDate || undefined,
+                  endDate: params.endDate || undefined,
+                  page,
+                  pageSize,
+                  taskId: selectedTaskId,
+                },
+              });
+            },
+          }}
+        />
+      )}
+    </>
+  );
+
+  const syncOperationItems = [
+    { key: 'daily-bars', label: '日线补齐', children: dailyBarsPane },
+    { key: 'stock-list', label: '股票池', children: stockListPane },
+    { key: 'calendars', label: '交易日历', children: calendarPane },
+  ];
+
+  const trackingItems = [
+    { key: 'recent', label: '最近记录', children: recentTasksPane },
+    { key: 'watermarks', label: '水位线与失败', children: watermarkPane },
+    { key: 'schedules', label: '定时规则', children: schedulePane },
+  ];
+
   return (
     <div className="workbench sync-tasks-page" ref={pageRef}>
       <div className="workbench-heading">
@@ -1937,38 +2418,20 @@ export function SyncTasksPage() {
         </Space>
       </div>
 
-      <Row gutter={[16, 16]} className="summary-row">
-        <Col xs={24} sm={8}>
-          <Card className="motion-summary-card">
-            <Statistic title="当前结果" value={tasksQuery.data?.total ?? 0} prefix={<SyncOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card className="motion-summary-card">
-            <Statistic title="等待/运行" value={runningCount} prefix={<FileTextOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card className="motion-summary-card">
-            <Statistic title="失败任务" value={failedCount} prefix={<FileTextOutlined />} />
-          </Card>
-        </Col>
-      </Row>
-
-      <RunnerStatusPanel
+      <SyncConsolePanelCard
+        total={tasksQuery.data?.total ?? 0}
+        runningCount={runningCount}
+        failedCount={failedCount}
         status={runnerStatusQuery.data}
-        loading={runnerStatusQuery.isFetching}
-        error={runnerStatusQuery.isError ? runnerStatusQuery.error : null}
-        onRefresh={() => void runnerStatusQuery.refetch()}
-        onOpenTask={openTaskDetail}
-      />
-
-      <SyncEvidencePanel
+        runnerLoading={runnerStatusQuery.isFetching}
+        runnerError={runnerStatusQuery.isError ? runnerStatusQuery.error : null}
         overview={integrationOverview}
         watermarks={watermarks}
         failedBatches={failedBatches}
-        loading={integrationOverviewQuery.isFetching}
-        error={integrationOverviewQuery.isError}
+        evidenceLoading={integrationOverviewQuery.isFetching}
+        evidenceError={integrationOverviewQuery.isError}
+        onRefresh={refreshTasks}
+        onOpenTask={openTaskDetail}
         onOpenFailedTask={openTaskDetail}
       />
 
@@ -1986,600 +2449,51 @@ export function SyncTasksPage() {
         />
       ) : null}
 
-      <Row gutter={[16, 16]} align="stretch" className="sync-command-row">
-        <Col span={8}>
-          <div ref={stockCardRef}>
-            <Card
-              className={`sync-command-card stock-detail-panel${search.focus === 'stock-list' ? ' is-focused' : ''}`}
-              title="手动同步股票池"
-              extra={<SyncOutlined />}
-            >
-              <Typography.Text type="secondary">
-                从 AKShare、BaoStock、AData、Tushare、Stock SDK 等启用来源更新 A 股基础列表。
-              </Typography.Text>
-              <Form
-                form={stockForm}
-                layout="vertical"
-                initialValues={{ source: 'auto', market: DEFAULT_MARKET }}
-                onFinish={handleStockSync}
-              >
-                <Form.Item label="数据源" name="source">
-                  <Select options={stockSourceOptions} loading={dataSourcesQuery.isFetching} />
-                </Form.Item>
-                <Form.Item label="市场" name="market">
-                  <Select options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]} />
-                </Form.Item>
-                <Button type="primary" htmlType="submit" loading={syncStocksMutation.isPending} block>
-                  更新股票池
-                </Button>
-              </Form>
-            </Card>
-          </div>
-        </Col>
+      <SyncOperationTabsCard
+        searchFocus={search.focus}
+        activeTab={operationTab}
+        onTabChange={(tab) => setOperationTab(tab === 'daily-bars' ? 'daily-bars' : (tab as SyncOperationTab))}
+        dailyBarsMode={dailyBarsMode}
+        onDailyBarsModeChange={setDailyBarsMode}
+        onResetMarketRepairPreview={() => previewDailyBarsMarketRepairMutation.reset()}
+        stockCardRef={stockCardRef}
+        dailyBarsCardRef={dailyBarsCardRef}
+        calendarCardRef={calendarCardRef}
+        stockForm={stockForm}
+        dailyBarsForm={dailyBarsForm}
+        marketRepairForm={marketRepairForm}
+        calendarForm={calendarForm}
+        stockSourceOptions={stockSourceOptions}
+        dailyBarsSourceOptions={dailyBarsSourceOptions}
+        calendarSourceOptions={calendarSourceOptions}
+        dataSourcesLoading={dataSourcesQuery.isFetching}
+        previewDailyBarsMarketRepairData={previewDailyBarsMarketRepairMutation.data}
+        previewDailyBarsMarketRepairLoading={previewDailyBarsMarketRepairMutation.isPending}
+        previewDailyBarsMarketRepairError={previewDailyBarsMarketRepairMutation.error}
+        isCreatingTask={isCreatingTask}
+        onStockSync={handleStockSync}
+        onDailyBarsSync={handleDailyBarsSync}
+        onMarketDailyBarsRepair={handleMarketDailyBarsRepair}
+        onMarketDailyBarsRepairPreview={() => void handleMarketDailyBarsRepairPreview()}
+        onCalendarSync={handleCalendarSync}
+      />
 
-        <Col span={8}>
-          <div ref={dailyBarsCardRef}>
-            <Card
-              className={`sync-command-card stock-detail-panel${
-                search.focus === 'daily-bars' || search.focus === 'daily-bars-market-repair' ? ' is-focused' : ''
-              }`}
-              title="日线同步"
-              extra={<FileTextOutlined />}
-            >
-              <Typography.Text type="secondary">
-                {dailyBarsMode === 'single'
-                  ? '指定单只股票和日期范围，写入标准日线行情与整合批次。'
-                  : '按市场和日期范围创建受控补齐任务，由后端根据股票池和已有日线数据逐只修复缺口。'}
-              </Typography.Text>
-              <Segmented
-                className="full-width-control"
-                block
-                value={dailyBarsMode}
-                onChange={(value) => {
-                  setDailyBarsMode(value as DailyBarsMode);
-                  if (value !== 'market-repair') {
-                    previewDailyBarsMarketRepairMutation.reset();
-                  }
-                }}
-                options={[
-                  { label: '单股日线', value: 'single' },
-                  { label: '市场缺口补齐', value: 'market-repair' },
-                ]}
-              />
-              {dailyBarsMode === 'single' ? (
-                <Form
-                  form={dailyBarsForm}
-                  layout="vertical"
-                  initialValues={{
-                    source: 'auto',
-                    market: DEFAULT_MARKET,
-                    symbol: '',
-                    dateRange: DEFAULT_DATE_RANGE,
-                  }}
-                  onFinish={handleDailyBarsSync}
-                >
-                  <Row gutter={10}>
-                    <Col span={12}>
-                      <Form.Item label="股票代码" name="symbol" rules={[{ required: true, message: '请输入股票代码' }]}>
-                        <Input placeholder={`例如 ${SYMBOL_EXAMPLE}`} />
-                      </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                      <Form.Item label="市场" name="market">
-                        <Select options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]} />
-                      </Form.Item>
-                    </Col>
-                  </Row>
-                  <Form.Item label="日期范围" name="dateRange" rules={[{ required: true, message: '请选择日期范围' }]}>
-                    <DatePicker.RangePicker className="full-width-control" />
-                  </Form.Item>
-                  <Form.Item label="数据源" name="source">
-                    <Select options={dailyBarsSourceOptions} loading={dataSourcesQuery.isFetching} />
-                  </Form.Item>
-                  <Button type="primary" htmlType="submit" loading={syncDailyBarsMutation.isPending} block>
-                    同步单股日线
-                  </Button>
-                </Form>
-              ) : (
-                <Form
-                  form={marketRepairForm}
-                  layout="vertical"
-                  initialValues={{
-                    source: 'auto',
-                    market: DEFAULT_MARKET,
-                    dateRange: DEFAULT_DATE_RANGE,
-                    maxSymbols: DEFAULT_MARKET_REPAIR_MAX_SYMBOLS,
-                  }}
-                  onFinish={handleMarketDailyBarsRepair}
-                  onValuesChange={() => previewDailyBarsMarketRepairMutation.reset()}
-                >
-                  <Row gutter={10}>
-                    <Col span={12}>
-                      <Form.Item label="市场" name="market">
-                        <Select options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]} />
-                      </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                      <Form.Item
-                        label="最大股票数"
-                        name="maxSymbols"
-                        rules={[{ required: true, message: '请设置本次最多处理的股票数' }]}
-                      >
-                        <InputNumber className="full-width-control" min={1} max={MAX_MARKET_REPAIR_SYMBOLS} precision={0} />
-                      </Form.Item>
-                    </Col>
-                  </Row>
-                  <Form.Item label="日期范围" name="dateRange" rules={[{ required: true, message: '请选择日期范围' }]}>
-                    <DatePicker.RangePicker className="full-width-control" />
-                  </Form.Item>
-                  <Form.Item label="数据源" name="source">
-                    <Select options={dailyBarsSourceOptions} loading={dataSourcesQuery.isFetching} />
-                  </Form.Item>
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="市场级补齐不填写股票代码，建议先预览股票池、开市日和缺口计划，再创建任务。"
-                    description={
-                      marketRepairDateRangeLabel
-                        ? `当前补齐范围 ${marketRepairDateRangeLabel}，用于补齐最近半年市场级股票-交易日缺口。`
-                        : undefined
-                    }
-                  />
-                  <MarketRepairPreviewPanel
-                    preview={previewDailyBarsMarketRepairMutation.data}
-                    loading={previewDailyBarsMarketRepairMutation.isPending}
-                    error={previewDailyBarsMarketRepairMutation.error}
-                  />
-                  <Space className="market-repair-actions">
-                    <Button
-                      loading={previewDailyBarsMarketRepairMutation.isPending}
-                      onClick={() => void handleMarketDailyBarsRepairPreview()}
-                    >
-                      预览补齐计划
-                    </Button>
-                    <Button type="primary" htmlType="submit" loading={syncDailyBarsMarketRepairMutation.isPending}>
-                      创建市场补齐任务
-                    </Button>
-                  </Space>
-                </Form>
-              )}
-            </Card>
-          </div>
-        </Col>
-
-        <Col span={8}>
-          <div ref={calendarCardRef}>
-            <Card
-              className={`sync-command-card stock-detail-panel${search.focus === 'calendars' ? ' is-focused' : ''}`}
-              title="交易日历同步"
-              extra={<CalendarOutlined />}
-            >
-              <Typography.Text type="secondary">
-                补齐交易日历覆盖，供日线缺口检查和后续调度判断使用。
-              </Typography.Text>
-              <Form
-                form={calendarForm}
-                layout="vertical"
-                initialValues={{ source: 'auto', market: DEFAULT_MARKET, dateRange: DEFAULT_DATE_RANGE }}
-                onFinish={handleCalendarSync}
-              >
-                <Form.Item label="市场" name="market">
-                  <Select options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]} />
-                </Form.Item>
-                <Form.Item label="日期范围" name="dateRange" rules={[{ required: true, message: '请选择日期范围' }]}>
-                  <DatePicker.RangePicker className="full-width-control" />
-                </Form.Item>
-                <Form.Item label="数据源" name="source">
-                  <Select options={calendarSourceOptions} loading={dataSourcesQuery.isFetching} />
-                </Form.Item>
-                <Button type="primary" htmlType="submit" loading={syncCalendarsMutation.isPending} block>
-                  同步交易日历
-                </Button>
-              </Form>
-            </Card>
-          </div>
-        </Col>
-      </Row>
-
-      <Card
-        className="sync-schedule-card stock-detail-panel"
-        title="定时规则"
-        extra={<Typography.Text type="secondary">自动 cron 暂未启用，可手动触发规则</Typography.Text>}
-      >
-        {schedulesQuery.isError ? (
-          <Alert type="error" showIcon message="定时规则加载失败" description="后端同步计划配置接口暂不可用。" />
-        ) : (
-          <Row gutter={[12, 12]}>
-            {schedules.map((schedule) => (
-              <Col span={8} key={schedule.code}>
-                <div className="sync-schedule-item">
-                  <div className="sync-schedule-heading">
-                    <Typography.Text strong>{schedule.name}</Typography.Text>
-                    <Space size={8}>
-                      <Tooltip title={canTriggerSchedule(schedule) ? '按当前规则创建一次同步任务' : '请先在配置规则里填写股票代码'}>
-                        <Button
-                          size="small"
-                          icon={<SyncOutlined />}
-                          disabled={!canTriggerSchedule(schedule)}
-                          loading={triggerScheduleMutation.isPending && triggerScheduleMutation.variables?.code === schedule.code}
-                          onClick={() => handleScheduleTrigger(schedule)}
-                        >
-                          立即触发
-                        </Button>
-                      </Tooltip>
-                      <Switch
-                        size="small"
-                        checked={schedule.enabled}
-                        checkedChildren="启用"
-                        unCheckedChildren="停用"
-                        loading={updateScheduleMutation.isPending}
-                        onChange={(checked) => handleScheduleToggle(schedule, checked)}
-                      />
-                    </Space>
-                  </div>
-                  <Typography.Text type="secondary">{getScheduleNote(schedule)}</Typography.Text>
-                  <div className="sync-schedule-meta">
-                    <Tag color={schedule.enabled ? 'success' : 'default'}>{schedule.enabled ? '已启用' : '未启用'}</Tag>
-                    <Tag>{getScheduleCron(schedule)}</Tag>
-                  </div>
-                  <Typography.Text type="secondary">{getScheduleScope(schedule)}</Typography.Text>
-                  <Typography.Text type="secondary">
-                    最近触发：{formatDateTime(getScheduleLastTriggeredAt(schedule))}
-                  </Typography.Text>
-                  <Collapse
-                    ghost
-                    size="small"
-                    className="sync-schedule-config"
-                    items={[
-                      {
-                        key: 'config',
-                        label: '配置规则',
-                        children: (
-                          <Form<ScheduleFormValues>
-                            layout="vertical"
-                            initialValues={getScheduleInitialValues(schedule)}
-                            onFinish={(values) => handleScheduleSave(schedule, values)}
-                          >
-                            <Form.Item label="数据源" name="source">
-                              <Select
-                                options={sourceOptionsForCapability(getScheduleCapability(schedule))}
-                                loading={dataSourcesQuery.isFetching}
-                              />
-                            </Form.Item>
-                            <Row gutter={8}>
-                              <Col span={12}>
-                                <Form.Item label="市场" name="market">
-                                  <Select options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]} />
-                                </Form.Item>
-                              </Col>
-                              <Col span={12}>
-                                <Form.Item
-                                  label="股票代码"
-                                  name="symbol"
-                                  tooltip={
-                                    getScheduleTaskType(schedule) === 'daily_bars'
-                                      ? '第一阶段日线规则需要单只股票代码，后续再扩展全市场批量。'
-                                      : '股票池和交易日历规则可留空。'
-                                  }
-                                >
-                                  <Input placeholder={getScheduleTaskType(schedule) === 'daily_bars' ? SYMBOL_EXAMPLE : '可留空'} />
-                                </Form.Item>
-                              </Col>
-                            </Row>
-                            <Form.Item
-                              label="Cron 表达式"
-                              name="cron_expression"
-                              rules={[{ required: true, message: '请输入 cron 表达式' }]}
-                            >
-                              <Input placeholder="30 18 * * 1-5" />
-                            </Form.Item>
-                            <Button
-                              size="small"
-                              type="primary"
-                              htmlType="submit"
-                              loading={updateScheduleMutation.isPending}
-                              block
-                            >
-                              保存配置
-                            </Button>
-                          </Form>
-                        ),
-                      },
-                    ]}
-                  />
-                </div>
-              </Col>
-            ))}
-            {schedules.length === 0 ? (
-              <Col span={24}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无定时规则" />
-              </Col>
-            ) : null}
-          </Row>
-        )}
+      <Card className="sync-tracking-card stock-detail-panel" title="运行追踪">
+        <Tabs defaultActiveKey="recent" items={trackingItems} />
       </Card>
-
-      <Row gutter={[16, 16]} align="stretch" className="sync-watermark-row">
-        <Col span={15}>
-          <Card className="sync-watermark-card stock-detail-panel" title="同步水位线">
-            {integrationOverviewQuery.isError ? (
-              <Alert type="error" showIcon message="同步水位线加载失败" description="后端数据整合总览接口暂不可用。" />
-            ) : (
-              <Table<SyncWatermark>
-                rowKey={(record) => `${record.dataset_name}-${record.source}-${record.market}-${record.symbol}-${record.batch_id}`}
-                columns={watermarkColumns}
-                dataSource={watermarks}
-                loading={integrationOverviewQuery.isFetching}
-                pagination={false}
-                size="small"
-                scroll={{ x: 1340 }}
-                locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无成功水位线" /> }}
-              />
-            )}
-          </Card>
-        </Col>
-        <Col span={9}>
-          <Card className="sync-watermark-card stock-detail-panel" title="失败批次">
-            {integrationOverviewQuery.isError ? (
-              <Alert type="error" showIcon message="失败批次加载失败" />
-            ) : (
-              <Table<RecentIngestBatch>
-                rowKey={(record) => String(record.id)}
-                columns={recentFailureColumns}
-                dataSource={failedBatches}
-                loading={integrationOverviewQuery.isFetching}
-                pagination={false}
-                size="small"
-                scroll={{ x: 720 }}
-                locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无失败批次" /> }}
-              />
-            )}
-          </Card>
-        </Col>
-      </Row>
-
-      <Card className="sync-table-card" title="最近同步记录">
-        <Form
-          key={[
-            params.status,
-            params.source,
-            params.taskType,
-            params.market,
-            params.symbol,
-            params.startDate,
-            params.endDate,
-          ].join('|')}
-          className="stock-filters sync-task-filters"
-          layout="inline"
-          initialValues={{
-            status: params.status,
-            source: params.source,
-            taskType: params.taskType,
-            market: params.market,
-            symbol: params.symbol,
-            dateRange:
-              params.startDate && params.endDate
-                ? [dayjs(params.startDate), dayjs(params.endDate)]
-                : undefined,
-          }}
-          onFinish={(values: {
-            status?: string;
-            source?: string;
-            taskType?: string;
-            market?: string;
-            symbol?: string;
-            dateRange?: [Dayjs, Dayjs];
-          }) => {
-            const [startDate, endDate] = values.dateRange ?? [];
-            void navigate({
-              search: {
-                status: values.status || undefined,
-                source: values.source?.trim() || undefined,
-                taskType: values.taskType || undefined,
-                market: values.market || undefined,
-                symbol: values.symbol?.trim() || undefined,
-                startDate: startDate?.format('YYYY-MM-DD'),
-                endDate: endDate?.format('YYYY-MM-DD'),
-                page: 1,
-                pageSize: params.pageSize,
-              },
-            });
-          }}
-        >
-          <Form.Item name="status">
-            <Select className="filter-select" options={statusOptions} />
-          </Form.Item>
-          <Form.Item name="taskType">
-            <Select className="filter-select" options={taskTypeOptions} />
-          </Form.Item>
-          <Form.Item name="market">
-            <Select
-              allowClear
-              className="filter-select"
-              options={[{ label: '中国 A 股', value: DEFAULT_MARKET }]}
-              placeholder="市场"
-            />
-          </Form.Item>
-          <Form.Item name="source" className="filter-keyword">
-            <Input allowClear placeholder="数据源，如 akshare" />
-          </Form.Item>
-          <Form.Item name="symbol" className="filter-keyword">
-            <Input allowClear placeholder={`股票代码，如 ${SYMBOL_EXAMPLE}`} />
-          </Form.Item>
-          <Form.Item name="dateRange">
-            <DatePicker.RangePicker className="full-width-control" />
-          </Form.Item>
-          <Form.Item className="filter-actions">
-            <Space wrap>
-              <Button type="primary" htmlType="submit">
-                查询
-              </Button>
-              <Button
-                onClick={() => {
-                  void navigate({
-                    search: {
-                      page: 1,
-                      pageSize: params.pageSize,
-                    },
-                  });
-                }}
-              >
-                重置
-              </Button>
-              <Button icon={<ReloadOutlined />} loading={tasksQuery.isFetching || isCreatingTask} onClick={refreshTasks}>
-                刷新
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-
-        {tasksQuery.isError ? (
-          <ErrorState error={tasksQuery.error} onRetry={() => void tasksQuery.refetch()} />
-        ) : (
-          <Table<SyncTask>
-            className="sync-tasks-table"
-            rowKey={(record) => String(record.id)}
-            columns={columns}
-            dataSource={tasks}
-            loading={tasksQuery.isFetching}
-            scroll={{ x: 1290 }}
-            locale={{
-              emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无同步记录" />,
-            }}
-            pagination={{
-              current: params.page,
-              pageSize: params.pageSize,
-              total: tasksQuery.data?.total ?? 0,
-              showSizeChanger: false,
-              showTotal: (total, range) => `${range[0]}-${range[1]} / 共 ${total} 条`,
-              onChange: (page, pageSize) => {
-                void navigate({
-                  search: {
-                    status: params.status || undefined,
-                    source: params.source || undefined,
-                    taskType: params.taskType || undefined,
-                    market: params.market || undefined,
-                    symbol: params.symbol || undefined,
-                    startDate: params.startDate || undefined,
-                    endDate: params.endDate || undefined,
-                    page,
-                    pageSize,
-                    taskId: selectedTaskId,
-                  },
-                });
-              },
-            }}
-          />
-        )}
-      </Card>
-
-      <Drawer
-        title={selectedTaskId ? `同步记录 #${selectedTaskId}` : '同步记录详情'}
-        open={Boolean(selectedTaskId)}
-        width={620}
+      <SyncTaskDetailDrawer
+        taskId={selectedTaskId}
+        task={selectedTask}
+        batches={batches}
+        logs={logs}
+        taskLoading={taskQuery.isFetching}
+        batchesLoading={batchesQuery.isFetching}
+        logsLoading={logsQuery.isFetching}
+        taskError={taskQuery.isError}
+        batchesError={batchesQuery.isError}
+        logsError={logsQuery.isError}
         onClose={closeDrawer}
-      >
-        {taskQuery.isError ? (
-          <Alert type="error" showIcon message="任务详情加载失败" description="任务可能不存在或后端接口暂不可用。" />
-        ) : (
-          <Space className="task-detail-drawer" direction="vertical" size={16}>
-            <TaskExecutionSummaryPanel
-              task={selectedTask}
-              batches={batches}
-              logs={logs}
-              loading={taskQuery.isFetching || batchesQuery.isFetching || logsQuery.isFetching}
-            />
-
-            <Descriptions bordered column={1} size="small">
-              <Descriptions.Item label="任务类型">{getTaskType(selectedTask)}</Descriptions.Item>
-              <Descriptions.Item label="状态">
-                <StatusTag value={selectedTask?.status} />
-              </Descriptions.Item>
-              <Descriptions.Item label="数据源">{formatTaskSource(selectedTask?.source)}</Descriptions.Item>
-              <Descriptions.Item label="来源决策">{renderTaskSourceEvidence(selectedTask)}</Descriptions.Item>
-              <Descriptions.Item label="市场">{formatMarket(selectedTask?.market, '全部市场')}</Descriptions.Item>
-              <Descriptions.Item label="读取记录">{formatNumber(getRecordsRead(selectedTask))}</Descriptions.Item>
-              <Descriptions.Item label="写入记录">{formatNumber(getRecordsWritten(selectedTask))}</Descriptions.Item>
-              <Descriptions.Item label="创建时间">{formatDateTime(getCreatedAt(selectedTask))}</Descriptions.Item>
-              <Descriptions.Item label="开始时间">{formatDateTime(getStartedAt(selectedTask))}</Descriptions.Item>
-              <Descriptions.Item label="结束时间">{formatDateTime(getFinishedAt(selectedTask))}</Descriptions.Item>
-              {getErrorMessage(selectedTask) ? (
-                <Descriptions.Item label="错误信息">
-                  <Typography.Text type="danger">{getErrorMessage(selectedTask)}</Typography.Text>
-                </Descriptions.Item>
-              ) : null}
-            </Descriptions>
-
-            <div>
-              <Typography.Title level={5}>数据整合批次</Typography.Title>
-              {batchesQuery.isError ? (
-                <Alert type="error" showIcon message="批次信息加载失败" />
-              ) : batches.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据整合批次" />
-              ) : (
-                <Table<IngestBatch>
-                  className="task-ingest-batches-table"
-                  rowKey={(record) => String(record.id)}
-                  columns={batchColumns}
-                  dataSource={batches}
-                  loading={batchesQuery.isFetching}
-                  pagination={false}
-                  size="small"
-                  scroll={{ x: 1350 }}
-                  expandable={{
-                    expandedRowRender: (record) => {
-                      const validationErrors = getBatchValidationErrors(record);
-                      const errorMessage = getBatchErrorMessage(record);
-                      if (!validationErrors.length && !errorMessage) {
-                        return <Typography.Text type="secondary">校验通过，无错误信息。</Typography.Text>;
-                      }
-                      return (
-                        <Space direction="vertical" size={4}>
-                          {errorMessage ? <Typography.Text type="danger">{errorMessage}</Typography.Text> : null}
-                          {validationErrors.map((error) => (
-                            <Typography.Text key={error} code>
-                              {error}
-                            </Typography.Text>
-                          ))}
-                        </Space>
-                      );
-                    },
-                  }}
-                />
-              )}
-            </div>
-
-            <div>
-              <Typography.Title level={5}>执行日志</Typography.Title>
-              {logsQuery.isError ? (
-                <Alert type="error" showIcon message="任务日志加载失败" />
-              ) : logs.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务日志" />
-              ) : (
-                <Timeline
-                  className="task-log-timeline"
-                  items={logs.map((log) => {
-                    const payload = formatPayload(getLogPayload(log));
-                    return {
-                      color: log.level === 'error' ? 'red' : 'blue',
-                      children: (
-                        <Space direction="vertical" size={4}>
-                          <Space className="task-log-heading">
-                            <Typography.Text strong>{log.message}</Typography.Text>
-                            <Typography.Text type="secondary">{formatLogLevel(log.level)}</Typography.Text>
-                          </Space>
-                          <Typography.Text type="secondary">{formatDateTime(getLogTime(log))}</Typography.Text>
-                          {payload ? <Typography.Text code>{payload}</Typography.Text> : null}
-                        </Space>
-                      ),
-                    };
-                  })}
-                />
-              )}
-            </div>
-          </Space>
-        )}
-      </Drawer>
+      />
     </div>
   );
 }

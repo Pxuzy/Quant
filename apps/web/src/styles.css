@@ -1580,18 +1580,6 @@ body {
   max-width: 100%;
 }
 
-.sync-command-row {
-  margin-bottom: 16px;
-}
-
-.sync-runner-card {
-  margin-bottom: 16px;
-}
-
-.sync-evidence-card {
-  margin-bottom: 16px;
-}
-
 .sync-focus-alert {
   margin-bottom: 16px;
   border-color: #b7d6ff;
@@ -1599,22 +1587,94 @@ body {
   background: #f5f9ff;
 }
 
-.sync-runner-layout {
-  width: 100%;
+.sync-console-panel,
+.sync-operations-card,
+.sync-tracking-card {
+  margin-bottom: 16px;
 }
 
-.sync-runner-head {
+.sync-console-panel .ant-card-body,
+.sync-operations-card .ant-card-body,
+.sync-tracking-card .ant-card-body {
+  padding: 14px 16px 16px;
+}
+
+.sync-console-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.15fr) minmax(360px, 1.25fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.sync-console-decision {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--app-primary), transparent 94%) 0%, var(--app-surface-soft) 100%);
+}
+
+.sync-console-decision h4 {
+  margin: 2px 0 4px !important;
+}
+
+.sync-console-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sync-console-kpis .ant-statistic {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface-soft);
+}
+
+.sync-console-kpis .ant-statistic-title {
+  margin-bottom: 2px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.sync-console-kpis .ant-statistic-content {
+  overflow: hidden;
+  color: var(--app-text-strong);
+  font-size: 20px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-console-runner {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface-soft);
+}
+
+.sync-console-runner-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
 }
 
-.sync-runner-worker {
-  padding: 12px;
-  border: 1px solid #e6edf7;
-  border-radius: 8px;
-  background: #f8fbff;
+.sync-console-runner-head .ant-statistic-title {
+  margin-bottom: 0;
+  font-size: 12px;
+}
+
+.sync-console-runner-head .ant-statistic-content {
+  font-size: 18px;
 }
 
 .sync-runner-command {
@@ -1624,20 +1684,20 @@ body {
   white-space: nowrap;
 }
 
-.sync-runner-task-grid {
+.sync-console-task-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .sync-runner-task-ref {
   display: grid;
   min-width: 0;
   gap: 6px;
-  padding: 12px;
-  border: 1px solid #edf0f5;
+  padding: 10px;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--app-surface);
 }
 
 .sync-runner-task-ref .ant-btn {
@@ -1645,96 +1705,79 @@ body {
   padding-inline: 0;
 }
 
-.sync-runner-meta {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.sync-runner-meta > div {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-  padding: 12px;
-  border: 1px solid #edf0f5;
-  border-radius: 8px;
-  background: #fbfdff;
-}
-
-.sync-runner-meta .ant-typography {
+.sync-runner-task-ref .ant-typography {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.sync-evidence-layout {
-  width: 100%;
+.sync-operations-card .ant-tabs-nav,
+.sync-tracking-card .ant-tabs-nav {
+  margin-bottom: 12px;
 }
 
-.sync-evidence-decision {
+.sync-operation-pane {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
+  min-width: 0;
+  gap: 14px;
   padding: 14px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--app-primary), transparent 95%) 0%, var(--app-surface-soft) 100%);
+  background: var(--app-surface-soft);
 }
 
-.sync-evidence-decision h5 {
+.sync-operation-pane.is-focused {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-primary), transparent 88%);
+}
+
+.sync-operation-intro {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sync-operation-intro h5 {
   margin: 0 0 4px !important;
 }
 
-.sync-evidence-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.sync-evidence-grid > div {
-  display: grid;
+.sync-operation-intro .ant-typography {
   min-width: 0;
-  gap: 4px;
-  padding: 12px;
-  border: 1px solid #edf0f5;
-  border-radius: 8px;
-  background: #ffffff;
 }
 
-.sync-evidence-grid .ant-typography {
+.sync-operation-form {
+  display: grid;
+  gap: 2px;
+}
+
+.sync-operation-form .ant-form-item {
+  margin-bottom: 12px;
+}
+
+.sync-operation-form .ant-btn {
+  width: fit-content;
+}
+
+.sync-operation-mode {
+  max-width: 420px;
+}
+
+.sync-tracking-card .sync-watermark-row {
+  margin-bottom: 0;
+}
+
+.sync-tracking-card .stock-filters {
+  margin-bottom: 12px;
+}
+
+.sync-tracking-card .ant-table-wrapper {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.sync-command-card {
-  height: 100%;
-}
-
-.sync-command-card.is-focused {
-  border-color: #1677ff;
-  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1), 0 12px 30px rgba(15, 23, 42, 0.08);
-}
-
-.sync-command-card .ant-card-body {
-  display: flex;
-  min-height: 330px;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.sync-command-card .ant-form {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-}
-
-.sync-command-card .ant-form > .ant-btn,
-.sync-command-card .ant-form > .ant-form-item:last-child {
-  margin-top: auto;
+.sync-watermark-row {
+  margin-bottom: 16px;
 }
 
 .market-repair-preview-panel {
@@ -1787,22 +1830,6 @@ body {
 
 .market-repair-actions .ant-btn {
   flex: 1;
-}
-
-.sync-schedule-card {
-  margin-bottom: 16px;
-}
-
-.sync-watermark-row {
-  margin-bottom: 16px;
-}
-
-.sync-watermark-card {
-  height: 100%;
-}
-
-.sync-watermark-card .ant-card-body {
-  min-height: 270px;
 }
 
 .sync-schedule-item {
@@ -2522,11 +2549,11 @@ body {
 .database-storage-summary-grid > div,
 .database-coverage-item,
 .database-freshness-item,
-.sync-evidence-decision,
-.sync-evidence-grid > div,
-.sync-runner-worker,
+.sync-console-decision,
+.sync-console-kpis .ant-statistic,
+.sync-console-runner,
 .sync-runner-task-ref,
-.sync-runner-meta > div,
+.sync-operation-pane,
 .market-repair-preview-panel,
 .market-repair-preview-stats .ant-statistic,
 .sync-schedule-item,
@@ -2550,10 +2577,6 @@ body {
 .overview-panel,
 .database-integration-kpi,
 .database-panel,
-.sync-command-card,
-.sync-runner-card,
-.sync-schedule-card,
-.sync-watermark-card,
 .stock-detail-panel {
   border-color: var(--app-border);
   background: var(--app-surface);
@@ -4030,8 +4053,7 @@ body {
   flex-wrap: wrap;
 }
 
-.stock-kline-period-cards,
-.stock-kline-range-cards {
+.stock-kline-period-cards {
   display: flex;
   align-items: center;
 }

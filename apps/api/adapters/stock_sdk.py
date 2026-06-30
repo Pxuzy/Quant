@@ -17,6 +17,7 @@ from apps.api.adapters.base import (
     NormalizedStock,
     ProviderMetadata,
     StockDataSourceAdapter,
+    normalize_daily_bar_adjust_type,
 )
 
 
@@ -777,6 +778,7 @@ class StockSdkAdapter(StockDataSourceAdapter):
         market: str,
         start_date: date,
         end_date: date,
+        adjust_type: str = "none",
     ) -> list[dict[str, Any]]:
         """
         通过 Node.js 子进程获取日K线。
@@ -788,6 +790,9 @@ class StockSdkAdapter(StockDataSourceAdapter):
             raise ValueError(
                 "stock-sdk daily bars adapter currently supports A_SHARE only."
             )
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
+        if adjust_type_code != "none":
+            raise ValueError("stock-sdk daily bars adapter currently supports unadjusted bars only.")
 
         client = self._get_client()
         kline = getattr(client, "kline", None)

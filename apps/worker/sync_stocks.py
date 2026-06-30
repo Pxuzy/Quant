@@ -70,6 +70,8 @@ def run_next_pending_sync(*, database_url: str | None = None) -> SyncTask | None
         return run_daily_bars_sync_task(task_id=task_id, database_url=database_url)
     if task_type == "daily_bars_market_repair":
         return run_market_daily_bars_repair_task(task_id=task_id, database_url=database_url)
+    if task_type == "daily_bars_raw_replay":
+        return run_raw_daily_bars_replay_task(task_id=task_id, database_url=database_url)
     if task_type == "calendars":
         return run_calendar_sync_task(task_id=task_id, database_url=database_url)
     raise ValueError(f"Unsupported pending sync task type: {task_type}")
@@ -92,6 +94,7 @@ def enqueue_daily_bars_sync(
     symbol: str,
     start_date: date,
     end_date: date,
+    adjust_type: str = "none",
     database_url: str | None = None,
 ) -> SyncTask:
     configure_worker_database(database_url)
@@ -103,6 +106,7 @@ def enqueue_daily_bars_sync(
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
+            adjust_type=adjust_type,
         )
     finally:
         db.close()
@@ -133,6 +137,8 @@ def enqueue_market_daily_bars_repair(
     start_date: date,
     end_date: date,
     max_symbols: int = 20,
+    start_policy: str = "requested_start",
+    adjust_type: str = "none",
     database_url: str | None = None,
 ) -> SyncTask:
     configure_worker_database(database_url)
@@ -144,6 +150,8 @@ def enqueue_market_daily_bars_repair(
             start_date=start_date,
             end_date=end_date,
             max_symbols=max_symbols,
+            start_policy=start_policy,
+            adjust_type=adjust_type,
         )
     finally:
         db.close()
@@ -174,6 +182,8 @@ def run_market_daily_bars_repair(
     start_date: date,
     end_date: date,
     max_symbols: int = 20,
+    start_policy: str = "requested_start",
+    adjust_type: str = "none",
     database_url: str | None = None,
 ) -> SyncTask:
     task = enqueue_market_daily_bars_repair(
@@ -182,6 +192,8 @@ def run_market_daily_bars_repair(
         start_date=start_date,
         end_date=end_date,
         max_symbols=max_symbols,
+        start_policy=start_policy,
+        adjust_type=adjust_type,
         database_url=database_url,
     )
     return run_market_daily_bars_repair_task(task_id=task.id, database_url=database_url)
@@ -194,6 +206,7 @@ def run_daily_bars_sync(
     symbol: str,
     start_date: date,
     end_date: date,
+    adjust_type: str = "none",
     database_url: str | None = None,
 ) -> SyncTask:
     task = enqueue_daily_bars_sync(
@@ -202,6 +215,7 @@ def run_daily_bars_sync(
         symbol=symbol,
         start_date=start_date,
         end_date=end_date,
+        adjust_type=adjust_type,
         database_url=database_url,
     )
     return run_daily_bars_sync_task(task_id=task.id, database_url=database_url)
@@ -292,6 +306,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
     parser.add_argument("--max-symbols", type=int, default=20)
+    parser.add_argument("--start-policy", choices=["requested_start", "listing_date"], default="requested_start")
+    parser.add_argument("--adjust-type", choices=["none", "qfq", "hfq"], default="none")
     parser.add_argument("--database-url", default=None)
     parser.add_argument("--task-id", type=int, default=None, help="Execute an existing pending stock sync task.")
     parser.add_argument("--enqueue", action="store_true", help="Create a pending stock sync task and exit.")
@@ -318,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
                     symbol=args.symbol,
                     start_date=start_date,
                     end_date=end_date,
+                    adjust_type=args.adjust_type,
                     database_url=args.database_url,
                 )
             else:
@@ -327,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
                     symbol=args.symbol,
                     start_date=start_date,
                     end_date=end_date,
+                    adjust_type=args.adjust_type,
                     database_url=args.database_url,
                 )
     elif task_type == "daily_bars_market_repair":
@@ -346,6 +364,8 @@ def main(argv: list[str] | None = None) -> int:
                     start_date=start_date,
                     end_date=end_date,
                     max_symbols=args.max_symbols,
+                    start_policy=args.start_policy,
+                    adjust_type=args.adjust_type,
                     database_url=args.database_url,
                 )
             else:
@@ -355,6 +375,8 @@ def main(argv: list[str] | None = None) -> int:
                     start_date=start_date,
                     end_date=end_date,
                     max_symbols=args.max_symbols,
+                    start_policy=args.start_policy,
+                    adjust_type=args.adjust_type,
                     database_url=args.database_url,
                 )
     elif task_type == "calendars":
@@ -393,7 +415,7 @@ def main(argv: list[str] | None = None) -> int:
         task = run_stock_sync(source=args.source, market=args.market, database_url=args.database_url)
 
     print(json.dumps(task_to_payload(task), ensure_ascii=True))
-    return 0 if task is None or task.status == "success" else 1
+    return 0 if task is None or task.status == "success" or (args.enqueue and task.status == "pending") else 1
 
 
 if __name__ == "__main__":

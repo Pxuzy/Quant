@@ -34,6 +34,7 @@ import { fadeInUp, useGSAP } from '../../../shared/motion/gsapMotion';
 const DETAIL_DAILY_PAGE_SIZE = 120;
 const TABLE_PREVIEW_SIZE = 20;
 const V1_MARKET = 'A_SHARE';
+const DETAIL_KLINE_HISTORY_LIMIT = 30000;
 const CHART_WIDTH = 820;
 const CHART_HEIGHT = 260;
 const CHART_PADDING = { top: 18, right: 28, bottom: 34, left: 54 };
@@ -130,6 +131,10 @@ function sortDailyRows(rows: DailyBar[]) {
 
 function normalizeV1Market(market?: string) {
   return market === V1_MARKET ? market : V1_MARKET;
+}
+
+function normalizeStockRouteSymbol(symbol: string) {
+  return symbol.replace(/^(sh|sz|bj)/i, '');
 }
 
 function average(values: number[]) {
@@ -687,7 +692,9 @@ export function StockDetailPage() {
   const params = useParams({ from: '/data-system/stocks/$symbol' });
   const search = useSearch({ from: '/data-system/stocks/$symbol' });
   const navigate = useNavigate({ from: '/data-system/stocks/$symbol' });
-  const symbol = params.symbol;
+  const rawSymbol = params.symbol;
+  const symbol = normalizeStockRouteSymbol(rawSymbol);
+  const displayCode = rawSymbol.toUpperCase();
   const market = normalizeV1Market(search.market);
   const stockQuery = useStockQuery(symbol, market);
   const coverageQuery = useStockDailyCoverageQuery(symbol, market);
@@ -712,6 +719,7 @@ export function StockDetailPage() {
   const stock = stockQuery.data;
   const coverage = coverageQuery.data;
   const dailyQuality = dailyQualityQuery.data;
+  const displayTitle = stock?.name ? `${stock.name} ${displayCode}` : displayCode;
   const ingestBatches = ingestBatchesQuery.data?.items ?? [];
   const latestIngestBatch = useMemo(() => getLatestIngestBatch(ingestBatches), [ingestBatches]);
   const completeness =
@@ -801,8 +809,7 @@ export function StockDetailPage() {
             <ArrowLeftOutlined /> 返回股票池
           </Link>
           <div className="stock-terminal-title-row">
-            <Typography.Title level={3}>{symbol}</Typography.Title>
-            {stock ? <Typography.Title level={3}>{stock.name}</Typography.Title> : null}
+            <Typography.Title level={3}>{displayTitle}</Typography.Title>
             {stock?.status ? <StatusTag value={stock.status} /> : null}
           </div>
           <Typography.Text type="secondary">
@@ -1059,10 +1066,11 @@ export function StockDetailPage() {
         <Col span={16} className="stock-terminal-main">
           <Card className="stock-detail-panel stock-detail-chart-card" title="K 线研究">
             <StockKlineChart
-              code={symbol}
-              title={`${symbol}${stock?.name ? ` ${stock.name}` : ''}`}
+              code={rawSymbol}
+              title={displayTitle}
               embedded
               minHeight={520}
+              historyLimit={DETAIL_KLINE_HISTORY_LIMIT}
             />
           </Card>
 
