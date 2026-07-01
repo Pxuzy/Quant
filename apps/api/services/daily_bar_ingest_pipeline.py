@@ -11,6 +11,7 @@ from apps.api.repositories.ingest_batches import IngestBatchRepository
 from apps.api.repositories.stocks import StockRepository
 from apps.api.repositories.sync_tasks import SyncTaskRepository
 from apps.api.services.database_integration_service import invalidate_coverage_cache
+from quant.scripts.data_loader import invalidate_data_cache
 from apps.api.services.normalized_data_validation import validate_daily_bar_records
 
 
@@ -71,6 +72,9 @@ class DailyBarIngestPipeline:
             end_date=end_date,
         )
         invalidate_coverage_cache((task.market or "A_SHARE").strip().upper())
+        invalidate_data_cache("stocks")
+        invalidate_data_cache("search")
+        invalidate_data_cache("calendar")
         # 更新股票最新数据日期
         try:
             latest = self.daily_bar_repo.latest_trade_date(market=(task.market or "A_SHARE").strip().upper())

@@ -386,6 +386,25 @@ class DataAccessLayer:
 _dal: DataAccessLayer | None = None
 
 
+# ─── 缓存失效 ───────────────────────────────────────────
+
+# 全局模块级 data_loader 缓存引用，由 _get_dal() 初始化
+# 外部 sync service 通过 invalidate_data_cache() 在数据写入后失效
+_DATA_CACHE_REF: DataAccessLayer | None = None
+
+
+def invalidate_data_cache(cache_name: str | None = None) -> None:
+    """失效 data_loader 的查询缓存（stocks/calendar/search）。
+
+    由 sync service 在数据写入后调用。
+    cache_name=None 时失效全部缓存。
+    """
+    global _DATA_CACHE_REF
+    if _DATA_CACHE_REF is None:
+        _DATA_CACHE_REF = _get_dal()
+    _DATA_CACHE_REF.invalidate_cache(cache_name)
+
+
 def _get_dal() -> DataAccessLayer:
     global _dal
     if _dal is None:
