@@ -47,11 +47,6 @@ const DataSourcesWorkbenchPage = lazy(() =>
     default: module.DataSourcesPage,
   })),
 );
-const NewsSummaryPage = lazy(() =>
-  import('../pages/data-system/news-summary/NewsSummaryPage').then((module) => ({
-    default: module.NewsSummaryPage,
-  })),
-);
 const NumericSummaryPage = lazy(() =>
   import('../pages/data-system/numeric-summary/NumericSummaryPage').then((module) => ({
     default: module.NumericSummaryPage,
@@ -67,10 +62,6 @@ const SyncTasksPage = lazy(() =>
     default: module.SyncTasksPage,
   })),
 );
-const StockPage = lazy(() =>
-  import('../pages/stock/StockPage').then((m) => ({ default: m.StockPage })),
-);
-
 export type StocksSearch = {
   keyword?: string;
   exchange?: string;
@@ -231,11 +222,7 @@ const dataSourcesRoute = createRoute({
   component: DataSourcesWorkbenchPage,
 });
 
-const newsSummaryRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/data-system/news-summary',
-  component: NewsSummaryPage,
-});
+;
 
 const numericSummaryRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -290,11 +277,7 @@ const syncTasksRoute = createRoute({
   component: SyncTasksPage,
 });
 
-const stockRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/stock/$code',
-  component: StockPage,
-});
+;
 
 const newsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -316,7 +299,6 @@ const notFoundRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   dashboardRoute,
-  stockRoute,
   newsRoute,
   notFoundRoute,
   overviewRoute,
@@ -325,7 +307,6 @@ const routeTree = rootRoute.addChildren([
   stocksRoute,
   stockDetailRoute,
   dataSourcesRoute,
-  newsSummaryRoute,
   numericSummaryRoute,
   databaseRoute,
   syncTasksRoute,

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from '@tanstack/react-router';
 import { Button, Card, Checkbox, Divider, InputNumber, Popover, Segmented, Space, Spin, Typography } from 'antd';
 import { ExpandOutlined, SettingOutlined } from '@ant-design/icons';
 
@@ -34,7 +33,7 @@ import {
   type KDJSettings,
   type MACDSettings,
   type RSISettings,
-} from './klineIndicators';
+} from '../../pages/stock/klineIndicators';
 
 const LOWER_PANE_INDEX = 1;
 
@@ -604,10 +603,4 @@ export function StockKlineChart({
       </Card>
     </div>
   );
-}
-
-export function StockPage() {
-  const { code } = useParams({ from: '/stock/$code' });
-
-  return <StockKlineChart code={code} />;
 }

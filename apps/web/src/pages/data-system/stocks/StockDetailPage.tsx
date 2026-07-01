@@ -19,7 +19,7 @@ import {
 } from '../../../features/stocks/api';
 import type { StockDailyCoverage, StockDailyIngestBatch, StockDailyQuality } from '../../../features/stocks/types';
 import { StatusTag } from '../../../shared/components/StatusTag';
-import { StockKlineChart } from '../../stock/StockPage';
+import { StockKlineChart } from '../../../features/market/StockKlineChart';
 import {
   formatDate,
   formatDateTime,
