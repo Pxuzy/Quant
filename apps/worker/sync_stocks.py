@@ -56,7 +56,11 @@ def run_next_pending_sync(*, database_url: str | None = None) -> SyncTask | None
     configure_worker_database(database_url)
     db = SessionLocal()
     try:
-        task = SyncTaskRepository(db).get_next_pending_any_task(SUPPORTED_PENDING_TASK_TYPES)
+        repo = SyncTaskRepository(db)
+        recovered = repo.recover_stale_tasks()
+        if recovered:
+            print(f"Recovered {recovered} stale running task(s).", flush=True)
+        task = repo.get_next_pending_any_task(SUPPORTED_PENDING_TASK_TYPES)
         if task is None:
             return None
         task_id = task.id
@@ -70,8 +74,6 @@ def run_next_pending_sync(*, database_url: str | None = None) -> SyncTask | None
         return run_daily_bars_sync_task(task_id=task_id, database_url=database_url)
     if task_type == "daily_bars_market_repair":
         return run_market_daily_bars_repair_task(task_id=task_id, database_url=database_url)
-    if task_type == "daily_bars_raw_replay":
-        return run_raw_daily_bars_replay_task(task_id=task_id, database_url=database_url)
     if task_type == "calendars":
         return run_calendar_sync_task(task_id=task_id, database_url=database_url)
     raise ValueError(f"Unsupported pending sync task type: {task_type}")

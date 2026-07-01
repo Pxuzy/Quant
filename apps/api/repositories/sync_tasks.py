@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -154,6 +153,29 @@ class SyncTaskRepository:
         task.error_message = message
         task.finished_at = datetime.now(timezone.utc)
         self.db.flush()
+
+    def recover_stale_tasks(self, timeout_minutes: int = 30) -> int:
+        """将运行超过 timeout_minutes 且仍为 running 状态的任务重置为 pending。
+
+        用于 worker 崩溃恢复。返回恢复的任务数。
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)
+        stale = list(
+            self.db.scalars(
+                select(SyncTask)
+                .where(SyncTask.status == "running", SyncTask.started_at < cutoff)
+                .limit(50)
+            ).all()
+        )
+        if not stale:
+            return 0
+        for task in stale:
+            task.status = "pending"
+            task.progress = 0
+            task.error_message = f"Auto-recovered from stale running state (started at {task.started_at})"
+        self.db.flush()
+        self.db.commit()
+        return len(stale)
 
     def add_log(self, task: SyncTask, *, level: str, message: str, payload: dict | None = None) -> SyncTaskLog:
         log = SyncTaskLog(task_id=task.id, level=level, message=message, payload_json=payload)
