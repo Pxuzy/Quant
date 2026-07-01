@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from apps.api.core.fastapi_compat import apply_starlette_router_compat
 
 apply_starlette_router_compat()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from apps.api.core.config import get_settings
 from apps.api.db.session import init_db
@@ -17,13 +21,16 @@ from apps.api.routers import (
     health,
     market,
     market_data,
-    mcp_data,
     research_data,
     stocks,
     sync_tasks,
     trading_calendars,
     watchlist,
 )
+
+# 前端 dist 路径
+FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "apps" / "web" / "dist"
+INDEX_HTML = FRONTEND_DIST / "index.html"
 
 
 def create_app() -> FastAPI:
@@ -40,7 +47,6 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(market.router)
-    app.include_router(mcp_data.router)
     app.include_router(database.router)
     app.include_router(data_quality.router)
     app.include_router(data_sources.router)
@@ -51,6 +57,23 @@ def create_app() -> FastAPI:
     app.include_router(sync_tasks.router)
     app.include_router(trading_calendars.router)
     app.include_router(watchlist.router)
+
+    # 挂载前端静态资源（JS/CSS/图片）
+    if FRONTEND_DIST.exists():
+        app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+
+        @app.get("/", include_in_schema=False)
+        async def serve_root():
+            return FileResponse(str(INDEX_HTML))
+
+        # SPA fallback: 所有非 API 路径都返回 index.html
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_spa(full_path: str):
+            if full_path.startswith("api/") or full_path.startswith("health"):
+                from fastapi.responses import JSONResponse
+                return JSONResponse({"detail": "Not Found"}, status_code=404)
+            return FileResponse(str(INDEX_HTML))
+
     return app
 
 

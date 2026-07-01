@@ -374,19 +374,10 @@ def test_data_source_catalog_lists_free_mcp_candidates_without_registering_them(
 
     assert response.status_code == 200
     payload = response.json()
-    codes = {item["code"] for item in payload}
-    assert codes == {"stock_mcp", "tsrs_mcp_server", "mcp_aktools", "cn_financial_mcp"}
+    assert payload == []  # MCP catalog was removed — no candidates
 
-    mcp_aktools = next(item for item in payload if item["code"] == "mcp_aktools")
-    assert mcp_aktools["mcp_role"] == "adapter_layer"
-    assert mcp_aktools["source_kind"] == "community_mcp"
-    assert mcp_aktools["integration_status"] == "research_only"
-    assert mcp_aktools["authorization_required"] is False
-    assert "akshare_public_data" in mcp_aktools["capabilities"]
-
-    cn_financial_mcp = next(item for item in payload if item["code"] == "cn_financial_mcp")
-    assert "industry_data" in cn_financial_mcp["capabilities"]
-    assert "research only" in cn_financial_mcp["production_note"].lower()
+    list_response = client.get("/api/data-sources")
+    assert list_response.status_code == 200
 
     list_response = client.get("/api/data-sources")
     assert list_response.status_code == 200
