@@ -35,6 +35,11 @@ tmp-debug-lake/
 screenshots/
 outputs/
 quant_frontend.png
+
+# AI agent artifacts
+.codebase-memory/
+.cortex/
+.reasonix/
 *.sqlite3
 *.parquet
 storage/

@@ -194,3 +194,25 @@ class StockRepository:
                 updated += 1
         self.db.flush()
         return updated
+
+    def update_data_freshness(
+        self,
+        *,
+        symbol: str,
+        exchange: str | None = None,
+        market: str = "A_SHARE",
+        latest_data_date,
+        data_completeness: float | None = None,
+    ) -> None:
+        """更新股票的最新数据日期和完整度。"""
+        conditions = [Stock.symbol == symbol.strip(), Stock.market == market.strip().upper()]
+        if exchange:
+            conditions.append(Stock.exchange == exchange.strip().upper())
+        stock = self.db.scalar(select(Stock).where(*conditions))
+        if stock is not None:
+            if latest_data_date is not None:
+                if stock.latest_data_date is None or latest_data_date > stock.latest_data_date:
+                    stock.latest_data_date = latest_data_date
+            if data_completeness is not None:
+                stock.data_completeness = data_completeness
+            self.db.flush()

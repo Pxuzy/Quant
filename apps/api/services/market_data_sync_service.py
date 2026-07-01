@@ -53,6 +53,7 @@ class MarketDataSyncService:
             ingest_batch_repo=self.ingest_batch_repo,
             dataset_repo=self.dataset_repo,
             daily_bar_repo=self.daily_bar_repo,
+            stock_repo=self.stock_repo,
             task_adjust_type=self._task_adjust_type,
         )
         self.market_repair_planner = MarketRepairPlanner(
@@ -811,6 +812,14 @@ class MarketDataSyncService:
                     )
                     records_read += len(raw_records)
                     records_written += written
+                    # 更新股票最新数据日期
+                    try:
+                        latest = self.daily_bar_repo.latest_trade_date(market=market_name)
+                        if latest is not None:
+                            self.stock_repo.update_data_freshness(
+                                symbol=symbol_item.symbol, market=market_name, latest_data_date=latest)
+                    except Exception:
+                        pass
                 except Exception as exc:
                     symbol_errors.append(f"{symbol_item.symbol}(write): {exc}")
                     self.task_repo.add_log(task, level="warning", message="Market repair symbol failed.",
