@@ -1,5 +1,5 @@
 import type { CandlestickData, HistogramData, LineData, Time } from 'lightweight-charts';
-import type { KLine } from '../../features/market/api';
+import type { KLine } from './api';
 
 export const UP_COLOR = '#d9363e';
 export const DOWN_COLOR = '#009966';

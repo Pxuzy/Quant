@@ -69,7 +69,7 @@ export function previewDailyBarsMarketRepair(
 export function useDailyBarsQuery(params: DailyBarsListParams) {
   return useQuery({
     queryKey: marketDataQueryKeys.dailyBars(params),
-    queryFn: ({ signal }) => fetchDailyBars(params, signal),
+    queryFn: () => fetchDailyBars(params),
     enabled: Boolean(params.symbol?.trim()),
     placeholderData: (previousData) => previousData,
   });

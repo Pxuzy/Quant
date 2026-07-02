@@ -11,6 +11,7 @@ import { Alert, App as AntApp, Button, Card, Col, Descriptions, Empty, Progress,
 import type { ColumnsType } from 'antd/es/table';
 import { useDailyBarsQuery, useSyncDailyBarsMutation } from '../../../features/market-data/api';
 import type { DailyBar } from '../../../features/market-data/types';
+import type { KLine } from '../../../features/market/api';
 import {
   useStockDailyCoverageQuery,
   useStockDailyIngestBatchesQuery,
@@ -31,7 +32,7 @@ import {
 import { formatAdjustType, formatExchange, formatMarket } from '../../../shared/domain/labels';
 import { fadeInUp, useGSAP } from '../../../shared/motion/gsapMotion';
 
-const DETAIL_DAILY_PAGE_SIZE = 120;
+const DETAIL_DAILY_PAGE_SIZE = 1000;
 const TABLE_PREVIEW_SIZE = 20;
 const V1_MARKET = 'A_SHARE';
 const DETAIL_KLINE_HISTORY_LIMIT = 30000;
@@ -671,6 +672,17 @@ function getLatestIngestBatch(batches: StockDailyIngestBatch[]) {
   return [...batches].sort((left, right) => batchSortTime(right) - batchSortTime(left))[0];
 }
 
+function dailyBarToKLine(row: DailyBar): KLine {
+  return {
+    date: row.trade_date,
+    open: row.open,
+    high: row.high,
+    low: row.low,
+    close: row.close,
+    volume: row.volume,
+  };
+}
+
 function getBatchLineageSearch(batch: StockDailyIngestBatch, fallback: { market: string; symbol: string }) {
   const batchId = getNumericBatchId(batch);
   return {
@@ -710,6 +722,7 @@ export function StockDetailPage() {
   });
   const rows = dailyBarsQuery.data?.items ?? [];
   const sortedRows = useMemo(() => sortDailyRows(rows), [rows]);
+  const klineRows = useMemo(() => sortedRows.map(dailyBarToKLine), [sortedRows]);
   const latestRows = useMemo(() => [...sortedRows].reverse().slice(0, TABLE_PREVIEW_SIZE), [sortedRows]);
   const indicators = useMemo(() => buildIndicatorSummary(sortedRows), [sortedRows]);
   const sampleQuality = useMemo(() => buildQualitySummary(sortedRows), [sortedRows]);
@@ -1071,6 +1084,8 @@ export function StockDetailPage() {
               embedded
               minHeight={520}
               historyLimit={DETAIL_KLINE_HISTORY_LIMIT}
+              data={klineRows}
+              dataLoading={dailyBarsQuery.isLoading}
             />
           </Card>
 

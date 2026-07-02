@@ -5,6 +5,7 @@ pydantic
 pytest
 httpx
 pandas
+cachetools
 pyarrow
 duckdb
 akshare

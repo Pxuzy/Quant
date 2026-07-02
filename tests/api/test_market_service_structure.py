@@ -134,6 +134,47 @@ def test_sector_rankings_returns_board_rows(monkeypatch):
 
     monkeypatch.setattr(api_market_service, "get_realtime_quotes", fake_quotes)
     monkeypatch.setattr(api_market_service, "_ensure_ths_industry_boards", lambda: [])
+    monkeypatch.setattr(api_market_service, "_get_ths_industry_sectors", lambda: ["能源金属", "半导体", "元件"])
+    monkeypatch.setattr(api_market_service, "_load_ths_map", lambda: {"sector_to_stocks": {}})
+    monkeypatch.setattr(
+        api_market_service,
+        "_db_industry_groups",
+        lambda: [
+            {
+                "name": "能源金属",
+                "category": "行业板块",
+                "change_pct": 3.5,
+                "up_count": 11,
+                "down_count": 2,
+                "stock_count": 13,
+                "amount": 1200000000,
+                "volume": 5500000,
+                "leader": {"name": "天齐锂业", "change_pct": 8.8},
+            },
+            {
+                "name": "半导体",
+                "category": "行业板块",
+                "change_pct": 2.1,
+                "up_count": 40,
+                "down_count": 8,
+                "stock_count": 48,
+                "amount": 2600000000,
+                "volume": 12000000,
+                "leader": {"name": "中芯国际", "change_pct": 6.2},
+            },
+            {
+                "name": "元件",
+                "category": "行业板块",
+                "change_pct": 1.7,
+                "up_count": 25,
+                "down_count": 10,
+                "stock_count": 35,
+                "amount": 1800000000,
+                "volume": 9000000,
+                "leader": {"name": "沪电股份", "change_pct": 5.5},
+            },
+        ],
+    )
 
     rows = legacy_market_service.get_sector_rankings(["行业板块", "概念板块", "指数板块"])
     by_name = {row["name"]: row for row in rows}

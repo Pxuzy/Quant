@@ -222,8 +222,6 @@ const dataSourcesRoute = createRoute({
   component: DataSourcesWorkbenchPage,
 });
 
-;
-
 const numericSummaryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/data-system/numeric-summary',
@@ -254,8 +252,6 @@ const databaseRoute = createRoute({
   component: DatabaseManagementPage,
 });
 
-// Legacy redirects keep backward compatibility.
-
 const syncTasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/data-system/sync-tasks',
@@ -276,8 +272,6 @@ const syncTasksRoute = createRoute({
   }),
   component: SyncTasksPage,
 });
-
-;
 
 const newsRoute = createRoute({
   getParentRoute: () => rootRoute,

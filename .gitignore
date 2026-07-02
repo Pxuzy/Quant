@@ -49,6 +49,7 @@ outputs/
 .codegraph/
 .pytest_cache/
 .playwright-cli/
+.playwright-mcp/
 .claude/
 .ai/
 data/
@@ -57,6 +58,7 @@ data/
 node_modules/
 apps/web/dist/
 apps/web/node_modules/
+*.tsbuildinfo
 
 # Logs
 *.log

@@ -470,7 +470,7 @@ export function DataSourcesPage() {
             <Button icon={<ReloadOutlined />} loading={query.isFetching} onClick={refresh}>刷新</Button>
           </Space>
         }
-        bodyStyle={{ padding: 0 }}
+        styles={{ body: { padding: 0 } }}
       >
         <Table<DataSource>
           rowKey="code"
@@ -504,7 +504,7 @@ export function DataSourcesPage() {
             </Typography.Text>
           </Space>
         }
-        bodyStyle={{ padding: 0 }}
+        styles={{ body: { padding: 0 } }}
       >
         <Table<DataSourceCatalogItem>
           rowKey="code"

@@ -15,7 +15,7 @@ import {
   CrosshairMode,
   LineStyle,
 } from 'lightweight-charts';
-import { fetchKline, type KLine } from '../../features/market/api';
+import { fetchKline, type KLine } from './api';
 import {
   DOWN_COLOR,
   DOWN_VOLUME_COLOR,
@@ -33,7 +33,7 @@ import {
   type KDJSettings,
   type MACDSettings,
   type RSISettings,
-} from '../../pages/stock/klineIndicators';
+} from './klineIndicators';
 
 const LOWER_PANE_INDEX = 1;
 
@@ -100,6 +100,8 @@ type StockKlineChartProps = {
   embedded?: boolean;
   minHeight?: number;
   historyLimit?: number;
+  data?: KLine[];
+  dataLoading?: boolean;
 };
 
 export function StockKlineChart({
@@ -108,6 +110,8 @@ export function StockKlineChart({
   embedded = false,
   minHeight = 520,
   historyLimit = KLINE_HISTORY_LIMIT,
+  data,
+  dataLoading = false,
 }: StockKlineChartProps) {
   const [period, setPeriod] = useState<PeriodValue>('day');
   const [loading, setLoading] = useState(true);
@@ -420,12 +424,22 @@ export function StockKlineChart({
   }, [attachTooltip, renderLowerIndicator, renderMainIndicators]);
 
   useEffect(() => {
+    if (data) return;
     const controller = new AbortController();
     void loadKline(controller.signal);
     return () => {
       controller.abort();
     };
-  }, [loadKline]);
+  }, [data, loadKline]);
+
+  useEffect(() => {
+    if (data) {
+      requestIdRef.current += 1;
+      shouldFitContentRef.current = true;
+      setKlineData(data);
+      setLoading(dataLoading);
+    }
+  }, [data, dataLoading]);
 
   useEffect(() => {
     renderChart(klineData);

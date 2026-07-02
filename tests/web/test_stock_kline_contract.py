@@ -6,16 +6,44 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
-def stock_page_source() -> str:
-    return (ROOT_DIR / "apps/web/src/pages/stock/StockPage.tsx").read_text(encoding="utf-8")
+def stock_kline_chart_source() -> str:
+    return (ROOT_DIR / "apps/web/src/features/market/StockKlineChart.tsx").read_text(encoding="utf-8")
 
 
 def stock_detail_page_source() -> str:
     return (ROOT_DIR / "apps/web/src/pages/data-system/stocks/StockDetailPage.tsx").read_text(encoding="utf-8")
 
 
+def market_data_api_source() -> str:
+    return (ROOT_DIR / "apps/web/src/features/market-data/api.ts").read_text(encoding="utf-8")
+
+
+def test_stock_detail_passes_daily_bars_to_kline_chart():
+    source = stock_detail_page_source()
+
+    assert "const klineRows = useMemo(() => sortedRows.map(dailyBarToKLine), [sortedRows]);" in source
+    assert "data={klineRows}" in source
+    assert "dataLoading={dailyBarsQuery.isLoading}" in source
+
+
+def test_stock_kline_uses_external_data_without_fetching_legacy_endpoint():
+    source = stock_kline_chart_source()
+
+    assert "data?: KLine[]" in source
+    assert "if (data) {" in source
+    assert "setKlineData(data);" in source
+    assert "if (data) return;" in source
+
+
+def test_daily_bars_query_does_not_abort_slow_chart_fetches():
+    source = market_data_api_source()
+
+    assert "queryFn: () => fetchDailyBars(params)" in source
+    assert "queryFn: ({ signal }) => fetchDailyBars(params, signal)" not in source
+
+
 def test_stock_kline_loads_full_history_without_range_state():
-    source = stock_page_source()
+    source = stock_kline_chart_source()
 
     assert "const KLINE_HISTORY_LIMIT = 10000;" in source
     assert "historyLimit = KLINE_HISTORY_LIMIT" in source
@@ -24,7 +52,7 @@ def test_stock_kline_loads_full_history_without_range_state():
 
 
 def test_stock_kline_omits_range_controls():
-    source = stock_page_source()
+    source = stock_kline_chart_source()
 
     assert "stock-kline-period-cards" in source
     assert "stock-kline-control-card" in source
@@ -47,7 +75,7 @@ def test_stock_detail_uses_normalized_symbol_for_stock_identity():
 
 
 def test_stock_kline_has_left_scale_and_dense_line_mode():
-    source = stock_page_source()
+    source = stock_kline_chart_source()
 
     assert "const LINE_MODE_VISIBLE_YEARS = 4;" in source
     assert "const CANDLE_MODE_VISIBLE_YEARS = 3.75;" in source

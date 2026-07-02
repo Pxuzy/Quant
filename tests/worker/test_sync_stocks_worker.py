@@ -12,6 +12,7 @@ from apps.api.models import Dataset, Stock, SyncTask, TradingCalendar
 from apps.api.repositories.sync_tasks import SyncTaskRepository
 from apps.worker.sync_stocks import (
     enqueue_calendar_sync,
+    enqueue_daily_bars_sync,
     enqueue_market_daily_bars_repair,
     enqueue_stock_sync,
     main,
@@ -266,7 +267,7 @@ def test_worker_cli_run_next_pending_claims_raw_daily_bars_replay(tmp_path, caps
     )
     assert raw_task == 0
 
-    pending_task = enqueue_raw_daily_bars_replay(
+    pending_task = enqueue_daily_bars_sync(
         source="baostock",
         market="A_SHARE",
         symbol="600519",
@@ -294,7 +295,7 @@ def test_worker_cli_run_next_pending_claims_raw_daily_bars_replay(tmp_path, caps
         reset_settings_cache()
 
     assert exit_code == 0
-    assert '"task_type": "daily_bars_raw_replay"' in captured.out
+    assert '"task_type": "daily_bars"' in captured.out
     assert '"status": "success"' in captured.out
     assert task is not None
     assert task.status == "success"

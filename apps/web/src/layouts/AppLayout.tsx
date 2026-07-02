@@ -46,7 +46,7 @@ export function AppLayout() {
 
   return (
     <Layout className="app-shell">
-      <Layout.Sider className="app-sider" width={224}>
+      <Layout.Sider className="app-sider" style={{ background: 'var(--app-surface)' }} width={224}>
         <div className="brand">
           <div className="brand-mark"><Icons.LineChartOutlined /></div>
           <div>
@@ -57,6 +57,7 @@ export function AppLayout() {
         <Menu
           mode="inline"
           selectedKeys={[current.key]}
+          theme={mode}
           onClick={({ key }) => {
             const target = NAV_ITEMS.find((i) => i.key === key);
             if (target) void navigate({ to: target.path });

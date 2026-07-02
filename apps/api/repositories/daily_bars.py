@@ -90,47 +90,36 @@ class DailyBarRepository:
         page_size: int = 200,
         sort_order: str = "asc",
     ) -> tuple[list[dict], int]:
-        if self._can_query_with_duckdb():
-            try:
-                return self._list_daily_bars_duckdb(
-                    symbol=symbol,
-                    market=market,
-                    start_date=start_date,
-                    end_date=end_date,
-                    page=page,
-                    page_size=page_size,
-                    sort_order=sort_order,
-                )
-            except (duckdb.Error, duckdb.IOException):
-                pass
+        if symbol and market:
+            rows = self.symbol_daily_bars(symbol=symbol.strip(), market=market)
+            if start_date:
+                rows = [row for row in rows if isinstance(row.get("trade_date"), date) and row["trade_date"] >= start_date]
+            if end_date:
+                rows = [row for row in rows if isinstance(row.get("trade_date"), date) and row["trade_date"] <= end_date]
+            rows = sorted(rows, key=lambda row: _daily_bar_sort_key(row, sort_order=sort_order))
+            total = len(rows)
+            start = (page - 1) * page_size
+            end = start + page_size
+            return rows[start:end], total
 
+        result = self._try_duckdb("list_daily_bars", symbol=symbol, market=market, start_date=start_date, end_date=end_date, page=page, page_size=page_size, sort_order=sort_order)
+        if result is not None:
+            return result
         return self._list_daily_bars_pyarrow(
-            symbol=symbol,
-            market=market,
-            start_date=start_date,
-            end_date=end_date,
-            page=page,
-            page_size=page_size,
-            sort_order=sort_order,
+            symbol=symbol, market=market, start_date=start_date, end_date=end_date, page=page, page_size=page_size, sort_order=sort_order,
         )
 
     def count(self, *, market: str | None = None) -> int:
-        if self._can_query_with_duckdb():
-            try:
-                return self._count_duckdb(market=market)
-            except (duckdb.Error, duckdb.IOException):
-                pass
-
+        result = self._try_duckdb("count", market=market)
+        if result is not None:
+            return result
         _, total = self.list_daily_bars(market=market, page=1, page_size=1)
         return total
 
     def latest_trade_date(self, *, market: str | None = None) -> date | None:
-        if self._can_query_with_duckdb():
-            try:
-                return self._latest_trade_date_duckdb(market=market)
-            except (duckdb.Error, duckdb.IOException):
-                pass
-
+        result = self._try_duckdb("latest_trade_date", market=market)
+        if result is not None:
+            return result
         rows = self._read_partition_rows(market=market)
         if not rows:
             return None
@@ -141,21 +130,15 @@ class DailyBarRepository:
         if not normalized_symbols:
             return {}
 
-        if self._can_query_with_duckdb():
-            try:
-                return self._summarize_symbols_duckdb(symbols=normalized_symbols, market=market)
-            except (duckdb.Error, duckdb.IOException):
-                pass
-
+        result = self._try_duckdb("summarize_symbols", symbols=normalized_symbols, market=market)
+        if result is not None:
+            return result
         return self._summarize_symbols_pyarrow(symbols=normalized_symbols, market=market)
 
     def market_trade_dates(self, *, market: str) -> set[date]:
-        if self._can_query_with_duckdb():
-            try:
-                return self._market_trade_dates_duckdb(market=market)
-            except (duckdb.Error, duckdb.IOException):
-                pass
-
+        result = self._try_duckdb("market_trade_dates", market=market)
+        if result is not None:
+            return result
         rows = self._read_partition_rows(market=market)
         return {
             row["trade_date"]
@@ -164,12 +147,9 @@ class DailyBarRepository:
         }
 
     def symbol_trade_dates(self, *, symbol: str, market: str) -> set[date]:
-        if self._can_query_with_duckdb():
-            try:
-                return self._symbol_trade_dates_duckdb(symbol=symbol, market=market)
-            except (duckdb.Error, duckdb.IOException):
-                pass
-
+        result = self._try_duckdb("symbol_trade_dates", symbol=symbol, market=market)
+        if result is not None:
+            return result
         rows = self._read_partition_rows(symbol=symbol, market=market)
         return {
             row["trade_date"]
@@ -178,12 +158,9 @@ class DailyBarRepository:
         }
 
     def symbol_daily_bars(self, *, symbol: str, market: str) -> list[dict]:
-        if self._can_query_with_duckdb():
-            try:
-                return self._symbol_daily_bars_duckdb(symbol=symbol, market=market)
-            except (duckdb.Error, duckdb.IOException):
-                pass
-
+        result = self._try_duckdb("symbol_daily_bars", symbol=symbol, market=market)
+        if result is not None:
+            return result
         rows = self._read_partition_rows(symbol=symbol, market=market)
         return sorted(
             [row for row in rows if isinstance(row.get("trade_date"), date)],
@@ -192,12 +169,9 @@ class DailyBarRepository:
 
     def market_symbol_trade_date_pairs(self, *, market: str, adjust_type: str | None = None) -> set[tuple[str, date]]:
         adjust_type_code = normalize_daily_bar_adjust_type(adjust_type) if adjust_type is not None else None
-        if self._can_query_with_duckdb():
-            try:
-                return self._market_symbol_trade_date_pairs_duckdb(market=market, adjust_type=adjust_type_code)
-            except (duckdb.Error, duckdb.IOException):
-                pass
-
+        result = self._try_duckdb("market_symbol_trade_date_pairs", market=market, adjust_type=adjust_type_code)
+        if result is not None:
+            return result
         rows = self._read_partition_rows(market=market)
         return {
             (str(row["symbol"]), row["trade_date"])
@@ -433,6 +407,33 @@ class DailyBarRepository:
                 key=lambda row: (row["trade_date"], row.get("adjust_type") or "none"),
             )
 
+        settings = get_settings()
+        default_lake_root = Path(settings.data_lake_dir)
+        default_dataset_dir = default_lake_root / "silver" / "daily_bars"
+        uses_default_dataset = (
+            self.lake_root.resolve() == default_lake_root.resolve()
+            and self.dataset_dir.resolve() == default_dataset_dir.resolve()
+        )
+
+        if uses_default_dataset:
+            try:
+                from apps.api.db.duckdb_store import get_duckdb
+
+                store = get_duckdb()
+                rows = store.execute(
+                    f"""
+                    select {", ".join(DAILY_BAR_COLUMNS)}
+                    from daily_bars
+                    where market = ? and symbol = ?
+                    order by trade_date asc, adjust_type asc
+                    """,
+                    [market, symbol],
+                ).fetchall()
+                if rows:
+                    return [_normalize_row(dict(zip(DAILY_BAR_COLUMNS, row))) for row in rows]
+            except duckdb.Error:
+                pass
+
         con = _duckdb_connect_with_timeout()
         try:
             rows = con.execute(
@@ -524,6 +525,15 @@ class DailyBarRepository:
 
     def _can_query_with_duckdb(self) -> bool:
         return duckdb is not None and any(self.dataset_dir.glob("market=*/trade_date=*/part-*.parquet"))
+
+    def _try_duckdb(self, method_name: str, *args, **kwargs):
+        """Try DuckDB path; returns None on failure or if DuckDB unavailable."""
+        if not self._can_query_with_duckdb():
+            return None
+        try:
+            return getattr(self, f"_{method_name}_duckdb")(*args, **kwargs)
+        except (duckdb.Error, duckdb.IOException):
+            return None
 
     def _duckdb_scan(self) -> str:
         return "read_parquet(?, hive_partitioning=true)"

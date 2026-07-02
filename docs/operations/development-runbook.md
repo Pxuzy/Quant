@@ -53,6 +53,14 @@ docker compose up -d postgres
 - API: `http://127.0.0.1:8021/health`
 - Web: `http://127.0.0.1:5175/data-system/overview`
 
+如果 Windows 拒绝绑定默认 Web 端口（例如 `5175` 返回 `WinError 10013`），或者 `apps/web/.env.local` 指向了备用 API 端口，可以显式指定端口。当前本机验证通过的组合是：
+
+```powershell
+.\scripts\quant-dev.cmd restart -ApiPort 8023 -WebPort 5176 -ForcePortOwner
+.\scripts\quant-dev.cmd status -ApiPort 8023 -WebPort 5176
+.\scripts\quant-dev.cmd smoke -ApiPort 8023 -WebPort 5176
+```
+
 `status` / `smoke` 不只检查 Web HTML 200，还会检查 Vite 入口模块 `/src/main.tsx`。如果入口模块返回 Vite error overlay，脚本会把 Web 判定为未就绪，避免“页面 200 但 React 根节点为空”的白屏假阳性。
 
 常用管理命令：

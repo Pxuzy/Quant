@@ -3,9 +3,24 @@
 }
 
 :root {
-  --app-bg: #f7f9fc;
-  --app-bg-radial: linear-gradient(180deg, #fbfcfe 0%, #f7f9fc 100%);
+  --app-bg: #f4f7fb;
+  --app-bg-radial: linear-gradient(180deg, #fbfcfe 0%, #f4f7fb 100%);
+  --app-shell-grid: repeating-linear-gradient(
+      0deg,
+      rgba(23, 32, 51, 0.035) 0,
+      rgba(23, 32, 51, 0.035) 1px,
+      transparent 1px,
+      transparent 34px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(23, 32, 51, 0.025) 0,
+      rgba(23, 32, 51, 0.025) 1px,
+      transparent 1px,
+      transparent 34px
+    );
   --app-surface: #ffffff;
+  --app-surface-muted: #f0f4f8;
   --app-surface-soft: #f8fafc;
   --app-surface-raised: #ffffff;
   --app-border: #dde5ee;
@@ -30,18 +45,33 @@
   --app-chart-up: #c24132;
   --app-chart-down: #1f8f59;
   --app-blue: #2f6f9f;
+  --app-focus-ring: 0 0 0 3px rgba(35, 105, 138, 0.18);
+  --app-header-height: 70px;
 }
 
 :root[data-quant-theme='dark'] {
-  --app-bg: #071018;
-  --app-bg-radial: radial-gradient(circle at 20% 0%, rgba(47, 140, 255, 0.14), transparent 34%),
-    radial-gradient(circle at 92% 12%, rgba(43, 217, 130, 0.08), transparent 26%),
-    linear-gradient(180deg, #071018 0%, #08131b 52%, #09141d 100%);
-  --app-surface: #0b1720;
-  --app-surface-soft: #0e1c27;
-  --app-surface-raised: #101f2a;
-  --app-border: #223544;
-  --app-border-strong: #2d4354;
+  --app-bg: #080d12;
+  --app-bg-radial: linear-gradient(180deg, #0b1219 0%, #080d12 46%, #0a1118 100%);
+  --app-shell-grid: repeating-linear-gradient(
+      0deg,
+      rgba(220, 231, 245, 0.035) 0,
+      rgba(220, 231, 245, 0.035) 1px,
+      transparent 1px,
+      transparent 34px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(220, 231, 245, 0.026) 0,
+      rgba(220, 231, 245, 0.026) 1px,
+      transparent 1px,
+      transparent 34px
+    );
+  --app-surface: #101923;
+  --app-surface-muted: #0d161f;
+  --app-surface-soft: #121d27;
+  --app-surface-raised: #152231;
+  --app-border: #243241;
+  --app-border-strong: #33475a;
   --app-text: #dce7f5;
   --app-text-strong: #f3f8ff;
   --app-muted: #93a4b7;
@@ -60,6 +90,7 @@
   --app-chart-up: #ff5148;
   --app-chart-down: #2bd982;
   --app-blue: #2f8cff;
+  --app-focus-ring: 0 0 0 3px rgba(76, 156, 255, 0.24);
 }
 
 html,
@@ -72,25 +103,46 @@ body,
 body {
   background: var(--app-bg);
   color: var(--app-text);
+  font-family: "DIN Alternate", "Bahnschrift", "SF Pro Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricprecision;
 }
 
 .app-shell {
   min-height: 100vh;
-  background: var(--app-bg-radial);
+  background: var(--app-shell-grid), var(--app-bg-radial);
+}
+
+.app-shell :where(button, a, input, textarea, select):focus-visible {
+  outline: 0;
+  box-shadow: var(--app-focus-ring);
 }
 
 .app-sider {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
   border-right: 1px solid var(--app-border);
-  box-shadow: 1px 0 0 rgba(15, 23, 42, 0.08);
+  background-color: var(--app-surface) !important;
+  box-shadow: 1px 0 0 rgba(15, 23, 42, 0.06);
+}
+
+.app-sider .ant-menu {
+  padding: 8px 0;
+  border-inline-end: 0;
+  background: transparent;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 78px;
+  height: var(--app-header-height);
   padding: 0 18px;
   border-bottom: 1px solid var(--app-border);
+  background: linear-gradient(180deg, var(--app-surface) 0%, color-mix(in srgb, var(--app-surface), var(--app-bg) 18%) 100%);
 }
 
 .brand-mark {
@@ -102,7 +154,7 @@ body {
   border-radius: 8px;
   background: linear-gradient(135deg, var(--app-primary) 0%, #55b7ff 100%);
   color: #ffffff;
-  box-shadow: 0 0 20px color-mix(in srgb, var(--app-primary), transparent 72%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 0 10px 20px color-mix(in srgb, var(--app-primary), transparent 78%);
   font-weight: 800;
   font-size: 20px;
 }
@@ -128,11 +180,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 78px;
+  height: var(--app-header-height);
   line-height: 1.2;
   padding: 0 22px 0 20px;
   border-bottom: 1px solid var(--app-border);
-  background: color-mix(in srgb, var(--app-bg), transparent 6%);
+  background: color-mix(in srgb, var(--app-surface), transparent 4%);
+  backdrop-filter: blur(12px);
 }
 
 .header-left,
@@ -145,7 +198,8 @@ body {
   padding: 6px 10px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: var(--app-surface);
+  background: var(--app-surface-soft);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset;
 }
 
 .header-divider {
@@ -167,7 +221,7 @@ body {
 
 .app-content {
   overflow-x: auto;
-  padding: 18px;
+  padding: 16px 18px 20px;
   background: transparent;
 }
 
@@ -176,10 +230,10 @@ body {
   min-width: 1120px;
   min-height: 360px;
   place-items: center;
-  border: 1px dashed #d8dee9;
+  border: 1px dashed var(--app-border);
   border-radius: 8px;
-  color: #667085;
-  background: #fbfdff;
+  color: var(--app-muted);
+  background: var(--app-surface);
 }
 
 .workbench {
@@ -204,7 +258,7 @@ body {
 .summary-row .ant-card,
 .table-card,
 .tasks-panel {
-  border: 1px solid #e5eaf2;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
@@ -214,7 +268,7 @@ body {
   gap: 8px 0;
   margin-bottom: 16px;
   padding: 14px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   background: #fafcff;
 }
@@ -336,7 +390,7 @@ body {
 }
 
 .data-source-table-card {
-  border: 1px solid #e5eaf2;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   box-shadow: var(--app-panel-glow);
 }
@@ -411,7 +465,7 @@ body {
 
 .source-card {
   overflow: hidden;
-  border: 1px solid #e5eaf2;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   background: #ffffff;
   box-shadow: none;
@@ -421,7 +475,7 @@ body {
   align-items: flex-start;
   min-height: 0;
   padding: 14px 16px;
-  border-bottom-color: #edf0f5;
+  border-bottom-color: var(--app-border);
 }
 
 .source-card .ant-card-head-title,
@@ -534,18 +588,18 @@ body {
   gap: 5px;
   align-content: start;
   padding: 10px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .source-smoke-history-panel {
   display: grid;
   gap: 8px;
   padding: 12px 16px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .source-smoke-history-row {
@@ -555,7 +609,7 @@ body {
   align-items: center;
   min-width: 0;
   padding: 10px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 6px;
   background: #ffffff;
 }
@@ -585,9 +639,9 @@ body {
   display: grid;
   gap: 8px;
   padding: 12px 16px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .source-smoke-detail-grid {
@@ -601,7 +655,7 @@ body {
   min-width: 0;
   gap: 4px;
   padding: 10px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 6px;
   background: #ffffff;
 }
@@ -653,7 +707,7 @@ body {
   min-width: 0;
   gap: 2px;
   padding: 8px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 6px;
   background: #ffffff;
 }
@@ -664,10 +718,10 @@ body {
   white-space: nowrap;
 }
 
-/* 总控台、数值汇总、数据源管理共享同一套浅色后台密度。 */
+/* 鎬绘帶鍙般€佹暟鍊兼眹鎬汇€佹暟鎹簮绠＄悊鍏变韩鍚屼竴濂楁祬鑹插悗鍙板瘑搴︺€?*/
 
 .quality-table-card {
-  border: 1px solid #e5eaf2;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   box-shadow: var(--app-panel-glow);
 }
@@ -677,7 +731,7 @@ body {
 }
 
 .quality-table-card .ant-card-head {
-  border-bottom-color: #edf0f5;
+  border-bottom-color: var(--app-border);
 }
 
 .quality-table-card .ant-table-cell {
@@ -863,7 +917,7 @@ body {
   font-weight: 700;
 }
 
-/* 总控台顶部的命令区，负责把“该先做什么”说清楚。 */
+/* 鎬绘帶鍙伴《閮ㄧ殑鍛戒护鍖猴紝璐熻矗鎶娾€滆鍏堝仛浠€涔堚€濊娓呮銆?*/
 .overview-panel-actions {
   justify-content: flex-end;
 }
@@ -937,7 +991,7 @@ body {
   box-shadow: var(--app-panel-glow);
 }
 
-/* 详细诊断区的标题和 Tabs，默认只把最关键的排在前面。 */
+/* 璇︾粏璇婃柇鍖虹殑鏍囬鍜?Tabs锛岄粯璁ゅ彧鎶婃渶鍏抽敭鐨勬帓鍦ㄥ墠闈€?*/
 .overview-diagnostics-heading {
   display: flex;
   align-items: flex-start;
@@ -993,7 +1047,7 @@ body {
   padding-inline: 0 !important;
 }
 
-/* 状态条和首页核心指标，强调扫读而不是堆信息。 */
+/* 鐘舵€佹潯鍜岄椤垫牳蹇冩寚鏍囷紝寮鸿皟鎵鑰屼笉鏄爢淇℃伅銆?*/
 .overview-secondary-grid > .ant-col {
   flex: 1 1 260px !important;
   max-width: none !important;
@@ -1037,14 +1091,14 @@ body {
 
 .overview-panel {
   height: 100%;
-  border: 1px solid #e5eaf2;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
 .overview-panel .ant-card-head {
   min-height: 48px;
-  border-bottom-color: #edf0f5;
+  border-bottom-color: var(--app-border);
 }
 
 .overview-panel .ant-card-head-title {
@@ -1079,9 +1133,9 @@ body {
 }
 
 .overview-stock-table-row {
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 6px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .overview-source-list .ant-list-item,
@@ -1114,9 +1168,9 @@ body {
 .overview-catalog-strip > div {
   min-width: 0;
   padding: 12px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 6px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .overview-catalog-strip h4,
@@ -1143,9 +1197,9 @@ body {
   align-items: center;
   gap: 16px;
   padding: 12px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 6px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .overview-quality-list .ant-list-item {
@@ -1176,9 +1230,9 @@ body {
   gap: 8px;
   align-content: start;
   padding: 14px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .overview-lineage-grid h4 {
@@ -1190,7 +1244,7 @@ body {
   min-width: 0;
 }
 
-/* 首页的四个状态条，在移动端收成一列。 */
+/* 棣栭〉鐨勫洓涓姸鎬佹潯锛屽湪绉诲姩绔敹鎴愪竴鍒椼€?*/
 .overview-provider-mini-list {
   display: grid;
   gap: 8px;
@@ -1201,7 +1255,7 @@ body {
   gap: 3px;
   min-width: 0;
   padding-bottom: 8px;
-  border-bottom: 1px solid #edf0f5;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .overview-provider-mini-list > div:last-child {
@@ -1224,16 +1278,16 @@ body {
   gap: 12px;
   align-items: center;
   padding: 12px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .overview-storage-list .ant-btn {
   justify-self: flex-start;
 }
 
-/* 总控台保持桌面后台布局；窄窗口通过外层横向滚动查看完整工作区。 */
+/* 鎬绘帶鍙颁繚鎸佹闈㈠悗鍙板竷灞€锛涚獎绐楀彛閫氳繃澶栧眰妯悜婊氬姩鏌ョ湅瀹屾暣宸ヤ綔鍖恒€?*/
 
 .database-page {
   max-width: 1440px;
@@ -1267,7 +1321,7 @@ body {
 .database-status-row .ant-card,
 .database-integration-kpi {
   height: 100%;
-  border: 1px solid #e5eaf2;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
 }
@@ -1291,14 +1345,14 @@ body {
 
 .database-panel {
   margin-bottom: 12px;
-  border: 1px solid #e5eaf2;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
 }
 
 .database-panel .ant-card-head {
   min-height: 44px;
-  border-bottom-color: #edf0f5;
+  border-bottom-color: var(--app-border);
 }
 
 .database-panel .ant-card-head-title {
@@ -1326,9 +1380,9 @@ body {
   align-items: center;
   min-width: 0;
   padding: 12px 14px;
-  border: 1px solid #e6edf7;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .database-closed-loop-main h4 {
@@ -1345,9 +1399,9 @@ body {
 .database-closed-loop-metrics > div {
   min-width: 0;
   padding: 11px 12px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .database-closed-loop-metrics h4 {
@@ -1364,9 +1418,9 @@ body {
   align-items: center;
   margin: 0 0 12px;
   padding: 6px;
-  border: 1px solid #e8edf5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .database-section-nav a {
@@ -1401,9 +1455,9 @@ body {
 .database-calendar-summary-grid > div {
   min-width: 0;
   padding: 12px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .database-calendar-summary-grid h5 {
@@ -1429,9 +1483,9 @@ body {
   min-width: 0;
   gap: 4px;
   padding: 10px 12px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .database-storage-map code {
@@ -1450,9 +1504,9 @@ body {
 .database-storage-summary-grid > div {
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .database-storage-summary-grid h4 {
@@ -1525,9 +1579,9 @@ body {
 .database-coverage-item {
   min-width: 0;
   padding: 14px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .database-coverage-item h4 {
@@ -1549,9 +1603,9 @@ body {
   min-width: 0;
   gap: 10px;
   padding: 14px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .database-freshness-head {
@@ -1784,9 +1838,9 @@ body {
   display: grid;
   gap: 10px;
   padding: 12px;
-  border: 1px solid #e5edf8;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .market-repair-preview-empty {
@@ -1810,7 +1864,7 @@ body {
 .market-repair-preview-stats .ant-statistic {
   min-width: 0;
   padding: 8px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   background: #fff;
 }
@@ -1838,9 +1892,9 @@ body {
   gap: 10px;
   align-content: start;
   padding: 14px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .sync-schedule-heading {
@@ -1858,7 +1912,7 @@ body {
 
 .sync-schedule-config {
   margin-top: 2px;
-  border-top: 1px solid #edf0f5;
+  border-top: 1px solid var(--app-border);
 }
 
 .sync-schedule-config .ant-collapse-header {
@@ -1915,9 +1969,9 @@ body {
   min-width: 0;
   gap: 4px;
   padding: 12px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .task-execution-summary-grid .ant-typography {
@@ -2091,14 +2145,14 @@ body {
 
 .stock-detail-panel {
   margin-bottom: 16px;
-  border: 1px solid #e5eaf2;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
 .stock-detail-panel .ant-card-head {
   min-height: 48px;
-  border-bottom-color: #edf0f5;
+  border-bottom-color: var(--app-border);
 }
 
 .stock-detail-panel .ant-card-head-title {
@@ -2125,9 +2179,9 @@ body {
   min-width: 0;
   gap: 4px;
   padding: 12px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .stock-terminal-side-rail .stock-lineage-grid > div {
@@ -2256,7 +2310,7 @@ body {
   gap: 16px;
   min-height: 34px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #edf0f5;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .stock-detail-indicators > div:last-child {
@@ -2283,9 +2337,9 @@ body {
   justify-content: space-between;
   gap: 14px;
   padding: 12px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background: #fbfdff;
+  background: var(--app-surface);
 }
 
 .stock-quality-decision {
@@ -2318,7 +2372,7 @@ body {
   display: grid;
   gap: 8px;
   padding-top: 10px;
-  border-top: 1px solid #edf0f5;
+  border-top: 1px solid var(--app-border);
 }
 
 .stock-quality-backfill {
@@ -2328,7 +2382,7 @@ body {
   gap: 12px;
   min-height: 38px;
   padding: 8px 10px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   background: #ffffff;
 }
@@ -2343,7 +2397,7 @@ body {
   gap: 10px;
   align-items: start;
   padding-bottom: 8px;
-  border-bottom: 1px solid #edf0f5;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .stock-data-profile > div:last-of-type {
@@ -2359,7 +2413,7 @@ body {
   gap: 4px;
   min-width: 0;
   padding: 10px;
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   background: #ffffff;
 }
@@ -2645,11 +2699,11 @@ body {
 
 :root[data-quant-theme='light'] .app-shell,
 .app-shell {
-  background: var(--app-bg-radial);
+  background: var(--app-shell-grid), var(--app-bg-radial);
 }
 
 .app-sider {
-  background: #ffffff !important;
+  background: var(--app-surface) !important;
 }
 
 .brand {
@@ -3169,7 +3223,7 @@ body {
   padding: 8px 9px 10px;
 }
 
-/* Trader ticker: top horizontal index strip — flat, no gradient */
+/* Trader ticker: top horizontal index strip 鈥?flat, no gradient */
 .dashboard-ticker {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3279,7 +3333,7 @@ body {
   margin: 2px 0;
 }
 
-/* Restore card heads — keep antd default but compact */
+/* Restore card heads 鈥?keep antd default but compact */
 .dashboard-page .dashboard-panel > .ant-card-head {
   display: block;
 }
@@ -3684,6 +3738,110 @@ body {
   }
 }
 
+@media (max-width: 900px) {
+  .app-sider {
+    display: none;
+  }
+
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    gap: 10px;
+    height: 58px;
+    padding: 0 12px;
+  }
+
+  .header-left,
+  .header-right {
+    min-width: 0;
+  }
+
+  .header-sync-button,
+  .theme-toggle {
+    padding-inline: 10px;
+  }
+
+  .app-content {
+    overflow-x: hidden;
+    padding: 10px;
+  }
+
+  .route-loading,
+  .workbench {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .workbench-heading {
+    margin-bottom: 10px;
+  }
+
+  .workbench-heading .ant-space,
+  .sync-operation-intro,
+  .sync-console-runner-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sync-console-panel .ant-card-body,
+  .sync-operations-card .ant-card-body,
+  .sync-tracking-card .ant-card-body {
+    padding: 12px;
+  }
+
+  .sync-console-grid,
+  .sync-console-kpis,
+  .sync-console-task-strip,
+  .market-repair-preview-stats,
+  .task-execution-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sync-operation-mode {
+    max-width: none;
+  }
+
+  .sync-operation-form .ant-col {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+
+  .sync-operation-form .ant-btn,
+  .market-repair-actions,
+  .market-repair-actions .ant-btn {
+    width: 100%;
+  }
+
+  .sync-tracking-card .stock-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sync-tracking-card .stock-filters .ant-form-item,
+  .sync-tracking-card .stock-filters .filter-select,
+  .sync-tracking-card .stock-filters .filter-select-wide,
+  .sync-tracking-card .stock-filters .filter-keyword,
+  .sync-tracking-card .stock-filters .filter-actions,
+  .full-width-control {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .header-sync-button,
+  .theme-toggle {
+    width: 42px;
+    min-width: 42px;
+    padding-inline: 0;
+  }
+
+  .app-header .ant-btn > span:not(.ant-btn-icon) {
+    display: none;
+  }
+}
+
 /* ====== TradingView-style News Page ====== */
 .tv-news-page {
   display: flex;
@@ -3763,7 +3921,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Category tabs — TV style */
+/* Category tabs 鈥?TV style */
 .tv-news-tabs {
   display: flex;
   gap: 0;
@@ -3802,7 +3960,7 @@ body {
   border-radius: 1px;
 }
 
-/* News list — flat rows, TV style */
+/* News list 鈥?flat rows, TV style */
 .tv-news-list {
   display: flex;
   flex-direction: column;
@@ -3846,7 +4004,7 @@ body {
   color: var(--app-muted);
 }
 
-/* Load more — TV "Keep reading" */
+/* Load more 鈥?TV "Keep reading" */
 .tv-news-more-wrap {
   display: flex;
   justify-content: center;
@@ -3986,7 +4144,7 @@ body {
   font-size: 11px;
 }
 
-/* TV change cell — background colored pill */
+/* TV change cell 鈥?background colored pill */
 .tv-change-cell {
   display: inline-block;
   padding: 1px 6px;
@@ -4013,7 +4171,7 @@ body {
   background: transparent;
 }
 
-/* Dashboard tools bar — merged status + actions */
+/* Dashboard tools bar 鈥?merged status + actions */
 .dashboard-tools-bar {
   display: flex;
   flex-direction: column;

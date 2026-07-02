@@ -145,3 +145,33 @@ def test_daily_bars_repository_reads_symbol_rows_with_adjust_types_via_duckdb(tm
     assert len(rows) == 2
     assert [row["adjust_type"] for row in rows] == ["none", "qfq"]
     assert {row["symbol"] for row in rows} == {"600519"}
+
+
+def test_list_daily_bars_reuses_symbol_fast_path_for_single_stock(tmp_path, monkeypatch):
+    repo = DailyBarRepository(lake_root=tmp_path / "lake")
+    calls: list[tuple[str, str]] = []
+
+    def symbol_rows(*, symbol: str, market: str):
+        calls.append((symbol, market))
+        return [
+            {"symbol": symbol, "market": market, "trade_date": date(2026, 6, 1), "adjust_type": "none"},
+            {"symbol": symbol, "market": market, "trade_date": date(2026, 6, 2), "adjust_type": "none"},
+        ]
+
+    def fail_duckdb_list(*args, **kwargs):
+        raise AssertionError("single-stock list should not run the generic count + page query")
+
+    monkeypatch.setattr(repo, "symbol_daily_bars", symbol_rows)
+    monkeypatch.setattr(repo, "_try_duckdb", fail_duckdb_list)
+
+    rows, total = repo.list_daily_bars(
+        symbol="600519",
+        market="A_SHARE",
+        page=1,
+        page_size=1,
+        sort_order="desc",
+    )
+
+    assert calls == [("600519", "A_SHARE")]
+    assert total == 2
+    assert [row["trade_date"] for row in rows] == [date(2026, 6, 2)]

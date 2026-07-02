@@ -75,6 +75,8 @@ Recommended root-level lifecycle commands:
 
 Open the workbench at `http://127.0.0.1:5175/data-system/overview`.
 
+If Windows refuses the default web port, use the explicit `-ApiPort` / `-WebPort` commands in [development-runbook.md](./docs/operations/development-runbook.md).
+
 The lifecycle smoke check verifies both the routed HTML page and the Vite entry module (`/src/main.tsx`), so a Vite module error is reported as Web not ready instead of a blank GUI.
 
 Foreground API and frontend commands are still available when you need to run each service manually:
