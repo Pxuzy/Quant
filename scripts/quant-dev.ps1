@@ -14,7 +14,7 @@ $ErrorActionPreference = "Stop"
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $apiDir = Join-Path $root "quant"
-$webDir = Join-Path $root "apps\web"
+$webDir = Join-Path $root "frontend"
 $storageDir = Join-Path $root "storage"
 $apiPython = Join-Path $apiDir ".venv\Scripts\python.exe"
 $apiScript = Join-Path $apiDir "scripts\run_api_server.py"

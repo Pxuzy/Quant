@@ -4,7 +4,7 @@ from datetime import date
 
 from sqlalchemy import select
 
-from apps.api.adapters.base import (
+from backend.app.adapters.base import (
     AdapterCapability,
     HealthCheckResult,
     NormalizedDailyBar,
@@ -13,10 +13,10 @@ from apps.api.adapters.base import (
     ProviderMetadata,
     StockDataSourceAdapter,
 )
-from apps.api.adapters.registry import AdapterRegistry
-from apps.api.db.session import SessionLocal
-from apps.api.models import Dataset, IngestBatch, TradingCalendar
-from apps.api.services.trading_calendar_service import TradingCalendarService
+from backend.app.adapters.registry import AdapterRegistry
+from backend.app.db.session import SessionLocal
+from backend.app.models import Dataset, IngestBatch, TradingCalendar
+from backend.app.services.trading_calendar_service import TradingCalendarService
 
 
 class FailingCalendarAdapter(StockDataSourceAdapter):

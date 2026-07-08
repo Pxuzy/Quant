@@ -36,7 +36,7 @@ def main():
     with open(symbols_file) as f:
         symbols = json.load(f)
 
-    from apps.api.adapters.baostock import _to_baostock_code, _result_set_to_records
+    from backend.app.adapters.baostock import _to_baostock_code, _result_set_to_records
     bs = importlib.import_module("baostock")
     bs.login()
 

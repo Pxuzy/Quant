@@ -7,15 +7,15 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def stock_kline_chart_source() -> str:
-    return (ROOT_DIR / "apps/web/src/features/market/StockKlineChart.tsx").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/features/market/StockKlineChart.tsx").read_text(encoding="utf-8")
 
 
 def stock_detail_page_source() -> str:
-    return (ROOT_DIR / "apps/web/src/pages/data-system/stocks/StockDetailPage.tsx").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/pages/data-system/stocks/StockDetailPage.tsx").read_text(encoding="utf-8")
 
 
 def market_data_api_source() -> str:
-    return (ROOT_DIR / "apps/web/src/features/market-data/api.ts").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/features/market-data/api.ts").read_text(encoding="utf-8")
 
 
 def test_stock_detail_passes_daily_bars_to_kline_chart():

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from apps.api.adapters.base import NormalizedDailyBar
-from apps.api.core.config import get_settings
-from apps.api.db.session import SessionLocal
-from apps.api.models import Dataset, IngestBatch, Stock, SyncTask, TradingCalendar
-from apps.api.repositories.daily_bars import DailyBarRepository
-from apps.api.services.database_integration_service import DatabaseIntegrationService, invalidate_coverage_cache
+from backend.app.adapters.base import NormalizedDailyBar
+from backend.app.core.config import get_settings
+from backend.app.db.session import SessionLocal
+from backend.app.models import Dataset, IngestBatch, Stock, SyncTask, TradingCalendar
+from backend.app.repositories.daily_bars import DailyBarRepository
+from backend.app.services.database_integration_service import DatabaseIntegrationService, invalidate_coverage_cache
 
 
 def test_database_integration_overview_returns_empty_state(client):

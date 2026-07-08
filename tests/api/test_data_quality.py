@@ -6,10 +6,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from sqlalchemy import select
 
-from apps.api.db.session import SessionLocal
-from apps.api.models import DataQualityReport, Dataset, IngestBatch, Stock, SyncTask, TradingCalendar
-from apps.api.repositories.daily_bars import DAILY_BAR_ARROW_SCHEMA, DailyBarRepository
-from apps.api.services.data_quality_service import DataQualityService
+from backend.app.db.session import SessionLocal
+from backend.app.models import DataQualityReport, Dataset, IngestBatch, Stock, SyncTask, TradingCalendar
+from backend.app.repositories.daily_bars import DAILY_BAR_ARROW_SCHEMA, DailyBarRepository
+from backend.app.services.data_quality_service import DataQualityService
 
 
 def seed_quality_datasets() -> None:

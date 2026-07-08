@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import delete
 from sqlalchemy import select
 
-from apps.api.adapters.base import (
+from backend.app.adapters.base import (
     AdapterCapability,
     HealthCheckResult,
     NormalizedDailyBar,
@@ -15,13 +15,13 @@ from apps.api.adapters.base import (
     ProviderMetadata,
     StockDataSourceAdapter,
 )
-from apps.api.adapters.registry import AdapterRegistry
-from apps.api.db.session import SessionLocal
-from apps.api.models import Dataset, IngestBatch, Stock, SyncTask, SyncTaskLog, TradingCalendar
-from apps.api.repositories.daily_bars import DailyBarRepository
-from apps.api.repositories.daily_bars import DailyBarRepository
-from apps.api.services.market_data_sync_service import MarketDataSyncService
-from apps.api.services.research_data_service import ResearchDataService
+from backend.app.adapters.registry import AdapterRegistry
+from backend.app.db.session import SessionLocal
+from backend.app.models import Dataset, IngestBatch, Stock, SyncTask, SyncTaskLog, TradingCalendar
+from backend.app.repositories.daily_bars import DailyBarRepository
+from backend.app.repositories.daily_bars import DailyBarRepository
+from backend.app.services.sync_service import MarketDataSyncService
+from backend.app.services.research_data_service import ResearchDataService
 
 
 class FailingDailyBarAdapter(StockDataSourceAdapter):
@@ -248,7 +248,7 @@ def test_market_daily_bars_repair_api_creates_explicit_market_task(client):
 def test_market_daily_bars_repair_preview_does_not_create_sync_task(client, monkeypatch):
     registry = AdapterRegistry()
     registry.register(MultiSymbolDailyBarAdapter())
-    monkeypatch.setattr("apps.api.services.market_data_sync_service.default_adapter_registry", lambda: registry)
+    monkeypatch.setattr("backend.app.services.sync_service.default_adapter_registry", lambda: registry)
 
     db = SessionLocal()
     try:
@@ -322,7 +322,7 @@ def test_market_daily_bars_repair_preview_does_not_create_sync_task(client, monk
 def test_market_daily_bars_repair_preview_limits_plan_by_max_symbols(client, monkeypatch):
     registry = AdapterRegistry()
     registry.register(MultiSymbolDailyBarAdapter())
-    monkeypatch.setattr("apps.api.services.market_data_sync_service.default_adapter_registry", lambda: registry)
+    monkeypatch.setattr("backend.app.services.sync_service.default_adapter_registry", lambda: registry)
 
     db = SessionLocal()
     try:
@@ -383,7 +383,7 @@ def test_market_daily_bars_repair_preview_limits_plan_by_max_symbols(client, mon
 def test_market_daily_bars_full_history_preview_starts_each_symbol_at_listing_date(client, monkeypatch):
     registry = AdapterRegistry()
     registry.register(MultiSymbolDailyBarAdapter())
-    monkeypatch.setattr("apps.api.services.market_data_sync_service.default_adapter_registry", lambda: registry)
+    monkeypatch.setattr("backend.app.services.sync_service.default_adapter_registry", lambda: registry)
 
     db = SessionLocal()
     try:
@@ -449,7 +449,7 @@ def test_market_daily_bars_full_history_preview_starts_each_symbol_at_listing_da
 def test_market_daily_bars_repair_preview_skips_a_share_index_rows(client, monkeypatch):
     registry = AdapterRegistry()
     registry.register(MultiSymbolDailyBarAdapter())
-    monkeypatch.setattr("apps.api.services.market_data_sync_service.default_adapter_registry", lambda: registry)
+    monkeypatch.setattr("backend.app.services.sync_service.default_adapter_registry", lambda: registry)
 
     db = SessionLocal()
     try:

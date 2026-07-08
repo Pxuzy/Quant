@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import date
 from datetime import datetime, timezone
 
-from apps.api.db.session import SessionLocal
-from apps.api.models import SyncTask
+from backend.app.db.session import SessionLocal
+from backend.app.models import SyncTask
 
 
 def test_sync_schedules_api_returns_default_rules(client):

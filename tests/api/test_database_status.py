@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.api.core.config import get_settings
+from backend.app.core.config import get_settings
 
 
 def test_database_status_reports_sqlite_and_lake_capacity(client, tmp_path, monkeypatch):

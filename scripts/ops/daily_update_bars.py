@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, ".")
 
-from apps.api.core.config import get_settings
+from backend.app.core.config import get_settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -168,8 +168,8 @@ def main():
     log.info("latest: %s, fetch from %s", last_date or "none", start_from)
 
     # 1. Get stock list
-    from apps.api.db.session import get_engine, SessionLocal
-    from apps.api.repositories.stocks import StockRepository
+    from backend.app.db.session import get_engine, SessionLocal
+    from backend.app.repositories.stocks import StockRepository
     engine = get_engine()
     SessionLocal.configure(bind=engine)
     db = SessionLocal()

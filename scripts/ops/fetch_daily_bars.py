@@ -27,10 +27,10 @@ sys.path.insert(0, ".")
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from apps.api.db.session import get_engine, SessionLocal
-from apps.api.repositories.stocks import StockRepository
-from apps.api.adapters.registry import default_adapter_registry
-from apps.api.adapters.baostock import (
+from backend.app.db.session import get_engine, SessionLocal
+from backend.app.repositories.stocks import StockRepository
+from backend.app.adapters.registry import default_adapter_registry
+from backend.app.adapters.baostock import (
     _to_baostock_code,
     _result_set_to_records,
 )

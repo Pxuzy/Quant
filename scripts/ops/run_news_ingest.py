@@ -7,7 +7,7 @@ sys.path.insert(0, ".")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("news-ingest")
 
-from apps.api.services.news_ingest_service import run_news_ingest
+from backend.app.services.news_ingest_service import run_news_ingest
 
 if __name__ == "__main__":
     log.info("Starting news ingest...")

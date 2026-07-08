@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from quant.scripts import run_api_server as runner
+from scripts import run_api_server as runner
 
 
 @pytest.fixture

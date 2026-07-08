@@ -7,7 +7,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def styles_source() -> str:
-    return (ROOT_DIR / "apps/web/src/styles.css").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/styles.css").read_text(encoding="utf-8")
 
 
 def test_database_section_nav_uses_theme_surfaces():

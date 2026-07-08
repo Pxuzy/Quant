@@ -11,9 +11,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 os.environ.setdefault("TQDM_DISABLE", "1")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from apps.api.db.session import SessionLocal, get_engine
-from apps.api.repositories.stock_boards import StockBoardRepository
-from apps.api.services.market_service import (
+from backend.app.db.session import SessionLocal, get_engine
+from backend.app.repositories.stock_boards import StockBoardRepository
+from backend.app.services.market_service import (
     _fetch_ths_industry_boards,
     _fetch_board_members,
     _sync_stock_industries_from_board_members,

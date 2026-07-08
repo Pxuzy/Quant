@@ -4,11 +4,11 @@ import sys
 from datetime import date
 from types import SimpleNamespace
 
-from apps.api.adapters.base import NormalizedDailyBar
-from apps.api.core.config import get_settings
-from apps.api.models import IngestBatch, Stock, SyncTask, TradingCalendar
-from apps.api.repositories.daily_bars import DailyBarRepository
-from apps.worker.sync_stocks import run_next_pending_stock_sync
+from backend.app.adapters.base import NormalizedDailyBar
+from backend.app.core.config import get_settings
+from backend.app.models import IngestBatch, Stock, SyncTask, TradingCalendar
+from backend.app.repositories.daily_bars import DailyBarRepository
+from backend.worker.sync_stocks import run_next_pending_stock_sync
 
 
 def install_fake_akshare(monkeypatch) -> None:
@@ -137,7 +137,7 @@ def test_stock_list_includes_latest_data_date_and_completeness(client, tmp_path,
     monkeypatch.setenv("DATA_LAKE_DIR", str(lake_root))
     get_settings.cache_clear()
 
-    from apps.api.db.session import SessionLocal
+    from backend.app.db.session import SessionLocal
 
     db = SessionLocal()
     try:
@@ -226,7 +226,7 @@ def test_stock_list_filters_by_exchange_industry_and_daily_coverage(client, tmp_
     monkeypatch.setenv("DATA_LAKE_DIR", str(lake_root))
     get_settings.cache_clear()
 
-    from apps.api.db.session import SessionLocal
+    from backend.app.db.session import SessionLocal
 
     db = SessionLocal()
     try:
@@ -311,7 +311,7 @@ def test_stock_daily_coverage_reports_missing_trade_dates(client, tmp_path, monk
     monkeypatch.setenv("DATA_LAKE_DIR", str(lake_root))
     get_settings.cache_clear()
 
-    from apps.api.db.session import SessionLocal
+    from backend.app.db.session import SessionLocal
 
     db = SessionLocal()
     try:
@@ -393,7 +393,7 @@ def test_stock_daily_quality_summarizes_backend_quality_issues(client, tmp_path,
     monkeypatch.setenv("DATA_LAKE_DIR", str(lake_root))
     get_settings.cache_clear()
 
-    from apps.api.db.session import SessionLocal
+    from backend.app.db.session import SessionLocal
 
     db = SessionLocal()
     try:
@@ -462,7 +462,7 @@ def test_stock_daily_quality_treats_adjust_types_as_distinct_rows(client, tmp_pa
     monkeypatch.setenv("DATA_LAKE_DIR", str(lake_root))
     get_settings.cache_clear()
 
-    from apps.api.db.session import SessionLocal
+    from backend.app.db.session import SessionLocal
 
     db = SessionLocal()
     try:
@@ -505,7 +505,7 @@ def test_stock_daily_quality_returns_unknown_without_daily_bars(client, tmp_path
     monkeypatch.setenv("DATA_LAKE_DIR", str(tmp_path / "lake"))
     get_settings.cache_clear()
 
-    from apps.api.db.session import SessionLocal
+    from backend.app.db.session import SessionLocal
 
     db = SessionLocal()
     try:
@@ -539,7 +539,7 @@ def test_stock_daily_quality_returns_unknown_without_daily_bars(client, tmp_path
 
 
 def test_stock_daily_ingest_batches_returns_recent_symbol_batches(client):
-    from apps.api.db.session import SessionLocal
+    from backend.app.db.session import SessionLocal
 
     db = SessionLocal()
     try:
@@ -656,7 +656,7 @@ def test_stock_detail_returns_404_for_missing_symbol(client):
 
 
 def test_stock_detail_prefers_common_a_share_row_when_symbol_is_duplicated(client):
-    from apps.api.db.session import SessionLocal
+    from backend.app.db.session import SessionLocal
 
     db = SessionLocal()
     try:

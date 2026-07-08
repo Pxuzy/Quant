@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from apps.api.db.session import SessionLocal
-from apps.api.models import Dataset, Stock
+from backend.app.db.session import SessionLocal
+from backend.app.models import Dataset, Stock
 
 
 def seed_datasets() -> None:

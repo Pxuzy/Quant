@@ -4,11 +4,11 @@ from datetime import date
 
 import pytest
 
-from apps.api.adapters.base import NormalizedDailyBar
-from apps.api.db.session import SessionLocal
-from apps.api.models import IngestBatch, SyncTask
-from apps.api.repositories.datasets import DatasetRepository
-from apps.api.services.research_data_service import ResearchDataService
+from backend.app.adapters.base import NormalizedDailyBar
+from backend.app.db.session import SessionLocal
+from backend.app.models import IngestBatch, SyncTask
+from backend.app.repositories.datasets import DatasetRepository
+from backend.app.services.research_data_service import ResearchDataService
 
 
 def make_bar(symbol: str, trade_date: date, close: float) -> NormalizedDailyBar:

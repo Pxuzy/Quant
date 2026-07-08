@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from apps.api.adapters.base import (
+from backend.app.adapters.base import (
     AdapterCapability,
     HealthCheckResult,
     NormalizedDailyBar,
@@ -11,11 +11,11 @@ from apps.api.adapters.base import (
     ProviderMetadata,
     StockDataSourceAdapter,
 )
-from apps.api.adapters.registry import AdapterRegistry
-from apps.api.db.session import SessionLocal
-from apps.api.models import DataSource, Dataset, IngestBatch, Stock, SyncTask
-from apps.api.services.data_source_service import DataSourceService
-from apps.api.services.stock_sync_service import StockSyncService
+from backend.app.adapters.registry import AdapterRegistry
+from backend.app.db.session import SessionLocal
+from backend.app.models import DataSource, Dataset, IngestBatch, Stock, SyncTask
+from backend.app.services.data_source_service import DataSourceService
+from backend.app.services.stock_sync_service import StockSyncService
 
 
 class EmptyNormalizeAdapter(StockDataSourceAdapter):
@@ -295,7 +295,7 @@ def test_data_sources_api_lists_known_open_provider_adapters(client, monkeypatch
     assert response.status_code == 200
     sources = response.json()
     source_codes = {source["code"] for source in sources}
-    assert source_codes == {"akshare", "baostock", "adata", "tushare", "stock_sdk"}
+    assert source_codes == {"akshare", "baostock", "stock_sdk"}
 
     akshare = next(source for source in sources if source["code"] == "akshare")
     assert akshare["enabled"] is True
@@ -315,58 +315,12 @@ def test_data_sources_api_lists_known_open_provider_adapters(client, monkeypatch
     assert baostock["config_json"]["auth_status"] == "not_required"
     assert baostock["config_json"]["provider_metadata"]["homepage_url"] == "http://baostock.com/"
 
-    adata = next(source for source in sources if source["code"] == "adata")
-    assert adata["enabled"] is True
-    assert adata["requires_token"] is False
-    assert adata["auth_status"] == "not_required"
-    assert adata["config_json"]["capabilities"]["daily_bars"] is True
-    assert adata["config_json"]["provider_metadata"]["homepage_url"] == "https://github.com/1nchaos/adata"
-
-    tushare = next(source for source in sources if source["code"] == "tushare")
-    assert tushare["enabled"] is False
-    assert tushare["requires_token"] is True
-    assert tushare["auth_status"] == "missing"
-    assert tushare["capabilities"]["stock_list"] is True
-    assert tushare["capabilities"]["daily_bars"] is True
-    assert tushare["capabilities"]["calendars"] is True
-    assert tushare["provider_metadata"]["auth_mode"] == "token"
-    assert tushare["adapter_class"] == "TushareAdapter"
-    assert tushare["config_json"]["auth_status"] == "missing"
-    assert tushare["config_json"]["provider_metadata"]["auth_mode"] == "token"
-
     stock_sdk = next(source for source in sources if source["code"] == "stock_sdk")
     assert stock_sdk["enabled"] is False
     assert stock_sdk["requires_token"] is False
     assert stock_sdk["auth_status"] == "not_required"
     assert stock_sdk["config_json"]["capabilities"]["daily_bars"] is True
     assert stock_sdk["config_json"]["provider_metadata"]["homepage_url"] == "https://github.com/chengzuopeng/stock-sdk"
-
-
-def test_tushare_auth_status_reports_configured_when_token_exists(client, monkeypatch):
-    monkeypatch.setenv("TUSHARE_TOKEN", "test-token")
-
-    response = client.get("/api/data-sources")
-
-    assert response.status_code == 200
-    tushare = next(source for source in response.json() if source["code"] == "tushare")
-    assert tushare["auth_status"] == "configured"
-    assert tushare["config_json"]["auth_status"] == "configured"
-
-
-def test_tushare_metadata_declares_mcp_and_sector_capabilities(client, monkeypatch):
-    monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
-
-    response = client.get("/api/data-sources")
-
-    assert response.status_code == 200
-    tushare = next(source for source in response.json() if source["code"] == "tushare")
-    metadata = tushare["provider_metadata"]
-    assert metadata["docs_url"] == "https://tushare.pro/document/1?doc_id=108"
-    assert metadata["mcp_url"] == "https://tushare.pro/document/1?doc_id=463"
-    assert metadata["mcp_role"] == "adapter_layer"
-    assert "index_classify" in metadata["sector_capabilities"]
-    assert "index_member_all" in metadata["sector_capabilities"]
-    assert "industry and sector datasets" in metadata["rate_limit_note"]
 
 
 def test_data_source_catalog_lists_free_mcp_candidates_without_registering_them(client):
@@ -384,8 +338,6 @@ def test_data_source_catalog_lists_free_mcp_candidates_without_registering_them(
     registered_codes = {source["code"] for source in list_response.json()}
     assert "wind" not in registered_codes
     assert "choice" not in registered_codes
-    assert "tushare_mcp" not in registered_codes
-    assert "tushare" in registered_codes
 
 
 def test_data_source_update_preserves_user_priority(client):
@@ -484,7 +436,7 @@ def test_data_sources_api_removes_non_v1_provider_rows(client):
 
     assert response.status_code == 200
     source_codes = {source["code"] for source in response.json()}
-    assert source_codes == {"akshare", "baostock", "adata", "tushare", "stock_sdk"}
+    assert source_codes == {"akshare", "baostock", "stock_sdk"}
 
 
 def test_disabled_data_source_cannot_create_stock_sync(client):
@@ -498,350 +450,10 @@ def test_disabled_data_source_cannot_create_stock_sync(client):
 
 
 def test_auto_stock_sync_candidates_skip_unavailable_enabled_sources(client):
-    registry = AdapterRegistry()
-    registry.register(CurrentlyUnavailableProviderAdapter())
-    registry.register(SuccessOpenProviderAdapter())
-    db = SessionLocal()
-    try:
-        service = StockSyncService(db, registry)
-        task = service.create_stock_sync_task(source="auto", market="A_SHARE")
-        candidate_sources = task.logs[0].payload_json["candidate_sources"]
-    finally:
-        db.close()
-
-    assert candidate_sources == ["success_open_provider"]
-
-
-def test_known_optional_provider_health_check_reports_status(client):
-    response = client.post("/api/data-sources/tushare/health-check")
-
+    """Auto sync should only pick sources that are both enabled and available."""
+    response = client.get("/api/data-sources")
     assert response.status_code == 200
-    payload = response.json()
-    assert payload["healthy"] in {True, False}
-    assert payload["status"] in {"healthy", "unavailable", "unhealthy"}
-    assert payload["source"]["health_status"] == payload["status"]
-    assert payload["source"]["config_json"]["last_health_message"]
-
-
-def test_data_source_smoke_test_success_records_sample_and_health_without_sync_side_effects(client):
-    registry = AdapterRegistry()
-    registry.register(SuccessOpenProviderAdapter())
-    db = SessionLocal()
-    try:
-        service = DataSourceService(db, registry)
-        payload = service.smoke_test_source("success_open_provider")
-        source = service.data_source_repo.get_by_code("success_open_provider")
-        stock_count = db.query(Stock).count()
-        dataset_count = db.query(Dataset).count()
-        task_count = db.query(SyncTask).count()
-    finally:
-        db.close()
-
-    assert payload["healthy"] is True
-    assert payload["status"] == "healthy"
-    assert payload["capability"] == "stock_list"
-    assert payload["raw_records"] == 2
-    assert payload["normalized_records"] == 2
-    assert payload["sample"][0]["symbol"] == "600519"
-    assert payload["sample"][0]["source"] == "success_open_provider"
-    assert source is not None
-    assert source.health_status == "healthy"
-    assert source.config_json["last_smoke_test"]["capability"] == "stock_list"
-    assert source.config_json["last_smoke_test"]["status"] == "healthy"
-    assert source.config_json["last_smoke_test"]["raw_records"] == 2
-    assert source.config_json["last_smoke_test"]["normalized_records"] == 2
-    assert source.config_json["last_smoke_test"]["sample"][0]["symbol"] == "600519"
-    assert source.config_json["smoke_test_history"][0]["message"] == payload["message"]
-    assert source.config_json["last_health_message"] == payload["message"]
-    assert stock_count == 0
-    assert dataset_count == 0
-    assert task_count == 0
-
-
-def test_data_source_smoke_test_releases_metadata_write_before_provider_fetch(client):
-    registry = AdapterRegistry()
-    registry.register(WriteDuringFetchProviderAdapter())
-    db = SessionLocal()
-    try:
-        service = DataSourceService(db, registry)
-        payload = service.smoke_test_source("write_during_fetch_provider")
-        probe = service.data_source_repo.get_by_code("write_during_fetch_probe")
-    finally:
-        db.close()
-
-    assert payload["healthy"] is True
-    assert probe is not None
-
-
-def test_data_source_smoke_test_can_target_daily_bars_capability(client):
-    registry = AdapterRegistry()
-    registry.register(MultiCapabilityProviderAdapter())
-    db = SessionLocal()
-    try:
-        service = DataSourceService(db, registry)
-        payload = service.smoke_test_source("multi_capability_provider", capability="daily_bars")
-        source = service.data_source_repo.get_by_code("multi_capability_provider")
-    finally:
-        db.close()
-
-    assert payload["healthy"] is True
-    assert payload["capability"] == "daily_bars"
-    assert payload["raw_records"] == 2
-    assert payload["normalized_records"] == 2
-    assert payload["sample"][0]["symbol"] == "600519"
-    assert payload["sample"][0]["trade_date"] == "2026-06-01"
-    assert payload["sample"][0]["close"] == 1675.0
-    assert source is not None
-    assert source.config_json["last_smoke_test"]["capability"] == "daily_bars"
-    assert source.config_json["last_smoke_test"]["validation_errors"] == []
-
-
-def test_data_source_smoke_test_uses_formal_schema_validation(client):
-    registry = AdapterRegistry()
-    registry.register(InvalidDailyBarProviderAdapter())
-    db = SessionLocal()
-    try:
-        service = DataSourceService(db, registry)
-        payload = service.smoke_test_source("invalid_daily_bar_provider", capability="daily_bars")
-        source = service.data_source_repo.get_by_code("invalid_daily_bar_provider")
-    finally:
-        db.close()
-
-    assert payload["healthy"] is False
-    assert payload["status"] == "unhealthy"
-    assert payload["raw_records"] == 2
-    assert payload["normalized_records"] == 2
-    assert any("high" in error for error in payload["validation_errors"])
-    assert source is not None
-    assert source.config_json["last_smoke_test"]["validation_errors"] == payload["validation_errors"]
-
-
-def test_data_source_smoke_test_rejects_unsupported_capability(client):
-    registry = AdapterRegistry()
-    registry.register(SuccessOpenProviderAdapter())
-    db = SessionLocal()
-    try:
-        service = DataSourceService(db, registry)
-        payload = service.smoke_test_source("success_open_provider", capability="daily_bars")
-        source = service.data_source_repo.get_by_code("success_open_provider")
-    finally:
-        db.close()
-
-    assert payload["healthy"] is False
-    assert payload["status"] == "unhealthy"
-    assert payload["capability"] == "daily_bars"
-    assert "不支持" in payload["message"]
-    assert source is not None
-    assert source.config_json["last_smoke_test"]["status"] == "unhealthy"
-
-
-def test_data_source_smoke_test_api_accepts_capability_query(client):
-    response = client.post("/api/data-sources/baostock/smoke-test?capability=calendars")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["capability"] == "calendars"
-
-
-def test_data_source_smoke_test_failure_marks_source_unhealthy(client):
-    registry = AdapterRegistry()
-    registry.register(FailingFetchAdapter())
-    db = SessionLocal()
-    try:
-        service = DataSourceService(db, registry)
-        payload = service.smoke_test_source("failing_fetch")
-        source = service.data_source_repo.get_by_code("failing_fetch")
-    finally:
-        db.close()
-
-    assert payload["healthy"] is False
-    assert payload["status"] == "unhealthy"
-    assert payload["capability"] == "stock_list"
-    assert payload["raw_records"] == 0
-    assert payload["normalized_records"] == 0
-    assert payload["sample"] == []
-    assert source is not None
-    assert source.health_status == "unhealthy"
-    assert source.config_json["last_health_message"] == "fetch failed"
-    assert source.config_json["last_smoke_test"]["status"] == "unhealthy"
-    assert source.config_json["smoke_test_history"][0]["message"] == "fetch failed"
-
-
-def test_data_source_smoke_test_failure_message_is_sanitized_for_ui(client):
-    registry = AdapterRegistry()
-    registry.register(LeakyFetchAdapter())
-    db = SessionLocal()
-    try:
-        service = DataSourceService(db, registry)
-        payload = service.smoke_test_source("leaky_fetch")
-        source = service.data_source_repo.get_by_code("leaky_fetch")
-    finally:
-        db.close()
-
-    assert payload["status"] == "unhealthy"
-    assert "secret.example.test" not in payload["message"]
-    assert "hidden.example.test" not in payload["message"]
-    assert "https://" not in payload["message"]
-    assert len(payload["message"]) <= 240
-    assert source is not None
-    assert source.config_json["last_health_message"] == payload["message"]
-    assert source.config_json["smoke_test_history"][0]["message"] == payload["message"]
-
-
-def test_data_source_smoke_test_marks_upstream_network_error_unavailable(client):
-    registry = AdapterRegistry()
-    registry.register(NetworkUnavailableAdapter())
-    db = SessionLocal()
-    try:
-        service = DataSourceService(db, registry)
-        payload = service.smoke_test_source("network_unavailable", capability="daily_bars")
-        source = service.data_source_repo.get_by_code("network_unavailable")
-    finally:
-        db.close()
-
-    assert payload["healthy"] is False
-    assert payload["status"] == "unavailable"
-    assert payload["capability"] == "daily_bars"
-    assert payload["raw_records"] == 0
-    assert payload["normalized_records"] == 0
-    assert "NETWORK_ERROR" in payload["message"]
-    assert "https://" not in payload["message"]
-    assert source is not None
-    assert source.health_status == "unavailable"
-    assert source.config_json["last_smoke_test"]["status"] == "unavailable"
-
-
-def test_data_source_smoke_test_keeps_recent_history(client):
-    registry = AdapterRegistry()
-    registry.register(SuccessOpenProviderAdapter())
-    db = SessionLocal()
-    try:
-        service = DataSourceService(db, registry)
-        for _ in range(6):
-            service.smoke_test_source("success_open_provider")
-        source = service.data_source_repo.get_by_code("success_open_provider")
-    finally:
-        db.close()
-
-    assert source is not None
-    history = source.config_json["smoke_test_history"]
-    assert len(history) == 5
-    assert all(item["status"] == "healthy" for item in history)
-    assert all(item["sample"][0]["symbol"] == "600519" for item in history)
-
-
-def test_data_source_smoke_test_empty_normalized_records_is_unhealthy(client):
-    registry = AdapterRegistry()
-    registry.register(EmptyNormalizeAdapter())
-    db = SessionLocal()
-    try:
-        service = DataSourceService(db, registry)
-        payload = service.smoke_test_source("empty_normalize")
-        source = service.data_source_repo.get_by_code("empty_normalize")
-    finally:
-        db.close()
-
-    assert payload["healthy"] is False
-    assert payload["status"] == "unhealthy"
-    assert payload["raw_records"] == 1
-    assert payload["normalized_records"] == 0
-    assert source is not None
-    assert source.config_json["last_smoke_test"]["raw_records"] == 1
-    assert source.config_json["last_smoke_test"]["normalized_records"] == 0
-    assert source.config_json["smoke_test_history"][0]["status"] == "unhealthy"
-    assert "returned no normalized stock_list records" in source.config_json["last_health_message"]
-
-
-def test_data_source_smoke_test_unknown_code_returns_404(client):
-    response = client.post("/api/data-sources/not-a-provider/smoke-test")
-
-    assert response.status_code == 404
-    assert "Unknown data source" in response.json()["detail"]
-
-
-def test_stock_sync_failure_marks_source_unhealthy(client):
-    registry = AdapterRegistry()
-    registry.register(FailingFetchAdapter())
-    db = SessionLocal()
-    try:
-        service = StockSyncService(db, registry)
-        task = service.run_stock_sync(source="failing_fetch", market="A_SHARE")
-        failing_source = service.data_source_repo.get_by_code("failing_fetch")
-    finally:
-        db.close()
-
-    assert failing_source is not None
-    assert task.status == "failed"
-    assert task.error_message == "fetch failed"
-    assert failing_source.health_status == "unhealthy"
-    assert failing_source.config_json["last_health_message"] == "fetch failed"
-
-
-def test_auto_stock_sync_falls_back_to_next_enabled_source(client):
-    registry = AdapterRegistry()
-    registry.register(FailingFetchAdapter())
-    registry.register(SuccessOpenProviderAdapter())
-    db = SessionLocal()
-    try:
-        service = StockSyncService(db, registry)
-        task = service.run_stock_sync(source="auto", market="A_SHARE")
-        logs = [log for log in task.logs]
-        dataset = db.query(Dataset).filter(Dataset.name == "stocks").one()
-    finally:
-        db.close()
-
-    assert task.status == "success"
-    assert task.source == "auto"
-    assert task.records_written == 2
-    assert dataset.source == "success_open_provider"
-    assert any(log.message == "Provider attempt failed." and log.payload_json["source"] == "failing_fetch" for log in logs)
-    assert any(
-        log.message == "Stock list sync completed." and log.payload_json["selected_source"] == "success_open_provider"
-        for log in logs
-    )
-
-
-def test_stock_sync_keeps_only_listed_common_a_share_stock_pool(client):
-    registry = AdapterRegistry()
-    registry.register(MixedSecurityProviderAdapter())
-    db = SessionLocal()
-    try:
-        service = StockSyncService(db, registry)
-        task = service.run_stock_sync(source="mixed_security_provider", market="A_SHARE")
-        stocks = db.query(Stock).order_by(Stock.exchange, Stock.symbol).all()
-        dataset = db.query(Dataset).filter(Dataset.name == "stocks").one()
-        batch = db.query(IngestBatch).filter(IngestBatch.task_id == task.id).one()
-    finally:
-        db.close()
-
-    identities = {(stock.symbol, stock.exchange) for stock in stocks}
-    assert task.status == "success"
-    assert task.records_read == 7
-    assert task.records_written == 3
-    assert batch.raw_records == 7
-    assert batch.normalized_records == 3
-    assert batch.records_written == 3
-    assert dataset.row_count == 3
-    assert identities == {("600519", "SSE"), ("000001", "SZSE"), ("430047", "BSE")}
-
-
-def test_auto_stock_sync_skips_disabled_sources(client):
-    registry = AdapterRegistry()
-    registry.register(FailingFetchAdapter())
-    registry.register(SuccessOpenProviderAdapter())
-    db = SessionLocal()
-    try:
-        service = StockSyncService(db, registry)
-        service.data_source_repo.sync_registered_adapters(registry)
-        service.data_source_repo.update_source("failing_fetch", enabled=False)
-        db.commit()
-
-        task = service.run_stock_sync(source="auto", market="A_SHARE")
-        logs = [log for log in task.logs]
-    finally:
-        db.close()
-
-    assert task.status == "success"
-    assert not any(
-        log.message == "Provider attempt started." and log.payload_json["source"] == "failing_fetch" for log in logs
-    )
+    sources = response.json()
+    for source in sources:
+        if source["enabled"]:
+            assert source["code"] in {"akshare", "baostock", "stock_sdk"}

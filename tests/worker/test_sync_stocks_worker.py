@@ -6,11 +6,11 @@ from types import SimpleNamespace
 
 from sqlalchemy import func, select
 
-from apps.api.core.config import reset_settings_cache
-from apps.api.db.session import SessionLocal, configure_database, init_db
-from apps.api.models import Dataset, Stock, SyncTask, TradingCalendar
-from apps.api.repositories.sync_tasks import SyncTaskRepository
-from apps.worker.sync_stocks import (
+from backend.app.core.config import reset_settings_cache
+from backend.app.db.session import SessionLocal, configure_database, init_db
+from backend.app.models import Dataset, Stock, SyncTask, TradingCalendar
+from backend.app.repositories.sync_tasks import SyncTaskRepository
+from backend.worker.sync_stocks import (
     enqueue_calendar_sync,
     enqueue_daily_bars_sync,
     enqueue_market_daily_bars_repair,

@@ -7,15 +7,15 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def theme_provider_source() -> str:
-    return (ROOT_DIR / "apps/web/src/app/ThemeProvider.tsx").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/app/ThemeProvider.tsx").read_text(encoding="utf-8")
 
 
 def styles_source() -> str:
-    return (ROOT_DIR / "apps/web/src/styles.css").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/styles.css").read_text(encoding="utf-8")
 
 
 def app_layout_source() -> str:
-    return (ROOT_DIR / "apps/web/src/layouts/AppLayout.tsx").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/layouts/AppLayout.tsx").read_text(encoding="utf-8")
 
 
 def test_app_theme_uses_documented_antd_component_tokens():

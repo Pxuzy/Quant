@@ -23,12 +23,12 @@ os.environ["DATA_LAKE_DIR"] = str(PROJECT_DIR / "storage" / "lake")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("init_pipeline")
 
-from apps.api.adapters.registry import default_adapter_registry
-from apps.api.repositories.daily_bars import DailyBarRepository
-from apps.api.repositories.stocks import StockRepository
-from apps.api.repositories.trading_calendars import TradingCalendarRepository
-from apps.api.db.session import get_engine, SessionLocal, init_db
-from apps.api.models.entities import Stock, TradingCalendar
+from backend.app.adapters.registry import default_adapter_registry
+from backend.app.repositories.daily_bars import DailyBarRepository
+from backend.app.repositories.stocks import StockRepository
+from backend.app.repositories.trading_calendars import TradingCalendarRepository
+from backend.app.db.session import get_engine, SessionLocal, init_db
+from backend.app.models.entities import Stock, TradingCalendar
 
 # ── 初始化 DB 表 ──
 init_db()
@@ -176,7 +176,7 @@ def verify_data():
     db = SessionLocal()
     try:
         from sqlalchemy import func
-        from apps.api.models.entities import Stock, TradingCalendar
+        from backend.app.models.entities import Stock, TradingCalendar
 
         stock_count = db.query(func.count(Stock.id)).scalar()
         logger.info(f"  📦 SQLite stocks: {stock_count}")

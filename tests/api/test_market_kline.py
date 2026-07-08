@@ -5,10 +5,10 @@ from datetime import date
 
 import pytest
 
-from apps.api.adapters.base import NormalizedDailyBar
-from apps.api.core.config import reset_settings_cache
-from apps.api.repositories.daily_bars import DailyBarRepository
-from apps.api.services.market_service import get_history_kline
+from backend.app.adapters.base import NormalizedDailyBar
+from backend.app.core.config import reset_settings_cache
+from backend.app.repositories.daily_bars import DailyBarRepository
+from backend.app.services.kline_service import get_history_kline
 
 
 @pytest.fixture(autouse=True)
@@ -51,7 +51,7 @@ def test_market_kline_reads_governed_daily_bars_before_provider(client, tmp_path
     def fail_provider_request(url: str, encoding: str = "utf-8") -> str:
         raise AssertionError("provider should not be used when governed daily bars exist")
 
-    monkeypatch.setattr("apps.api.services.market_service._request", fail_provider_request)
+    monkeypatch.setattr("backend.app.services.kline_service._request", fail_provider_request)
 
     response = client.get("/api/market/kline?code=sh600900&period=day&count=10000")
 
@@ -81,7 +81,7 @@ def test_market_kline_handles_provider_empty_data_shape(client, monkeypatch):
     def fake_request(url: str, encoding: str = "utf-8") -> str:
         return json.dumps({"data": []})
 
-    monkeypatch.setattr("apps.api.services.market_service._request", fake_request)
+    monkeypatch.setattr("backend.app.services.kline_service._request", fake_request)
 
     response = client.get("/api/market/kline?code=sh600900&period=day&count=5000")
 
@@ -101,7 +101,7 @@ def test_market_kline_parses_tencent_day_row_order(client, monkeypatch):
             },
         })
 
-    monkeypatch.setattr("apps.api.services.market_service._request", fake_request)
+    monkeypatch.setattr("backend.app.services.kline_service._request", fake_request)
 
     response = client.get("/api/market/kline?code=sh600900&period=day&count=1")
 
@@ -127,7 +127,7 @@ def test_market_kline_accepts_long_history_request(client, monkeypatch):
             },
         })
 
-    monkeypatch.setattr("apps.api.services.market_service._request", fake_request)
+    monkeypatch.setattr("backend.app.services.kline_service._request", fake_request)
 
     response = client.get("/api/market/kline?code=sh600900&period=day&count=5000")
 
@@ -152,7 +152,7 @@ def test_market_kline_splits_provider_requests_for_long_history(client, monkeypa
         rows = responses.pop(0)
         return json.dumps({"data": {"sh600900": {"qfqday": rows}}})
 
-    monkeypatch.setattr("apps.api.services.market_service._request", fake_request)
+    monkeypatch.setattr("backend.app.services.kline_service._request", fake_request)
 
     response = client.get("/api/market/kline?code=sh600900&period=day&count=1601")
 
@@ -181,7 +181,7 @@ def test_market_kline_stops_at_provider_empty_page_after_listing_history(client,
         rows = responses.pop(0)
         return json.dumps({"data": {"sh600900": {"qfqday": rows}}})
 
-    monkeypatch.setattr("apps.api.services.market_service._request", fake_request)
+    monkeypatch.setattr("backend.app.services.kline_service._request", fake_request)
 
     response = client.get("/api/market/kline?code=sh600900&period=day&count=10000")
 

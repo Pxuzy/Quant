@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from apps.api.db.session import SessionLocal
-from apps.api.models import SyncTask
+from backend.app.db.session import SessionLocal
+from backend.app.models import SyncTask
 
 
 def test_sync_task_read_exposes_auto_task_candidate_and_selected_sources(client):

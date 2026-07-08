@@ -1,0 +1,400 @@
+"""
+Shared HTTP / subprocess client utilities for adapters that bridge to a
+Node.js data source.
+
+This module owns the "transport" layer:
+  - ``NODE_STOCK_SDK_SCRIPT``  – the embedded JavaScript bridge script.
+  - ``_NodeStockSdkNamespace`` – Python-side namespace proxy (codes / kline).
+  - ``_NodeStockSdkClient``    – launches and talks to the Node subprocess.
+  - ``_stock_sdk_cwd``         – resolves the working directory for the
+                                  Node package lookup.
+
+Data normalization helpers (``_clean_text``, ``_records_from_payload``,
+``_parse_date``, …) are **not** here – they live alongside the adapter
+that consumes them in ``stock_sdk.py``.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import os
+import subprocess
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# 内嵌的 JavaScript 脚本
+# =============================================================================
+#
+# 这段 JS 代码会被保存为字符串，然后通过 node -e 执行。
+# 它是一个通用的 SDK 调用桥接器：接收 JSON 输入，调用 stock-sdk，输出 JSON 结果。
+#
+# 输入格式（通过 stdin）：
+#   {"action": "codes.cn",      "params": {"market": "A_SHARE"}}
+#   {"action": "kline.cn",      "params": {"symbol": "600519", ...}}
+#   {"action": "health",        "params": {}}
+#   {"action": "namespace.fn",  "params": {...}}              ← 通用调用
+#
+# 输出格式（通过 stdout）：
+#   JSON 数组 [{"code": "600519", "name": "贵州茅台"}, ...]
+
+NODE_STOCK_SDK_SCRIPT = r"""
+const fs = require("fs");
+const { createRequire } = require("module");
+const { pathToFileURL } = require("url");
+
+function compactError(error) {
+  const code = error && (error.code || error.sdkCode);
+  const provider = error && error.provider;
+  const status = error && error.status;
+  const url = error && error.url;
+  const message = error && error.message ? error.message : String(error);
+  const cause = error && error.cause && error.cause.message;
+  const parts = ["stock-sdk request failed"];
+  if (code) {
+    parts.push(`code=${code}`);
+  }
+  if (provider) {
+    parts.push(`provider=${provider}`);
+  }
+  if (status) {
+    parts.push(`status=${status}`);
+  }
+  if (message) {
+    parts.push(`message=${message}`);
+  }
+  if (url) {
+    parts.push(`url=${url}`);
+  }
+  if (cause && cause !== message) {
+    parts.push(`cause=${cause}`);
+  }
+  return parts.join("; ");
+}
+
+(async () => {
+  // ---- 步骤 1：读取 Python 端发来的 JSON 指令 ----
+  const input = JSON.parse(fs.readFileSync(0, "utf8") || "{}");
+
+  // ---- 步骤 2：加载 stock-sdk 包 ----
+  // createRequire 从当前工作目录加载，保证找到用户安装的 stock-sdk
+  const requireFromCwd = createRequire(process.cwd() + "/package.json");
+  let mod;
+  try {
+    // 优先用 ESM import（现代 JS）
+    mod = await import(pathToFileURL(requireFromCwd.resolve("stock-sdk")).href);
+  } catch (importError) {
+    // 降级到 CommonJS require（传统 JS）
+    mod = requireFromCwd("stock-sdk");
+  }
+
+  // ---- 步骤 3：获取 SDK 实例 ----
+  // stock-sdk 可能以多种方式导出，逐一尝试；只接受真正暴露 codes/kline 的对象。
+  function hasSdkApi(candidate) {
+    return Boolean(candidate && (
+      candidate.codes ||
+      candidate.kline ||
+      candidate.batch ||
+      candidate.getAShareCodeList ||
+      candidate.getAllAShareQuotes ||
+      candidate.getHistoryKline ||
+      candidate.getKlineWithIndicators
+    ));
+  }
+
+  function instantiate(candidate) {
+    if (!candidate) {
+      return null;
+    }
+    if (typeof candidate === "function") {
+      return new candidate();
+    }
+    if (typeof candidate.StockSDK === "function") {
+      return new candidate.StockSDK();
+    }
+    return candidate;
+  }
+
+  const sdkCandidates = [
+    mod.StockSDK,
+    mod.default && mod.default.StockSDK,
+    mod.default,
+    mod.stock,
+    mod.default && mod.default.stock,
+    mod
+  ];
+  let sdk = null;
+  for (const candidate of sdkCandidates) {
+    const instance = instantiate(candidate);
+    if (hasSdkApi(instance)) {
+      sdk = instance;
+      break;
+    }
+  }
+  if (!sdk) {
+    throw new Error("stock-sdk did not export a usable SDK instance or constructor.");
+  }
+
+  // ---- 步骤 4：检查可用方法（用于健康检查） ----
+  const stockListCallable = Boolean(
+    (sdk.codes && sdk.codes.cn) ||
+    (sdk.batch && sdk.batch.cn) ||
+    sdk.getAShareCodeList ||
+    sdk.getAllAShareQuotes
+  );
+  const klineCallable = Boolean(
+    (sdk.kline && (sdk.kline.cn || sdk.kline.getHistoryKline || sdk.kline.withIndicators)) ||
+    sdk.getHistoryKline ||
+    sdk.getKlineWithIndicators
+  );
+
+  if (input.action === "health") {
+    process.stdout.write(JSON.stringify({
+      hasCodes: stockListCallable,
+      hasKline: klineCallable
+    }));
+    return;
+  }
+
+  // ---- 步骤 5：包装股票列表调用 ----
+  async function callStockList(params) {
+    if (sdk.codes && typeof sdk.codes.cn === "function") {
+      return sdk.codes.cn(params || {});
+    }
+    if (sdk.batch && typeof sdk.batch.cn === "function") {
+      return sdk.batch.cn(params || {});
+    }
+    if (typeof sdk.getAShareCodeList === "function") {
+      return sdk.getAShareCodeList(params || {});
+    }
+    if (typeof sdk.getAllAShareQuotes === "function") {
+      return sdk.getAllAShareQuotes(params || {});
+    }
+    throw new Error("stock-sdk does not expose codes.cn, batch.cn, getAShareCodeList or getAllAShareQuotes.");
+  }
+
+  // ---- 步骤 6：包装 K 线调用 ----
+  function normalizeDate(value) {
+    if (value == null || value === "") {
+      return undefined;
+    }
+    const text = String(value);
+    const digits = text.replace(/[-/]/g, "").slice(0, 8);
+    return /^\d{8}$/.test(digits) ? digits : text;
+  }
+
+  async function callKline(params) {
+    const symbol = params.symbol || params.code;
+    if (!symbol) {
+      throw new Error("stock-sdk kline request requires a symbol.");
+    }
+    const options = {
+      ...params,
+      period: params.period || "daily",
+      adjust: params.adjust === undefined ? "" : params.adjust,
+      startDate: normalizeDate(params.startDate || params.start_date),
+      endDate: normalizeDate(params.endDate || params.end_date)
+    };
+    delete options.symbol;
+    delete options.code;
+
+    // 尝试多种 K 线 API 路径
+    if (sdk.kline && typeof sdk.kline.cn === "function") {
+      if (sdk.kline.cn.length >= 2) {
+        return sdk.kline.cn(symbol, options);
+      }
+      return sdk.kline.cn(params || {});
+    }
+    if (sdk.kline && typeof sdk.kline.getHistoryKline === "function") {
+      return sdk.kline.getHistoryKline(symbol, options);
+    }
+    if (sdk.kline && typeof sdk.kline.withIndicators === "function") {
+      return sdk.kline.withIndicators(symbol, options);
+    }
+    if (typeof sdk.getHistoryKline === "function") {
+      return sdk.getHistoryKline(symbol, options);
+    }
+    if (typeof sdk.getKlineWithIndicators === "function") {
+      return sdk.getKlineWithIndicators(symbol, options);
+    }
+    throw new Error("stock-sdk does not expose kline.cn, kline.getHistoryKline, kline.withIndicators, getHistoryKline or getKlineWithIndicators.");
+  }
+
+  // ---- 步骤 7：根据 action 分发 ----
+  if (input.action === "codes.cn") {
+    const result = await callStockList(input.params || {});
+    process.stdout.write(JSON.stringify(result == null ? [] : result));
+    return;
+  }
+
+  if (input.action === "kline.cn") {
+    const result = await callKline(input.params || {});
+    process.stdout.write(JSON.stringify(result == null ? [] : result));
+    return;
+  }
+
+  // 通用调用：支持任意 namespace.method
+  const [namespaceName, methodName] = String(input.action || "").split(".");
+  const namespace = sdk[namespaceName];
+  const fn = namespace && namespace[methodName];
+  if (typeof fn !== "function") {
+    throw new Error(`stock-sdk does not expose ${input.action}.`);
+  }
+
+  const result = await fn.call(namespace, input.params || {});
+  process.stdout.write(JSON.stringify(result == null ? [] : result));
+})().catch((error) => {
+  // 出错时写入短诊断，避免把本地 node_modules 路径和 JS 堆栈泄漏到管理页面。
+  process.stderr.write(
+    typeof compactError === "function"
+      ? compactError(error)
+      : (error && error.message ? error.message : String(error))
+  );
+  process.exit(1);
+});
+"""
+
+
+# =============================================================================
+# Node.js 子进程管理辅助类
+# =============================================================================
+
+
+class _NodeStockSdkNamespace:
+    """
+    模拟 Python 的层级式 API 调用。
+
+    这个类让 Python 端可以这样写：
+      client.codes.cn(market="A_SHARE")    # 实际上调用 Node 端 codes.cn
+      client.kline.cn(symbol="600519", ...) # 实际上调用 Node 端 kline.cn
+
+    原理：
+      _NodeStockSdkNamespace("codes") → 记住自己属于 "codes" 命名空间
+      调用 .cn(**kwargs) → 转发为 client.run("codes.cn", kwargs)
+    """
+    def __init__(self, client: "_NodeStockSdkClient", namespace: str) -> None:
+        self._client = client
+        self._namespace = namespace
+
+    def cn(self, **kwargs: Any) -> list[dict[str, Any]]:
+        """调用 Node 端的 namespace.cn 方法。"""
+        return self._client.run(f"{self._namespace}.cn", kwargs)
+
+
+class _NodeStockSdkClient:
+    """
+    Node.js 子进程客户端 —— 负责启动和管理 Node.js 子进程。
+
+    关键设计：
+      - 每次调用都是独立的子进程（用完就关，不留长连接）
+      - 通过 JSON stdin/stdout 和子进程通信
+      - 30 秒超时
+    """
+
+    def __init__(self) -> None:
+        # 可以通过环境变量指定 Node.js 路径
+        self.node_executable = os.getenv("STOCK_SDK_NODE", "node")
+        self.cwd = _stock_sdk_cwd()
+
+        # 暴露 codes 和 kline 两个命名空间
+        self.codes = _NodeStockSdkNamespace(self, "codes")
+        self.kline = _NodeStockSdkNamespace(self, "kline")
+
+    def health_check(self) -> dict[str, Any]:
+        """健康检查：问 Node 端 stock-sdk 有没有需要的函数。"""
+        return self.run("health", {})
+
+    def run(self, action: str, params: dict[str, Any]) -> Any:
+        """
+        启动 Node.js 子进程，发送 JSON 指令，读取 JSON 结果。
+
+        这是 Python ↔ Node.js 通信的核心方法。
+
+        流程图：
+          Python                                Node.js 子进程
+          ──────                                ─────────────
+          subprocess.run(                       json.loads(stdin)
+              input='{"action":"codes.cn",...}'  → 解析指令
+          )                                     → 调用 sdk.codes.cn(...)
+                                                → stdout.write(JSON结果)
+
+          json.loads(completed.stdout)          子进程退出
+          → 返回 Python 对象
+
+        错误处理：
+          - Node 没装 → ModuleNotFoundError
+          - 超时 → RuntimeError
+          - Node 报错 → RuntimeError（包含 Node 端的错误信息）
+        """
+        try:
+            completed = subprocess.run(
+                [self.node_executable, "-e", NODE_STOCK_SDK_SCRIPT],
+                # -e 表示把后面的字符串当 JS 代码执行
+                input=json.dumps(
+                    {"action": action, "params": params},
+                    ensure_ascii=False,
+                ),
+                capture_output=True,  # 捕获 stdout 和 stderr
+                text=True,            # 文本模式（不是 bytes）
+                encoding="utf-8",
+                cwd=str(self.cwd),    # 在 stock-sdk 所在目录执行
+                timeout=30,           # 30 秒超时
+                check=False,          # 不自动抛异常，我们自己处理
+            )
+        except FileNotFoundError as exc:
+            # Node.js 没装
+            logger.warning("Node.js not found: %s", exc)
+            raise ModuleNotFoundError(
+                "Node.js is required to use stock-sdk."
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "stock-sdk request timed out."
+            ) from exc
+
+        # Node 端执行失败（return_code != 0）
+        if completed.returncode != 0:
+            stderr = completed.stderr.strip()
+            if (
+                "Cannot find module 'stock-sdk'" in stderr
+                or "Cannot find package 'stock-sdk'" in stderr
+            ):
+                raise ModuleNotFoundError(
+                    "stock-sdk Node package is not installed. "
+                    "Install stock-sdk@beta to enable this source."
+                )
+            raise RuntimeError(
+                stderr or "stock-sdk request failed."
+            )
+
+        # 解析 Node 端返回的 JSON
+        stdout = completed.stdout.strip()
+        if not stdout:
+            return []
+        return json.loads(stdout)
+
+
+def _stock_sdk_cwd() -> Path:
+    """
+    确定 stock-sdk Node 包所在的目录。
+
+    优先级：
+      ① 环境变量 STOCK_SDK_CWD（用户显式指定）
+      ② frontend 目录（monorepo 的标准位置）
+      ③ 项目根目录（兜底）
+    """
+    configured = os.getenv("STOCK_SDK_CWD")
+    if configured:
+        return Path(configured)
+
+    # __file__ 是当前文件的绝对路径
+    # .resolve().parents[3] 向上 3 级：
+    #   _http.py → adapters/ → api/ → apps/ → Quant/（项目根目录）
+    repo_root = Path(__file__).resolve().parents[3]
+    web_app = repo_root / "frontend"
+    if web_app.exists():
+        return web_app
+    return repo_root

@@ -15,8 +15,8 @@ from typing import Optional
 os.environ.setdefault("TQDM_DISABLE", "1")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from apps.api.db.session import SessionLocal, get_engine
-from apps.api.repositories.stock_boards import StockBoardRepository
+from backend.app.db.session import SessionLocal, get_engine
+from backend.app.repositories.stock_boards import StockBoardRepository
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("sync_ths_members")
@@ -189,8 +189,8 @@ def main():
 
         # Phase 3: Update stock industries
         logger.info(f"\nPhase 3: 更新股票行业分类...")
-        from apps.api.repositories.stocks import StockRepository
-        from apps.api.models import Stock
+        from backend.app.repositories.stocks import StockRepository
+        from backend.app.models import Stock
         from sqlalchemy import select
 
         industry_by_symbol = {}

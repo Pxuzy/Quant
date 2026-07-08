@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from apps.api.adapters.base import NormalizedDailyBar
-from apps.api.repositories.daily_bars import DailyBarRepository
+from backend.app.adapters.base import NormalizedDailyBar
+from backend.app.repositories.daily_bars import DailyBarRepository
 
 
 def test_daily_bars_repository_uses_duckdb_for_filtered_queries(tmp_path, monkeypatch):

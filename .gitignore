@@ -68,12 +68,34 @@ apps/web/node_modules/
 .env.local
 *.local
 
+# Logs
+logs/
+*.log
+
 # Screenshots (keep only docs)
 qa-screenshots/
 *.png
 !docs/**/*.png
+
+# AI tool artifacts
 .gstack/
 .agents/
 .clinerules/
 .cursor/
-fix-gstack-skills.ps1
+.hermes/
+.codex/
+.reasonix/
+.runtime-logs/
+
+# Tools
+tools/
+
+# Obsidian in docs
+docs/.obsidian/
+
+# Storage QA profiles
+storage/edge-*/
+
+# pyproject build artifacts
+*.egg-info/
+.eggs/

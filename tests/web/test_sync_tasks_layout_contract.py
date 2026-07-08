@@ -7,27 +7,27 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def sync_tasks_page_source() -> str:
-    return (ROOT_DIR / "apps/web/src/pages/data-system/sync-tasks/SyncTasksPage.tsx").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/pages/data-system/sync-tasks/SyncTasksPage.tsx").read_text(encoding="utf-8")
 
 
 def styles_source() -> str:
-    return (ROOT_DIR / "apps/web/src/styles.css").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/styles.css").read_text(encoding="utf-8")
 
 
 def market_data_types_source() -> str:
-    return (ROOT_DIR / "apps/web/src/features/market-data/types.ts").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/features/market-data/types.ts").read_text(encoding="utf-8")
 
 
 def sync_console_panel_source() -> str:
-    return (ROOT_DIR / "apps/web/src/pages/data-system/sync-tasks/components/SyncConsolePanel.tsx").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/pages/data-system/sync-tasks/components/SyncConsolePanel.tsx").read_text(encoding="utf-8")
 
 
 def sync_operation_tabs_source() -> str:
-    return (ROOT_DIR / "apps/web/src/pages/data-system/sync-tasks/components/SyncOperationTabs.tsx").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/pages/data-system/sync-tasks/components/SyncOperationTabs.tsx").read_text(encoding="utf-8")
 
 
 def sync_task_detail_drawer_source() -> str:
-    return (ROOT_DIR / "apps/web/src/pages/data-system/sync-tasks/components/TaskDetailDrawer.tsx").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/pages/data-system/sync-tasks/components/TaskDetailDrawer.tsx").read_text(encoding="utf-8")
 
 
 def test_sync_tasks_page_uses_tabbed_operations_layout():

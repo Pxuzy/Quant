@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, ".")
 
-from apps.api.core.config import get_settings
+from backend.app.core.config import get_settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -196,7 +196,7 @@ def _sync_stock_data_coverage(con):
     log.info(f"  Syncing {len(rows)} stocks to DB...")
 
     # Use SQLAlchemy engine to update Stock table (DuckDB can't see SQLite tables)
-    from apps.api.db.session import get_engine
+    from backend.app.db.session import get_engine
     from sqlalchemy import text
     from datetime import datetime, timezone
 
