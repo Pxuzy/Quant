@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "quant"
+version = "0.2.0"
+description = "Local-first personal stock research workbench"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Pxuzy"},
+]
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.0",
+    "alembic>=1.13",
+    "duckdb>=1.0",
+    "httpx>=0.27",
+    "requests>=2.31",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pyarrow>=15.0",
+    "cachetools>=5.3",
+    "apscheduler>=3.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx",
+    "ruff>=0.6",
+]
+adapters = [
+    "baostock>=1.0",
+    "akshare>=1.14",
+]
+
+[tool.setuptools.packages.find]
+include = ["backend*", "scripts*"]
+
+[tool.setuptools.package-data]
+backend = ["alembic/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**" = ["I"]
+"alembic/env.py" = ["I"]
+"alembic/versions/*" = ["ALL"]
