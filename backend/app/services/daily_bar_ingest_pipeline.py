@@ -11,7 +11,7 @@ from backend.app.repositories.ingest_batches import IngestBatchRepository
 from backend.app.repositories.stocks import StockRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.services.database_integration_service import invalidate_coverage_cache
-from scripts.data_loader import invalidate_data_cache
+from backend.app.db.cache import invalidate_data_cache
 from backend.app.services.normalized_data_validation import validate_daily_bar_records
 
 
