@@ -98,16 +98,6 @@ class NormalizedTradingCalendar:
 
 
 class StockDataSourceAdapter(ABC):
-    """Abstract base for all data source adapters.
-
-    Each adapter must implement: capabilities, metadata, health_check,
-    plus at least one data-fetch method (stock_list / daily_bars / calendars).
-    """
-# Python 会在创建对象时直接报错，而不是等到调用时才出错。
-# 这叫做"在编译/加载阶段就发现问题，而不是运行时才爆炸"。
-
-
-class StockDataSourceAdapter(ABC):
     """
     股票数据源适配器的抽象基类 —— 所有适配器的"接口约定"。
 
