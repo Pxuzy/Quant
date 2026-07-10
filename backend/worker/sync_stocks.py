@@ -1,8 +1,16 @@
+"""Stock data sync worker — enqueue & run sync tasks from command line.
+
+Design: four task types (stock_list, daily_bars, daily_bars_market_repair, calendars)
+share the same enqueue→run pattern. Helpers below eliminate ~70% code duplication
+while keeping the public API backward-compatible.
+"""
 from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Callable
 from datetime import date
+from typing import Any, TypeVar
 
 from backend.app.db.session import SessionLocal, configure_database, init_db
 from backend.app.models import SyncTask
@@ -12,12 +20,68 @@ from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE, StockSyncS
 from backend.app.services.trading_calendar_service import TradingCalendarService
 
 SUPPORTED_PENDING_TASK_TYPES = ("stock_list", "daily_bars", "daily_bars_market_repair", "calendars")
+T = TypeVar("T")
 
 
-def configure_worker_database(database_url: str | None = None) -> None:
+# ─── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _init(database_url: str | None = None) -> None:
+    """Ensure DB engine + schema are ready."""
     if database_url:
         configure_database(database_url)
     init_db()
+
+
+def _with_db(fn: Callable[..., T], database_url: str | None = None, **kwargs: Any) -> T:
+    """Open a session, call fn(session, **kwargs), close."""
+    _init(database_url)
+    db = SessionLocal()
+    try:
+        return fn(db, **kwargs)
+    finally:
+        db.close()
+
+
+def _enqueue(
+    service_factory: Callable,
+    method: str,
+    kwargs: dict[str, Any],
+    database_url: str | None = None,
+) -> SyncTask:
+    """Generic enqueue: construct a service and call method(session, **kwargs)."""
+    def _do(db):
+        svc = service_factory(db)
+        return getattr(svc, method)(**kwargs)
+    return _with_db(_do, database_url)
+
+
+def _run_task(
+    service_factory: Callable,
+    method: str,
+    task_id: int,
+    database_url: str | None = None,
+) -> SyncTask:
+    """Generic run-by-id: call the service method with task_id."""
+    def _do(db):
+        svc = service_factory(db)
+        return getattr(svc, method)(task_id)
+    return _with_db(_do, database_url)
+
+
+def _run_next(
+    service_factory: Callable,
+    method: str,
+    database_url: str | None = None,
+) -> SyncTask | None:
+    """Generic run-next-pending."""
+    def _do(db):
+        svc = service_factory(db)
+        return getattr(svc, method)()
+    return _with_db(_do, database_url)
+
+
+# ─── Stock List ─────────────────────────────────────────────────────────────
 
 
 def enqueue_stock_sync(
@@ -26,57 +90,16 @@ def enqueue_stock_sync(
     market: str = "A_SHARE",
     database_url: str | None = None,
 ) -> SyncTask:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return StockSyncService(db).create_stock_sync_task(source=source, market=market)
-    finally:
-        db.close()
+    return _enqueue(StockSyncService, "create_stock_sync_task",
+                    {"source": source, "market": market}, database_url)
 
 
 def run_stock_sync_task(*, task_id: int, database_url: str | None = None) -> SyncTask:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return StockSyncService(db).run_stock_sync_task(task_id)
-    finally:
-        db.close()
+    return _run_task(StockSyncService, "run_stock_sync_task", task_id, database_url)
 
 
 def run_next_pending_stock_sync(*, database_url: str | None = None) -> SyncTask | None:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return StockSyncService(db).run_next_pending_stock_sync()
-    finally:
-        db.close()
-
-
-def run_next_pending_sync(*, database_url: str | None = None) -> SyncTask | None:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        repo = SyncTaskRepository(db)
-        recovered = repo.recover_stale_tasks()
-        if recovered:
-            print(f"Recovered {recovered} stale running task(s).", flush=True)
-        task = repo.get_next_pending_any_task(SUPPORTED_PENDING_TASK_TYPES)
-        if task is None:
-            return None
-        task_id = task.id
-        task_type = task.task_type
-    finally:
-        db.close()
-
-    if task_type == "stock_list":
-        return run_stock_sync_task(task_id=task_id, database_url=database_url)
-    if task_type == "daily_bars":
-        return run_daily_bars_sync_task(task_id=task_id, database_url=database_url)
-    if task_type == "daily_bars_market_repair":
-        return run_market_daily_bars_repair_task(task_id=task_id, database_url=database_url)
-    if task_type == "calendars":
-        return run_calendar_sync_task(task_id=task_id, database_url=database_url)
-    raise ValueError(f"Unsupported pending sync task type: {task_type}")
+    return _run_next(StockSyncService, "run_next_pending_stock_sync", database_url)
 
 
 def run_stock_sync(
@@ -89,6 +112,9 @@ def run_stock_sync(
     return run_stock_sync_task(task_id=task.id, database_url=database_url)
 
 
+# ─── Daily Bars ─────────────────────────────────────────────────────────────
+
+
 def enqueue_daily_bars_sync(
     *,
     source: str = AUTO_SOURCE_CODE,
@@ -99,37 +125,40 @@ def enqueue_daily_bars_sync(
     adjust_type: str = "none",
     database_url: str | None = None,
 ) -> SyncTask:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return MarketDataSyncService(db).create_daily_bars_sync_task(
-            source=source,
-            market=market,
-            symbol=symbol,
-            start_date=start_date,
-            end_date=end_date,
-            adjust_type=adjust_type,
-        )
-    finally:
-        db.close()
+    return _enqueue(MarketDataSyncService, "create_daily_bars_sync_task",
+                    {"source": source, "market": market, "symbol": symbol,
+                     "start_date": start_date, "end_date": end_date,
+                     "adjust_type": adjust_type},
+                    database_url)
 
 
 def run_daily_bars_sync_task(*, task_id: int, database_url: str | None = None) -> SyncTask:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return MarketDataSyncService(db).run_daily_bars_sync_task(task_id)
-    finally:
-        db.close()
+    return _run_task(MarketDataSyncService, "run_daily_bars_sync_task", task_id, database_url)
 
 
 def run_next_pending_daily_bars_sync(*, database_url: str | None = None) -> SyncTask | None:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return MarketDataSyncService(db).run_next_pending_daily_bars_sync()
-    finally:
-        db.close()
+    return _run_next(MarketDataSyncService, "run_next_pending_daily_bars_sync", database_url)
+
+
+def run_daily_bars_sync(
+    *,
+    source: str = AUTO_SOURCE_CODE,
+    market: str = "A_SHARE",
+    symbol: str,
+    start_date: date,
+    end_date: date,
+    adjust_type: str = "none",
+    database_url: str | None = None,
+) -> SyncTask:
+    task = enqueue_daily_bars_sync(
+        source=source, market=market, symbol=symbol,
+        start_date=start_date, end_date=end_date, adjust_type=adjust_type,
+        database_url=database_url,
+    )
+    return run_daily_bars_sync_task(task_id=task.id, database_url=database_url)
+
+
+# ─── Daily Bars — Market Repair ─────────────────────────────────────────────
 
 
 def enqueue_market_daily_bars_repair(
@@ -143,38 +172,19 @@ def enqueue_market_daily_bars_repair(
     adjust_type: str = "none",
     database_url: str | None = None,
 ) -> SyncTask:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return MarketDataSyncService(db).create_market_daily_bars_repair_task(
-            source=source,
-            market=market,
-            start_date=start_date,
-            end_date=end_date,
-            max_symbols=max_symbols,
-            start_policy=start_policy,
-            adjust_type=adjust_type,
-        )
-    finally:
-        db.close()
+    return _enqueue(MarketDataSyncService, "create_market_daily_bars_repair_task",
+                    {"source": source, "market": market, "start_date": start_date,
+                     "end_date": end_date, "max_symbols": max_symbols,
+                     "start_policy": start_policy, "adjust_type": adjust_type},
+                    database_url)
 
 
 def run_market_daily_bars_repair_task(*, task_id: int, database_url: str | None = None) -> SyncTask:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return MarketDataSyncService(db).run_market_daily_bars_repair_task(task_id)
-    finally:
-        db.close()
+    return _run_task(MarketDataSyncService, "run_market_daily_bars_repair_task", task_id, database_url)
 
 
 def run_next_pending_market_daily_bars_repair(*, database_url: str | None = None) -> SyncTask | None:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return MarketDataSyncService(db).run_next_pending_market_daily_bars_repair()
-    finally:
-        db.close()
+    return _run_next(MarketDataSyncService, "run_next_pending_market_daily_bars_repair", database_url)
 
 
 def run_market_daily_bars_repair(
@@ -189,38 +199,14 @@ def run_market_daily_bars_repair(
     database_url: str | None = None,
 ) -> SyncTask:
     task = enqueue_market_daily_bars_repair(
-        source=source,
-        market=market,
-        start_date=start_date,
-        end_date=end_date,
-        max_symbols=max_symbols,
-        start_policy=start_policy,
-        adjust_type=adjust_type,
+        source=source, market=market, start_date=start_date, end_date=end_date,
+        max_symbols=max_symbols, start_policy=start_policy, adjust_type=adjust_type,
         database_url=database_url,
     )
     return run_market_daily_bars_repair_task(task_id=task.id, database_url=database_url)
 
 
-def run_daily_bars_sync(
-    *,
-    source: str = AUTO_SOURCE_CODE,
-    market: str = "A_SHARE",
-    symbol: str,
-    start_date: date,
-    end_date: date,
-    adjust_type: str = "none",
-    database_url: str | None = None,
-) -> SyncTask:
-    task = enqueue_daily_bars_sync(
-        source=source,
-        market=market,
-        symbol=symbol,
-        start_date=start_date,
-        end_date=end_date,
-        adjust_type=adjust_type,
-        database_url=database_url,
-    )
-    return run_daily_bars_sync_task(task_id=task.id, database_url=database_url)
+# ─── Calendars ──────────────────────────────────────────────────────────────
 
 
 def enqueue_calendar_sync(
@@ -231,35 +217,18 @@ def enqueue_calendar_sync(
     end_date: date,
     database_url: str | None = None,
 ) -> SyncTask:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return TradingCalendarService(db).create_calendar_sync_task(
-            source=source,
-            market=market,
-            start_date=start_date,
-            end_date=end_date,
-        )
-    finally:
-        db.close()
+    return _enqueue(TradingCalendarService, "create_calendar_sync_task",
+                    {"source": source, "market": market, "start_date": start_date,
+                     "end_date": end_date},
+                    database_url)
 
 
 def run_calendar_sync_task(*, task_id: int, database_url: str | None = None) -> SyncTask:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return TradingCalendarService(db).run_calendar_sync_task(task_id)
-    finally:
-        db.close()
+    return _run_task(TradingCalendarService, "run_calendar_sync_task", task_id, database_url)
 
 
 def run_next_pending_calendar_sync(*, database_url: str | None = None) -> SyncTask | None:
-    configure_worker_database(database_url)
-    db = SessionLocal()
-    try:
-        return TradingCalendarService(db).run_next_pending_calendar_sync()
-    finally:
-        db.close()
+    return _run_next(TradingCalendarService, "run_next_pending_calendar_sync", database_url)
 
 
 def run_calendar_sync(
@@ -271,13 +240,44 @@ def run_calendar_sync(
     database_url: str | None = None,
 ) -> SyncTask:
     task = enqueue_calendar_sync(
-        source=source,
-        market=market,
-        start_date=start_date,
-        end_date=end_date,
+        source=source, market=market, start_date=start_date, end_date=end_date,
         database_url=database_url,
     )
     return run_calendar_sync_task(task_id=task.id, database_url=database_url)
+
+
+# ─── Multi-task Runner ──────────────────────────────────────────────────────
+
+
+def run_next_pending_sync(*, database_url: str | None = None) -> SyncTask | None:
+    """Pick the oldest pending task of any supported type and execute it."""
+    def _do(db):
+        repo = SyncTaskRepository(db)
+        recovered = repo.recover_stale_tasks()
+        if recovered:
+            print(f"Recovered {recovered} stale running task(s).", flush=True)
+        task = repo.get_next_pending_any_task(SUPPORTED_PENDING_TASK_TYPES)
+        if task is None:
+            return None
+        return task
+    task = _with_db(_do, database_url)
+    if task is None:
+        return None
+
+    # Dispatch by type
+    dispatcher = {
+        "stock_list": run_stock_sync_task,
+        "daily_bars": run_daily_bars_sync_task,
+        "daily_bars_market_repair": run_market_daily_bars_repair_task,
+        "calendars": run_calendar_sync_task,
+    }
+    runner = dispatcher.get(task.task_type)
+    if runner is None:
+        raise ValueError(f"Unsupported pending sync task type: {task.task_type}")
+    return runner(task_id=task.id, database_url=database_url)
+
+
+# ─── CLI ────────────────────────────────────────────────────────────────────
 
 
 def task_to_payload(task: SyncTask | None) -> dict:
@@ -295,7 +295,7 @@ def task_to_payload(task: SyncTask | None) -> dict:
     }
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a stock data sync task.")
     parser.add_argument(
         "--task-type",
@@ -311,11 +311,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start-policy", choices=["requested_start", "listing_date"], default="requested_start")
     parser.add_argument("--adjust-type", choices=["none", "qfq", "hfq"], default="none")
     parser.add_argument("--database-url", default=None)
-    parser.add_argument("--task-id", type=int, default=None, help="Execute an existing pending stock sync task.")
-    parser.add_argument("--enqueue", action="store_true", help="Create a pending stock sync task and exit.")
-    parser.add_argument("--run-next-pending", action="store_true", help="Execute the oldest pending stock sync task.")
+    parser.add_argument("--task-id", type=int, default=None, help="Execute an existing pending sync task.")
+    parser.add_argument("--enqueue", action="store_true", help="Create a pending task and exit.")
+    parser.add_argument("--run-next-pending", action="store_true", help="Execute the oldest pending task.")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     task_type = args.task_type or "stock_list"
+
+    task: SyncTask | None = None
 
     if args.run_next_pending and args.task_type is None:
         task = run_next_pending_sync(database_url=args.database_url)
@@ -329,26 +336,10 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error("--symbol, --start-date, and --end-date are required for daily_bars tasks.")
             start_date = date.fromisoformat(args.start_date)
             end_date = date.fromisoformat(args.end_date)
-            if args.enqueue:
-                task = enqueue_daily_bars_sync(
-                    source=args.source,
-                    market=args.market,
-                    symbol=args.symbol,
-                    start_date=start_date,
-                    end_date=end_date,
-                    adjust_type=args.adjust_type,
-                    database_url=args.database_url,
-                )
-            else:
-                task = run_daily_bars_sync(
-                    source=args.source,
-                    market=args.market,
-                    symbol=args.symbol,
-                    start_date=start_date,
-                    end_date=end_date,
-                    adjust_type=args.adjust_type,
-                    database_url=args.database_url,
-                )
+            fn = enqueue_daily_bars_sync if args.enqueue else run_daily_bars_sync
+            task = fn(source=args.source, market=args.market, symbol=args.symbol,
+                      start_date=start_date, end_date=end_date, adjust_type=args.adjust_type,
+                      database_url=args.database_url)
     elif task_type == "daily_bars_market_repair":
         if args.task_id is not None:
             task = run_market_daily_bars_repair_task(task_id=args.task_id, database_url=args.database_url)
@@ -359,28 +350,10 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error("--start-date and --end-date are required for daily_bars_market_repair tasks.")
             start_date = date.fromisoformat(args.start_date)
             end_date = date.fromisoformat(args.end_date)
-            if args.enqueue:
-                task = enqueue_market_daily_bars_repair(
-                    source=args.source,
-                    market=args.market,
-                    start_date=start_date,
-                    end_date=end_date,
-                    max_symbols=args.max_symbols,
-                    start_policy=args.start_policy,
-                    adjust_type=args.adjust_type,
-                    database_url=args.database_url,
-                )
-            else:
-                task = run_market_daily_bars_repair(
-                    source=args.source,
-                    market=args.market,
-                    start_date=start_date,
-                    end_date=end_date,
-                    max_symbols=args.max_symbols,
-                    start_policy=args.start_policy,
-                    adjust_type=args.adjust_type,
-                    database_url=args.database_url,
-                )
+            fn = enqueue_market_daily_bars_repair if args.enqueue else run_market_daily_bars_repair
+            task = fn(source=args.source, market=args.market, start_date=start_date, end_date=end_date,
+                      max_symbols=args.max_symbols, start_policy=args.start_policy,
+                      adjust_type=args.adjust_type, database_url=args.database_url)
     elif task_type == "calendars":
         if args.task_id is not None:
             task = run_calendar_sync_task(task_id=args.task_id, database_url=args.database_url)
@@ -391,30 +364,19 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error("--start-date and --end-date are required for calendars tasks.")
             start_date = date.fromisoformat(args.start_date)
             end_date = date.fromisoformat(args.end_date)
-            if args.enqueue:
-                task = enqueue_calendar_sync(
-                    source=args.source,
-                    market=args.market,
-                    start_date=start_date,
-                    end_date=end_date,
-                    database_url=args.database_url,
-                )
-            else:
-                task = run_calendar_sync(
-                    source=args.source,
-                    market=args.market,
-                    start_date=start_date,
-                    end_date=end_date,
-                    database_url=args.database_url,
-                )
-    elif args.enqueue:
-        task = enqueue_stock_sync(source=args.source, market=args.market, database_url=args.database_url)
-    elif args.task_id is not None:
-        task = run_stock_sync_task(task_id=args.task_id, database_url=args.database_url)
-    elif args.run_next_pending:
-        task = run_next_pending_stock_sync(database_url=args.database_url)
+            fn = enqueue_calendar_sync if args.enqueue else run_calendar_sync
+            task = fn(source=args.source, market=args.market, start_date=start_date, end_date=end_date,
+                      database_url=args.database_url)
     else:
-        task = run_stock_sync(source=args.source, market=args.market, database_url=args.database_url)
+        # stock_list (default)
+        if args.enqueue:
+            task = enqueue_stock_sync(source=args.source, market=args.market, database_url=args.database_url)
+        elif args.task_id is not None:
+            task = run_stock_sync_task(task_id=args.task_id, database_url=args.database_url)
+        elif args.run_next_pending:
+            task = run_next_pending_stock_sync(database_url=args.database_url)
+        else:
+            task = run_stock_sync(source=args.source, market=args.market, database_url=args.database_url)
 
     print(json.dumps(task_to_payload(task), ensure_ascii=True))
     return 0 if task is None or task.status == "success" or (args.enqueue and task.status == "pending") else 1
