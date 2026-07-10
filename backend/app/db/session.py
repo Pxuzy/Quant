@@ -36,6 +36,22 @@ def _is_pg(url: str) -> bool:
     return url.startswith("postgresql")
 
 
+def _get_sqlite_connect_args() -> dict:
+    return {"check_same_thread": False}
+
+
+def _setup_sqlite_pragmas(engine: Engine) -> None:
+    """WAL mode + busy timeout for concurrent SQLite access."""
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
+
+
 def get_engine() -> Engine:
     global _engine, _engine_url
 
@@ -44,7 +60,7 @@ def get_engine() -> Engine:
         return _engine
 
     ensure_database_parent(database_url)
-    connect_args = {"check_same_thread": False} if not _is_pg(database_url) else {}
+    connect_args = {} if _is_pg(database_url) else _get_sqlite_connect_args()
 
     if _is_pg(database_url):
         _engine = create_engine(
@@ -56,17 +72,7 @@ def get_engine() -> Engine:
         )
     else:
         _engine = create_engine(database_url, connect_args=connect_args, future=True)
-
-        # Set SQLite busy timeout to 30 seconds (30000ms)
-        # This prevents "database is locked" errors during concurrent writes
-        from sqlalchemy import event
-
-        @event.listens_for(_engine, "connect")
-        def set_sqlite_pragma(dbapi_connection, connection_record):
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA busy_timeout=30000")
-            cursor.close()
+        _setup_sqlite_pragmas(_engine)
 
     _engine_url = database_url
     SessionLocal.configure(bind=_engine)
@@ -87,7 +93,8 @@ def _run_alembic_upgrade(engine: Engine) -> None:
     from alembic import command
 
     alembic_cfg = Config()
-    alembic_cfg.set_main_option("script_location", "apps/api/alembic")
+    # script_location 相对于 alembic.ini 的位置：backend/alembic/
+    alembic_cfg.set_main_option("script_location", "backend/app/alembic")
     # Point Alembic at our URL so it doesn't re-read env.py's hardcoded URL
     alembic_cfg.set_main_option("sqlalchemy.url", engine.url.render_as_string(hide_password=False))
     command.upgrade(alembic_cfg, "head")
