@@ -52,7 +52,7 @@ sync task
   -> worker claim
   -> provider health_check
   -> adapter.fetch
-  -> raw artifact envelope + checksum（当前已接入单股日线）
+  -> raw artifact envelope + checksum（当前已接入单股日线、股票列表和交易日历）
   -> adapter.normalize
   -> schema validation
   -> ingest_batch
@@ -62,7 +62,7 @@ sync task
   -> quality report / lineage / BarReader
 ```
 
-当前单股票日线正式管线会在 normalize 前保存 provider raw envelope，并通过 `raw_artifacts` 与 `ingest_batches.raw_artifact_id` 关联。股票列表、交易日历、市场级 repair 尚未统一接入该 raw 机制。`scripts/ops/fetch_daily_bars.py` 与 `scripts/ops/merge_raw_to_silver.py` 产生的 `storage/raw` 仍是旁路运维数据，不自动等同于 `sync_tasks`、`ingest_batches`、quality 和 lineage。
+当前单股票日线、股票列表和交易日历正式管线会在 normalize 前保存 provider raw envelope，并通过 `raw_artifacts` 与 `ingest_batches.raw_artifact_id` 关联。市场级 repair 尚未统一接入该 raw 机制。`scripts/ops/fetch_daily_bars.py` 与 `scripts/ops/merge_raw_to_silver.py` 产生的 `storage/raw` 仍是旁路运维数据，不自动等同于 `sync_tasks`、`ingest_batches`、quality 和 lineage。
 
 目标正式链路：
 
