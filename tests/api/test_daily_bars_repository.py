@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from backend.app.adapters.base import NormalizedDailyBar
+from backend.app.core.config import get_settings
 from backend.app.repositories.daily_bars import DailyBarRepository
 
 
@@ -175,3 +176,60 @@ def test_list_daily_bars_reuses_symbol_fast_path_for_single_stock(tmp_path, monk
     assert calls == [("600519", "A_SHARE")]
     assert total == 2
     assert [row["trade_date"] for row in rows] == [date(2026, 6, 2)]
+
+
+def test_daily_bar_repositories_isolate_duckdb_by_lake_root(tmp_path, monkeypatch):
+    first_lake = tmp_path / "first" / "lake"
+    second_lake = tmp_path / "second" / "lake"
+    monkeypatch.setenv("DATA_LAKE_DIR", str(first_lake))
+    get_settings.cache_clear()
+    first_repo = DailyBarRepository()
+
+    first_repo.write_many(
+        [
+            NormalizedDailyBar(
+                symbol="600519",
+                exchange="SSE",
+                market="A_SHARE",
+                trade_date=date(2026, 6, 1),
+                open=1665.0,
+                high=1680.0,
+                low=1660.0,
+                close=1675.0,
+                pre_close=None,
+                volume=1000.0,
+                amount=1675000.0,
+                adjust_factor=1.0,
+                source="fixture",
+            )
+        ]
+    )
+
+    assert first_repo.symbol_daily_bars(symbol="600519", market="A_SHARE")
+
+    monkeypatch.setenv("DATA_LAKE_DIR", str(second_lake))
+    get_settings.cache_clear()
+    second_repo = DailyBarRepository()
+    second_repo.write_many(
+        [
+            NormalizedDailyBar(
+                symbol="600519",
+                exchange="SSE",
+                market="A_SHARE",
+                trade_date=date(2026, 6, 2),
+                open=1678.0,
+                high=1690.0,
+                low=1670.0,
+                close=1688.0,
+                pre_close=1675.0,
+                volume=1100.0,
+                amount=1856800.0,
+                adjust_factor=1.0,
+                source="fixture",
+            )
+        ]
+    )
+
+    assert [row["trade_date"] for row in second_repo.symbol_daily_bars(symbol="600519", market="A_SHARE")] == [
+        date(2026, 6, 2)
+    ]

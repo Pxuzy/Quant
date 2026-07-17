@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -40,9 +41,22 @@ def _duckdb_connect_with_timeout() -> duckdb.DuckDBPyConnection:
 
 
 class DailyBarRepository:
-    def __init__(self, *, lake_root: str | Path | None = None, dataset_dir: str | Path | None = None) -> None:
-        self.lake_root = Path(lake_root or get_settings().data_lake_dir)
+    def __init__(
+        self,
+        *,
+        lake_root: str | Path | None = None,
+        dataset_dir: str | Path | None = None,
+        duckdb_path: str | Path | None = None,
+    ) -> None:
+        settings = get_settings()
+        self.lake_root = Path(lake_root or settings.data_lake_dir)
         self.dataset_dir = Path(dataset_dir) if dataset_dir is not None else self.lake_root / "silver" / "daily_bars"
+        if duckdb_path is not None:
+            self.duckdb_path = Path(duckdb_path)
+        elif os.getenv("DUCKDB_PATH"):
+            self.duckdb_path = Path(settings.duckdb_path)
+        else:
+            self.duckdb_path = self.lake_root.parent / "quant.duckdb"
 
     def write_many(self, records: list[NormalizedDailyBar]) -> int:
         if not records:
@@ -52,7 +66,7 @@ class DailyBarRepository:
 
         # Primary write: DuckDB persistent store (幂等去重)
         from backend.app.db.duckdb_store import write_daily_bars
-        written = write_daily_bars(rows)
+        written = write_daily_bars(rows, db_path=self.duckdb_path)
 
         # Archive: Parquet 湖存储 (best-effort, 非阻塞)
         try:
@@ -419,7 +433,7 @@ class DailyBarRepository:
             try:
                 from backend.app.db.duckdb_store import get_duckdb
 
-                store = get_duckdb()
+                store = get_duckdb(db_path=self.duckdb_path)
                 rows = store.execute(
                     f"""
                     select {", ".join(DAILY_BAR_COLUMNS)}

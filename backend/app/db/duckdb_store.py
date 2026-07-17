@@ -20,12 +20,12 @@ _DB_PATH: str = ""
 _WRITE_LOCK = Lock()
 
 
-def get_duckdb() -> duckdb.DuckDBPyConnection:
+def get_duckdb(db_path: str | Path | None = None) -> duckdb.DuckDBPyConnection:
     """获取线程安全的持久 DuckDB 连接（单例）。"""
     global _CONN, _DB_PATH
 
-    db_path = get_settings().duckdb_path
-    if _CONN is not None and _DB_PATH == db_path:
+    requested_path = str(db_path or get_settings().duckdb_path)
+    if _CONN is not None and _DB_PATH == requested_path:
         return _CONN
 
     if _CONN is not None:
@@ -34,10 +34,10 @@ def get_duckdb() -> duckdb.DuckDBPyConnection:
         except Exception:
             pass
 
-    path = Path(db_path)
+    path = Path(requested_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     _CONN = duckdb.connect(str(path))
-    _DB_PATH = db_path
+    _DB_PATH = requested_path
     _init_schema()
     return _CONN
 
@@ -83,11 +83,11 @@ def _init_schema() -> None:
     """)
 
 
-def write_daily_bars(rows: list[dict]) -> int:
+def write_daily_bars(rows: list[dict], *, db_path: str | Path | None = None) -> int:
     """将行情数据写入 DuckDB 持久表（幂等去重 + 线程安全），批量 INSERT VALUES 加速。"""
     if not rows:
         return 0
-    con = get_duckdb()
+    con = get_duckdb(db_path=db_path)
     with _WRITE_LOCK:
         # Build bulk VALUES clause using parameterized approach via temp table
         chunk_size = 5000
