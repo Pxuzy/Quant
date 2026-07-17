@@ -25,6 +25,7 @@ class SyncTaskRepository:
         max_symbols: int | None = None,
         start_policy: str | None = None,
         adjust_type: str | None = None,
+        input_raw_artifact_id: int | None = None,
     ) -> SyncTask:
         task = SyncTask(
             task_type=task_type,
@@ -36,6 +37,7 @@ class SyncTaskRepository:
             max_symbols=max_symbols,
             start_policy=start_policy,
             adjust_type=adjust_type,
+            input_raw_artifact_id=input_raw_artifact_id,
         )
         self.db.add(task)
         self.db.flush()

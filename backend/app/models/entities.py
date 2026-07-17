@@ -133,6 +133,7 @@ class SyncTask(Base):
     max_symbols: Mapped[int | None] = mapped_column(Integer, nullable=True)
     start_policy: Mapped[str | None] = mapped_column(String(32), nullable=True)
     adjust_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    input_raw_artifact_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_read: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

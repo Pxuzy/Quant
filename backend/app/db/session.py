@@ -125,6 +125,7 @@ def _ensure_sqlite_sync_task_columns(engine: Engine) -> None:
         "max_symbols": "INTEGER",
         "start_policy": "VARCHAR(32)",
         "adjust_type": "VARCHAR(16)",
+        "input_raw_artifact_id": "INTEGER",
     }
     missing_columns = [
         (name, column_type)
