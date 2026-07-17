@@ -65,7 +65,6 @@ sync_tasks
 
 ### 尚未实现或不应误称已完成
 
-- 市场级 repair 的正式 raw artifact 接入；
 - 正式 `daily_bars_raw_replay` 任务；
 - 独立 `dataset_versions`、`dataset_partitions`、`snapshots` 和持久 manifest；
 - 以质量检查为阻断条件的 candidate → active 原子发布；
@@ -78,7 +77,7 @@ sync_tasks
 
 | 层 | 当前语义 | 研究是否可直接读取 |
 | --- | --- | --- |
-| raw | 单股日线、股票列表和交易日历正式 fetch 已保存 raw envelope；市场 repair 仍主要依赖现有流程 | 否 |
+| raw | 日线、股票列表、交易日历和市场 repair 正式 fetch 已保存 raw envelope | 否 |
 | bronze | 目标层，当前没有正式自动发布逻辑 | 否 |
 | silver | 当前日线 canonical 查询/归档层 | 是，受 governed contract 约束 |
 | gold | 目标层，用于因子、指标和回测专用数据集 | 未来 |
@@ -168,11 +167,10 @@ source registry
 适合个人项目的增量顺序：
 
 1. 冻结 provider registry 与数据契约；
-2. 把 raw artifact 扩展到市场 repair，并记录每只股票的 checksum；
-3. 增加质量门禁和原子发布；
-4. 增加 dataset version、manifest、snapshot、watermark；
-5. 扩展 BarReader/DataPortal；
-6. 最后统一 replay、repair、lease/retry 和运维观测。
+2. 增加质量门禁和原子发布；
+3. 增加 dataset version、manifest、snapshot、watermark；
+4. 扩展 BarReader/DataPortal；
+5. 最后统一正式 replay、lease/retry 和运维观测。
 
 暂不引入 Kafka、Airflow、Celery、Redis、Iceberg/Delta 或微服务拆分。
 
