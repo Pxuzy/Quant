@@ -438,6 +438,20 @@ def test_data_sources_api_removes_non_v1_provider_rows(client):
     source_codes = {source["code"] for source in response.json()}
     assert source_codes == {"akshare", "baostock", "stock_sdk"}
 
+    db = SessionLocal()
+    try:
+        retired = {
+            source.code: source
+            for source in db.query(DataSource).filter(DataSource.code.in_(["eastmoney", "mock_seed_provider"])).all()
+        }
+    finally:
+        db.close()
+
+    assert set(retired) == {"eastmoney", "mock_seed_provider"}
+    assert all(source.enabled is False for source in retired.values())
+    assert all(source.health_status == "retired" for source in retired.values())
+    assert all(source.config_json.get("retired") is True for source in retired.values())
+
 
 def test_disabled_data_source_cannot_create_stock_sync(client):
     disable_response = client.patch("/api/data-sources/baostock", json={"enabled": False})

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import delete
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -58,14 +57,36 @@ class DataSourceRepository:
     def sync_registered_adapters(self, registry: AdapterRegistry) -> list[DataSource]:
         registered_codes = {adapter.code for adapter in registry.list()}
         if registered_codes:
-            self.db.execute(delete(DataSource).where(DataSource.code.not_in(registered_codes)))
+            retired_sources = list(
+                self.db.scalars(
+                    select(DataSource).where(DataSource.code.not_in(registered_codes))
+                ).all()
+            )
+            retired_at = datetime.now(timezone.utc).isoformat()
+            for source in retired_sources:
+                config_json = source.config_json if isinstance(source.config_json, dict) else {}
+                source.enabled = False
+                source.health_status = "retired"
+                source.config_json = {
+                    **config_json,
+                    "retired": True,
+                    "retired_at": config_json.get("retired_at", retired_at),
+                }
         return [self.upsert_adapter(adapter) for adapter in registry.list()]
 
     def get_by_code(self, code: str) -> DataSource | None:
         return self.db.scalar(select(DataSource).where(DataSource.code == code))
 
     def list_all(self) -> list[DataSource]:
-        return list(self.db.scalars(select(DataSource).order_by(DataSource.priority.asc(), DataSource.code.asc())).all())
+        sources = list(self.db.scalars(select(DataSource).order_by(DataSource.priority.asc(), DataSource.code.asc())).all())
+        return [
+            source
+            for source in sources
+            if not (
+                isinstance(source.config_json, dict)
+                and source.config_json.get("retired") is True
+            )
+        ]
 
     def list_enabled(self) -> list[DataSource]:
         return list(
