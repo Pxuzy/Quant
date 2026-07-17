@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 
 from backend.app.core.config import reset_settings_cache
 from backend.app.db.session import SessionLocal, configure_database, init_db
-from backend.app.models import Dataset, Stock, SyncTask, TradingCalendar
+from backend.app.models import Dataset, IngestBatch, RawArtifact, Stock, SyncTask, TradingCalendar
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.worker.sync_stocks import (
     enqueue_calendar_sync,
@@ -99,6 +99,8 @@ def install_fake_baostock(monkeypatch) -> None:
 
 def test_worker_claims_pending_stock_sync_task(tmp_path, monkeypatch):
     install_fake_akshare(monkeypatch)
+    monkeypatch.setenv("DATA_LAKE_DIR", str(tmp_path / "lake"))
+    reset_settings_cache()
     database_url = f"sqlite:///{tmp_path / 'worker-test.db'}"
     pending_task = enqueue_stock_sync(database_url=database_url)
 
@@ -116,13 +118,21 @@ def test_worker_claims_pending_stock_sync_task(tmp_path, monkeypatch):
     try:
         stock_count = db.scalar(select(func.count(Stock.id)))
         dataset = db.scalar(select(Dataset).where(Dataset.name == "stocks"))
+        batch = db.scalar(select(IngestBatch).where(IngestBatch.task_id == pending_task.id))
+        artifact = db.get(RawArtifact, batch.raw_artifact_id) if batch and batch.raw_artifact_id else None
     finally:
         db.close()
+        reset_settings_cache()
 
     assert stock_count >= 8
     assert dataset is not None
     assert dataset.storage_type == "postgres"
     assert dataset.layer == "silver"
+    assert batch is not None
+    assert batch.raw_artifact_id is not None
+    assert artifact is not None
+    assert artifact.source == "akshare"
+    assert artifact.row_count == 8
 
 
 def test_worker_claim_commit_is_visible_to_other_sessions(tmp_path):

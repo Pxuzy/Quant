@@ -11,10 +11,12 @@ from backend.app.models import SyncTask
 from backend.app.repositories.data_sources import DataSourceRepository
 from backend.app.repositories.datasets import DatasetRepository
 from backend.app.repositories.ingest_batches import IngestBatchRepository
+from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.repositories.trading_calendars import TradingCalendarRepository
 from backend.app.services.database_integration_service import invalidate_coverage_cache
 from backend.app.services.normalized_data_validation import validate_calendar_records
+from backend.app.services.raw_artifact_store import RawArtifactStore
 from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE
 
 
@@ -26,6 +28,8 @@ class TradingCalendarService:
         self.data_source_repo = DataSourceRepository(db)
         self.dataset_repo = DatasetRepository(db)
         self.ingest_batch_repo = IngestBatchRepository(db)
+        self.raw_artifact_repo = RawArtifactRepository(db)
+        self.raw_artifact_store = RawArtifactStore()
         self.task_repo = SyncTaskRepository(db)
 
     def list_days(
@@ -316,6 +320,29 @@ class TradingCalendarService:
             payload={"source": adapter.code, "records": records_read},
         )
 
+        raw_metadata = self.raw_artifact_store.persist(
+            task_id=task.id,
+            dataset_name="trading_calendars",
+            source=adapter.code,
+            requested_source=task.source,
+            market=market,
+            symbol=None,
+            start_date=task.start_date,
+            end_date=task.end_date,
+            records=raw_records,
+        )
+        raw_artifact = self.raw_artifact_repo.create_artifact(
+            task=task,
+            dataset_name="trading_calendars",
+            source=adapter.code,
+            requested_source=task.source,
+            market=market,
+            symbol=None,
+            start_date=task.start_date,
+            end_date=task.end_date,
+            metadata=raw_metadata,
+        )
+
         normalized = adapter.normalize_trading_calendar(raw_records, market=market)
         validation_errors = validate_calendar_records(normalized, source=adapter.code, market=market)
         batch = self.ingest_batch_repo.create_batch(
@@ -328,6 +355,7 @@ class TradingCalendarService:
             end_date=task.end_date,
             raw_records=records_read,
             normalized_records=len(normalized),
+            raw_artifact_id=raw_artifact.id,
             validation_errors=validation_errors,
         )
         self.task_repo.add_log(

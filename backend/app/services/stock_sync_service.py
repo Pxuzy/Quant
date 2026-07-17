@@ -11,9 +11,11 @@ from backend.app.models import SyncTask
 from backend.app.repositories.data_sources import DataSourceRepository
 from backend.app.repositories.datasets import DatasetRepository
 from backend.app.repositories.ingest_batches import IngestBatchRepository
+from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.repositories.stocks import StockRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.services.database_integration_service import invalidate_coverage_cache
+from backend.app.services.raw_artifact_store import RawArtifactStore
 from scripts.data_loader import invalidate_data_cache
 from backend.app.services.normalized_data_validation import validate_stock_records
 
@@ -30,6 +32,8 @@ class StockSyncService:
         self.data_source_repo = DataSourceRepository(db)
         self.dataset_repo = DatasetRepository(db)
         self.ingest_batch_repo = IngestBatchRepository(db)
+        self.raw_artifact_repo = RawArtifactRepository(db)
+        self.raw_artifact_store = RawArtifactStore()
         self.stock_repo = StockRepository(db)
         self.task_repo = SyncTaskRepository(db)
 
@@ -305,6 +309,29 @@ class StockSyncService:
             payload={"source": adapter.code, "records": records_read},
         )
 
+        raw_metadata = self.raw_artifact_store.persist(
+            task_id=task.id,
+            dataset_name="stocks",
+            source=adapter.code,
+            requested_source=task.source,
+            market=market,
+            symbol=None,
+            start_date=None,
+            end_date=None,
+            records=raw_records,
+        )
+        raw_artifact = self.raw_artifact_repo.create_artifact(
+            task=task,
+            dataset_name="stocks",
+            source=adapter.code,
+            requested_source=task.source,
+            market=market,
+            symbol=None,
+            start_date=None,
+            end_date=None,
+            metadata=raw_metadata,
+        )
+
         normalized = _listed_common_stock_records(adapter.normalize_stock_list(raw_records))
         validation_errors = validate_stock_records(normalized, source=adapter.code, market=market)
         batch = self.ingest_batch_repo.create_batch(
@@ -315,6 +342,7 @@ class StockSyncService:
             market=market,
             raw_records=records_read,
             normalized_records=len(normalized),
+            raw_artifact_id=raw_artifact.id,
             validation_errors=validation_errors,
         )
         self.task_repo.add_log(

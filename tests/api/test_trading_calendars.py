@@ -15,7 +15,7 @@ from backend.app.adapters.base import (
 )
 from backend.app.adapters.registry import AdapterRegistry
 from backend.app.db.session import SessionLocal
-from backend.app.models import Dataset, IngestBatch, TradingCalendar
+from backend.app.models import Dataset, IngestBatch, RawArtifact, TradingCalendar
 from backend.app.services.trading_calendar_service import TradingCalendarService
 
 
@@ -159,6 +159,7 @@ def test_auto_calendar_sync_falls_back_and_updates_catalog(client):
         dataset = db.scalar(select(Dataset).where(Dataset.name == "trading_calendars"))
         rows = db.scalars(select(TradingCalendar).order_by(TradingCalendar.trade_date.asc())).all()
         batches = db.scalars(select(IngestBatch).where(IngestBatch.task_id == task.id)).all()
+        artifact = db.get(RawArtifact, batches[0].raw_artifact_id) if batches and batches[0].raw_artifact_id else None
     finally:
         db.close()
 
@@ -178,6 +179,10 @@ def test_auto_calendar_sync_falls_back_and_updates_catalog(client):
     assert batches[0].raw_records == 3
     assert batches[0].normalized_records == 3
     assert batches[0].records_written == 3
+    assert batches[0].raw_artifact_id is not None
+    assert artifact is not None
+    assert artifact.source == "success_calendar"
+    assert artifact.row_count == 3
     assert [row.is_open for row in rows] == [True, True, False]
     assert any(
         log.message == "Provider attempt failed." and log.payload_json["source"] == "failing_calendar"
