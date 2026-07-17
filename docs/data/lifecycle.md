@@ -39,6 +39,7 @@ sync_tasks
   -> provider candidate selection
   -> provider health_check（执行阶段）
   -> adapter.fetch_daily_bars
+  -> immutable raw artifact + checksum
   -> adapter.normalize_daily_bars
   -> validate_daily_bar_records
   -> ingest_batches
@@ -58,12 +59,13 @@ sync_tasks
 - `sync_tasks`、`sync_task_logs`、`ingest_batches`、`datasets`、`data_quality_reports`；
 - `GET /api/database/lineage` 的批次级血缘；
 - `GET /api/research-data/bars` 的单股票 governed-only `BarReader`；
+- 单股票日线正式 fetch 的 raw envelope、SHA-256 和 `IngestBatch.raw_artifact_id` 关联；
 - provider 退役记录保留：当前 registry 不再删除历史 `DataSource`，而是标记为 retired 并从默认运行列表隐藏；
 - 不同 data lake 的 DuckDB 路径隔离；重复写入返回实际新增行数。
 
 ### 尚未实现或不应误称已完成
 
-- API 正式 fetch 的不可变 raw artifact；
+- 股票列表、交易日历和市场级 repair 的正式 raw artifact 接入；
 - 正式 `daily_bars_raw_replay` 任务；
 - 独立 `dataset_versions`、`dataset_partitions`、`snapshots` 和持久 manifest；
 - 以质量检查为阻断条件的 candidate → active 原子发布；
@@ -76,7 +78,7 @@ sync_tasks
 
 | 层 | 当前语义 | 研究是否可直接读取 |
 | --- | --- | --- |
-| raw | `scripts/ops` 旁路产生的 provider 原始文件；尚未成为正式 fetch 的强制产物 | 否 |
+| raw | 单股票日线正式 fetch 已保存 raw envelope；其他任务仍主要依赖 `scripts/ops` 旁路 | 否 |
 | bronze | 目标层，当前没有正式自动发布逻辑 | 否 |
 | silver | 当前日线 canonical 查询/归档层 | 是，受 governed contract 约束 |
 | gold | 目标层，用于因子、指标和回测专用数据集 | 未来 |
@@ -166,7 +168,7 @@ source registry
 适合个人项目的增量顺序：
 
 1. 冻结 provider registry 与数据契约；
-2. 把 raw artifact 纳入正式 fetch，并记录 checksum；
+2. 把 raw artifact 扩展到股票列表、交易日历和市场 repair，并记录 checksum；
 3. 增加质量门禁和原子发布；
 4. 增加 dataset version、manifest、snapshot、watermark；
 5. 扩展 BarReader/DataPortal；
