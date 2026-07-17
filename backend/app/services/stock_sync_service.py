@@ -57,7 +57,7 @@ class StockSyncService:
             # If the task is already completed/failed, create a new one
 
         if source_code == AUTO_SOURCE_CODE:
-            candidates = self._enabled_adapters_for_capability("stock_list")
+            candidates = self._enabled_adapters_for_capability("stock_list", require_healthy=False)
             if not candidates:
                 self.db.rollback()
                 raise ValueError("No enabled data source supports stock_list.")
@@ -161,7 +161,12 @@ class StockSyncService:
         task = self.create_stock_sync_task(source=source, market=market)
         return self.run_stock_sync_task(task.id)
 
-    def _enabled_adapters_for_capability(self, capability: str) -> list[StockDataSourceAdapter]:
+    def _enabled_adapters_for_capability(
+        self,
+        capability: str,
+        *,
+        require_healthy: bool = True,
+    ) -> list[StockDataSourceAdapter]:
         self.data_source_repo.sync_registered_adapters(self.registry)
         candidates: list[StockDataSourceAdapter] = []
         for source in self.data_source_repo.list_enabled():
@@ -169,10 +174,11 @@ class StockSyncService:
                 adapter = self.registry.get(source.code)
             except ValueError:
                 continue
-            health = adapter.health_check()
-            self.data_source_repo.update_health(adapter.code, health)
-            if not health.healthy:
-                continue
+            if require_healthy:
+                health = adapter.health_check()
+                self.data_source_repo.update_health(adapter.code, health)
+                if not health.healthy:
+                    continue
             if bool(getattr(adapter.capabilities(), capability, False)):
                 candidates.append(adapter)
 

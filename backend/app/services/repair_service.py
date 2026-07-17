@@ -72,7 +72,7 @@ class _MarketRepairMixin:
         market_code = market.strip().upper()
 
         if source_code == AUTO_SOURCE_CODE:
-            candidates = self._enabled_adapters_for_capability("daily_bars")
+            candidates = self._enabled_adapters_for_capability("daily_bars", require_healthy=False)
             if not candidates:
                 self.db.rollback()
                 raise ValueError("No enabled data source supports daily_bars.")
@@ -132,7 +132,7 @@ class _MarketRepairMixin:
         market_code = market.strip().upper()
 
         if source_code == AUTO_SOURCE_CODE:
-            candidates = self._enabled_adapters_for_capability("daily_bars")
+            candidates = self._enabled_adapters_for_capability("daily_bars", require_healthy=False)
             if not candidates:
                 self.db.rollback()
                 raise ValueError("No enabled data source supports daily_bars.")
