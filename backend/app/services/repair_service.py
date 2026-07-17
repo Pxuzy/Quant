@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from backend.app.adapters.base import HealthCheckResult, StockDataSourceAdapter, normalize_daily_bar_adjust_type
 from backend.app.models import SyncTask
 from backend.app.repositories.ingest_batches import IngestBatchRepository
+from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.services.market_repair_planner import (
     DEFAULT_MARKET_REPAIR_START_POLICY,
     LISTING_DATE_START_POLICY,
@@ -23,6 +24,7 @@ from backend.app.services.market_repair_planner import (
     MarketRepairPlanner,
 )
 from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE
+from backend.app.services.raw_artifact_store import RawArtifactStore
 
 from .pipeline import (
     DEFAULT_ADJUST_TYPE,
@@ -436,6 +438,8 @@ class _MarketRepairMixin:
 
         adjust_type = plan.adjust_type
         market_name = plan.market
+        raw_artifact_repo = RawArtifactRepository(self.db)
+        raw_artifact_store = RawArtifactStore(lake_root=self.daily_bar_repo.lake_root)
 
         # 并行 fetch（纯网络操作，无需 DB session）
         # 串行 write（需要 DB session，在主线程完成）
@@ -495,6 +499,28 @@ class _MarketRepairMixin:
                 try:
                     from dataclasses import replace
 
+                    raw_metadata = raw_artifact_store.persist(
+                        task_id=task.id,
+                        dataset_name="daily_bars",
+                        source=adapter.code,
+                        requested_source=task.source,
+                        market=market_name,
+                        symbol=symbol_item.symbol,
+                        start_date=symbol_item.start_date,
+                        end_date=symbol_item.end_date,
+                        records=raw_records,
+                    )
+                    raw_artifact = raw_artifact_repo.create_artifact(
+                        task=task,
+                        dataset_name="daily_bars",
+                        source=adapter.code,
+                        requested_source=task.source,
+                        market=market_name,
+                        symbol=symbol_item.symbol,
+                        start_date=symbol_item.start_date,
+                        end_date=symbol_item.end_date,
+                        metadata=raw_metadata,
+                    )
                     normalized = [replace(record, adjust_type=adjust_type)
                                   for record in adapter.normalize_daily_bars(raw_records)]
                     written = self.ingest_pipeline.write_normalized(
@@ -507,6 +533,7 @@ class _MarketRepairMixin:
                         end_date=symbol_item.end_date,
                         task=task,
                         requested_source=adapter.code,
+                        raw_artifact_id=raw_artifact.id,
                     )
                     records_read += len(raw_records)
                     records_written += written

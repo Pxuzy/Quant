@@ -246,6 +246,13 @@ def test_worker_cli_run_next_pending_claims_market_repair_without_task_type(tmp_
     assert exit_code == 0
     assert '"task_type": "daily_bars_market_repair"' in captured.out
     assert '"status": "success"' in captured.out
+    db = SessionLocal()
+    try:
+        batches = list(db.scalars(select(IngestBatch).where(IngestBatch.task_id == pending_task.id)).all())
+    finally:
+        db.close()
+    assert len(batches) == 1
+    assert batches[0].raw_artifact_id is not None
     assert task is not None
     assert task.status == "success"
     assert task.records_written == 2
