@@ -243,7 +243,7 @@ def test_worker_cli_run_next_pending_claims_market_repair_without_task_type(tmp_
     assert dataset.storage_type == "parquet"
 
 
-def test_worker_cli_run_next_pending_claims_raw_daily_bars_replay(tmp_path, capsys, monkeypatch):
+def test_worker_cli_run_next_pending_is_idempotent_for_repeated_daily_bars(tmp_path, capsys, monkeypatch):
     install_fake_baostock(monkeypatch)
     monkeypatch.setenv("DATA_LAKE_DIR", str(tmp_path / "lake"))
     reset_settings_cache()
@@ -300,7 +300,7 @@ def test_worker_cli_run_next_pending_claims_raw_daily_bars_replay(tmp_path, caps
     assert task is not None
     assert task.status == "success"
     assert task.records_read == 2
-    assert task.records_written == 2
+    assert task.records_written == 0
     assert dataset is not None
     assert dataset.storage_type == "parquet"
 
