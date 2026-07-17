@@ -27,6 +27,7 @@ class IngestBatchRepository:
         symbol: str | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
+        raw_artifact_id: int | None = None,
         schema_version: str = "v1",
         normalize_version: str = "v1",
     ) -> IngestBatch:
@@ -39,6 +40,7 @@ class IngestBatchRepository:
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
+            raw_artifact_id=raw_artifact_id,
             schema_version=schema_version,
             normalize_version=normalize_version,
             raw_records=raw_records,

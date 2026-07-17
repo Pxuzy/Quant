@@ -17,11 +17,12 @@ from backend.app.adapters.base import (
 )
 from backend.app.adapters.registry import AdapterRegistry
 from backend.app.db.session import SessionLocal
-from backend.app.models import Dataset, IngestBatch, Stock, SyncTask, SyncTaskLog, TradingCalendar
+from backend.app.models import Dataset, IngestBatch, RawArtifact, Stock, SyncTask, SyncTaskLog, TradingCalendar
 from backend.app.repositories.daily_bars import DailyBarRepository
 from backend.app.repositories.daily_bars import DailyBarRepository
 from backend.app.services.sync_service import MarketDataSyncService
 from backend.app.services.research_data_service import ResearchDataService
+from backend.app.services.raw_artifact_store import RawArtifactStore
 
 
 class FailingDailyBarAdapter(StockDataSourceAdapter):
@@ -977,6 +978,7 @@ def test_auto_daily_bars_sync_falls_back_and_writes_parquet(client, tmp_path):
         logs = list(task.logs)
         dataset = db.scalar(select(Dataset).where(Dataset.name == "daily_bars"))
         batches = db.scalars(select(IngestBatch).where(IngestBatch.task_id == task.id).order_by(IngestBatch.id)).all()
+        artifact = db.scalar(select(RawArtifact).where(RawArtifact.id == batches[0].raw_artifact_id)) if batches else None
     finally:
         db.close()
 
@@ -1006,6 +1008,14 @@ def test_auto_daily_bars_sync_falls_back_and_writes_parquet(client, tmp_path):
     assert batches[0].normalized_records == 2
     assert batches[0].records_written == 2
     assert batches[0].validation_errors_json == []
+    assert batches[0].raw_artifact_id is not None
+    assert artifact is not None
+    assert artifact.source == "success_daily"
+    assert artifact.row_count == 2
+    assert RawArtifactStore.read(artifact.uri)["records"] == [
+        {"trade_date": "2026-06-01", "close": 1675.0},
+        {"trade_date": "2026-06-02", "close": 1688.0},
+    ]
     assert total == 2
     assert items[0]["symbol"] == "600519"
     assert items[0]["source"] == "success_daily"

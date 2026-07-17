@@ -190,6 +190,31 @@ class SyncSchedule(Base):
     )
 
 
+class RawArtifact(Base):
+    __tablename__ = "raw_artifacts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("sync_tasks.id"), nullable=False, index=True)
+    dataset_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    requested_source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    market: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    symbol: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    uri: Mapped[str] = mapped_column(String(1024), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False, default="application/json")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="stored", index=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    task: Mapped[SyncTask] = relationship()
+    ingest_batches: Mapped[list["IngestBatch"]] = relationship(back_populates="raw_artifact")
+
+
 class IngestBatch(Base):
     __tablename__ = "ingest_batches"
 
@@ -202,6 +227,7 @@ class IngestBatch(Base):
     symbol: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    raw_artifact_id: Mapped[int | None] = mapped_column(ForeignKey("raw_artifacts.id"), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="running", index=True)
     schema_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
     normalize_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
@@ -216,6 +242,7 @@ class IngestBatch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     task: Mapped[SyncTask] = relationship(back_populates="ingest_batches")
+    raw_artifact: Mapped["RawArtifact | None"] = relationship(back_populates="ingest_batches")
 
 
 class Dataset(Base):

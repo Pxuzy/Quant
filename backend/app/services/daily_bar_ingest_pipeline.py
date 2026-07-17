@@ -8,8 +8,10 @@ from backend.app.models import SyncTask
 from backend.app.repositories.daily_bars import DailyBarRepository
 from backend.app.repositories.datasets import DatasetRepository
 from backend.app.repositories.ingest_batches import IngestBatchRepository
+from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.repositories.stocks import StockRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
+from backend.app.services.raw_artifact_store import RawArtifactStore
 from backend.app.services.database_integration_service import invalidate_coverage_cache
 from scripts.data_loader import invalidate_data_cache
 from backend.app.services.normalized_data_validation import validate_daily_bar_records
@@ -28,6 +30,7 @@ class DailyBarIngestPipeline:
     ) -> None:
         self.task_repo = task_repo
         self.ingest_batch_repo = ingest_batch_repo
+        self.raw_artifact_repo = RawArtifactRepository(task_repo.db)
         self.dataset_repo = dataset_repo
         self.daily_bar_repo = daily_bar_repo
         self.stock_repo = stock_repo
@@ -59,6 +62,29 @@ class DailyBarIngestPipeline:
             payload={"source": adapter.code, "records": records_read, "adjust_type": adjust_type},
         )
 
+        raw_metadata = RawArtifactStore(lake_root=self.daily_bar_repo.lake_root).persist(
+            task_id=task.id,
+            dataset_name="daily_bars",
+            source=adapter.code,
+            requested_source=task.source,
+            market=task.market or "A_SHARE",
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            records=raw_records,
+        )
+        raw_artifact = self.raw_artifact_repo.create_artifact(
+            task=task,
+            dataset_name="daily_bars",
+            source=adapter.code,
+            requested_source=task.source,
+            market=task.market or "A_SHARE",
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            metadata=raw_metadata,
+        )
+
         market = task.market or "A_SHARE"
         normalized = [replace(record, adjust_type=adjust_type) for record in adapter.normalize_daily_bars(raw_records)]
         records_written = self.write_normalized(
@@ -70,6 +96,7 @@ class DailyBarIngestPipeline:
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
+            raw_artifact_id=raw_artifact.id,
         )
         invalidate_coverage_cache((task.market or "A_SHARE").strip().upper())
         invalidate_data_cache("stocks")
@@ -96,6 +123,7 @@ class DailyBarIngestPipeline:
         end_date: date,
         task: SyncTask | None = None,
         requested_source: str | None = None,
+        raw_artifact_id: int | None = None,
     ) -> int:
         validation_errors = validate_daily_bar_records(normalized, source=adapter.code, market=market)
         batch = None
@@ -109,6 +137,7 @@ class DailyBarIngestPipeline:
                 symbol=symbol,
                 start_date=start_date,
                 end_date=end_date,
+                raw_artifact_id=raw_artifact_id,
                 raw_records=raw_records_count,
                 normalized_records=len(normalized),
                 validation_errors=validation_errors,

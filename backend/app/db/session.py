@@ -83,11 +83,14 @@ def _ensure_pg_extensions(engine: Engine) -> None:
 
 def _run_alembic_upgrade(engine: Engine) -> None:
     """Run Alembic migrations against the given engine."""
+    from pathlib import Path
+
     from alembic.config import Config
     from alembic import command
 
     alembic_cfg = Config()
-    alembic_cfg.set_main_option("script_location", "apps/api/alembic")
+    project_root = Path(__file__).resolve().parents[3]
+    alembic_cfg.set_main_option("script_location", str(project_root / "backend" / "app" / "alembic"))
     # Point Alembic at our URL so it doesn't re-read env.py's hardcoded URL
     alembic_cfg.set_main_option("sqlalchemy.url", engine.url.render_as_string(hide_password=False))
     command.upgrade(alembic_cfg, "head")
@@ -106,6 +109,7 @@ def init_db(*, drop_all: bool = False) -> None:
             Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         _ensure_sqlite_sync_task_columns(engine)
+        _ensure_sqlite_ingest_batch_columns(engine)
 
 
 def _ensure_sqlite_sync_task_columns(engine: Engine) -> None:
@@ -133,6 +137,22 @@ def _ensure_sqlite_sync_task_columns(engine: Engine) -> None:
     with engine.begin() as connection:
         for name, column_type in missing_columns:
             connection.execute(text(f"ALTER TABLE sync_tasks ADD COLUMN {name} {column_type}"))
+
+
+def _ensure_sqlite_ingest_batch_columns(engine: Engine) -> None:
+    if not engine.url.drivername.startswith("sqlite"):
+        return
+
+    inspector = inspect(engine)
+    if "ingest_batches" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("ingest_batches")}
+    if "raw_artifact_id" in existing_columns:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE ingest_batches ADD COLUMN raw_artifact_id INTEGER"))
 
 
 def get_db() -> Iterator[Session]:
