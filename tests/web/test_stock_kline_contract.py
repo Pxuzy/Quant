@@ -7,11 +7,15 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def stock_kline_chart_source() -> str:
-    return (ROOT_DIR / "frontend/src/features/market/StockKlineChart.tsx").read_text(encoding="utf-8")
+    return (ROOT_DIR / "frontend/src/shared/components/StockKlineChart.tsx").read_text(encoding="utf-8")
 
 
 def stock_detail_page_source() -> str:
     return (ROOT_DIR / "frontend/src/pages/data-system/stocks/StockDetailPage.tsx").read_text(encoding="utf-8")
+
+
+def stock_detail_utils_source() -> str:
+    return (ROOT_DIR / "frontend/src/pages/data-system/stocks/components/utils.ts").read_text(encoding="utf-8")
 
 
 def market_data_api_source() -> str:
@@ -63,6 +67,7 @@ def test_stock_kline_omits_range_controls():
 
 def test_stock_detail_uses_normalized_symbol_for_stock_identity():
     source = stock_detail_page_source()
+    utils_source = stock_detail_utils_source()
 
     assert "const rawSymbol = params.symbol;" in source
     assert "const symbol = normalizeStockRouteSymbol(rawSymbol);" in source
@@ -70,7 +75,7 @@ def test_stock_detail_uses_normalized_symbol_for_stock_identity():
     assert "const displayTitle = stock?.name ? `${stock.name} ${displayCode}` : displayCode;" in source
     assert "useStockQuery(symbol, market)" in source
     assert "title={displayTitle}" in source
-    assert "const DETAIL_KLINE_HISTORY_LIMIT = 30000;" in source
+    assert "export const DETAIL_KLINE_HISTORY_LIMIT = 30000;" in utils_source
     assert "historyLimit={DETAIL_KLINE_HISTORY_LIMIT}" in source
 
 
