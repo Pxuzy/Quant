@@ -43,7 +43,7 @@ provider 从 registry 退役时，不删除历史 `DataSource`：
 | `daily_bars_market_repair` | `POST /api/market-data/daily-bars/market-repair` | 按股票池、交易日历和缺口计划执行市场级修复 |
 | `calendars` | `POST /api/trading-calendars/sync` | 交易日历同步 |
 
-任务执行入口：`backend/worker/sync_stocks.py`。当前没有正式的 `daily_bars_raw_replay` task type；`scripts/ops` 中的 raw 合并脚本不能被写成 replay API。
+任务执行入口：`backend/worker/sync_stocks.py`。`daily_bars_raw_replay` 已作为 worker/CLI task type 实现；它只读取 `raw_artifacts`，不访问 provider。当前尚无 replay API；`scripts/ops` 中的 raw 合并脚本也不能被写成 replay API。
 
 ## 4. 当前正式接入链路
 
@@ -75,6 +75,17 @@ fetch
   -> quality gate
   -> dataset version/manifest publish
   -> active snapshot
+```
+
+离线 replay 命令示例：
+
+```bash
+python -m backend.worker.sync_stocks \
+  --task-type daily_bars_raw_replay \
+  --raw-artifact-id <artifact_id> \
+  --adjust-type qfq \
+  --enqueue
+python -m backend.worker.sync_stocks --run-next-pending
 ```
 
 ## 5. 日线契约

@@ -60,12 +60,12 @@ sync_tasks
 - `GET /api/database/lineage` 的批次级血缘；
 - `GET /api/research-data/bars` 的单股票 governed-only `BarReader`；
 - 单股票日线正式 fetch 的 raw envelope、SHA-256 和 `IngestBatch.raw_artifact_id` 关联；
+- `daily_bars_raw_replay` worker task：校验 raw checksum 后离线 normalize，不重新请求 provider；
 - provider 退役记录保留：当前 registry 不再删除历史 `DataSource`，而是标记为 retired 并从默认运行列表隐藏；
 - 不同 data lake 的 DuckDB 路径隔离；重复写入返回实际新增行数。
 
 ### 尚未实现或不应误称已完成
 
-- 正式 `daily_bars_raw_replay` 任务；
 - 独立 `dataset_versions`、`dataset_partitions`、`snapshots` 和持久 manifest；
 - 以质量检查为阻断条件的 candidate → active 原子发布；
 - 物化 watermark、provider attempt、quarantine 记录；
@@ -170,7 +170,7 @@ source registry
 2. 增加质量门禁和原子发布；
 3. 增加 dataset version、manifest、snapshot、watermark；
 4. 扩展 BarReader/DataPortal；
-5. 最后统一正式 replay、lease/retry 和运维观测。
+5. 最后统一 replay 的 API、lease/retry 和运维观测。
 
 暂不引入 Kafka、Airflow、Celery、Redis、Iceberg/Delta 或微服务拆分。
 
