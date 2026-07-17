@@ -91,7 +91,7 @@ class DailyBarRepository:
         except Exception:
             pass  # DuckDB 已有数据，Parquet 归档失败不影响业务
 
-        return written if written else len(records)
+        return written
 
     def list_daily_bars(
         self,

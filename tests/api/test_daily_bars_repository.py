@@ -233,3 +233,26 @@ def test_daily_bar_repositories_isolate_duckdb_by_lake_root(tmp_path, monkeypatc
     assert [row["trade_date"] for row in second_repo.symbol_daily_bars(symbol="600519", market="A_SHARE")] == [
         date(2026, 6, 2)
     ]
+
+
+def test_daily_bar_write_many_reports_only_new_rows(tmp_path):
+    repo = DailyBarRepository(lake_root=tmp_path / "lake")
+    row = NormalizedDailyBar(
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        trade_date=date(2026, 6, 1),
+        open=1665.0,
+        high=1680.0,
+        low=1660.0,
+        close=1675.0,
+        pre_close=None,
+        volume=1000.0,
+        amount=1675000.0,
+        adjust_factor=1.0,
+        source="fixture",
+    )
+
+    assert repo.write_many([row]) == 1
+    assert repo.write_many([row]) == 0
+    assert repo.count(market="A_SHARE") == 1
