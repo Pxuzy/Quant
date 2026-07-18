@@ -5,7 +5,7 @@ from datetime import date
 
 from backend.app.adapters.base import StockDataSourceAdapter
 from backend.app.models import SyncTask
-from backend.app.repositories.daily_bars import DailyBarRepository
+from backend.app.repositories.daily_bars import DailyBarArchiveError, DailyBarRepository
 from backend.app.repositories.datasets import DatasetRepository
 from backend.app.repositories.ingest_batches import IngestBatchRepository
 from backend.app.repositories.raw_artifacts import RawArtifactRepository
@@ -176,6 +176,8 @@ class DailyBarIngestPipeline:
                     quality_status=dataset.quality_status,
                 )
         except Exception as exc:
+            if isinstance(exc, DailyBarArchiveError):
+                records_written = exc.records_written
             if batch is not None:
                 if records_written > 0:
                     self.ingest_batch_repo.mark_reconcile_required(batch, message=str(exc))

@@ -50,6 +50,7 @@ class ResearchDataService:
         items, total = self.daily_bar_repo.list_daily_bars(
             symbol=symbol_code,
             market=market_code,
+            adjust_type=BAR_READER_CONTRACT["adjust_type"],
             start_date=start_date,
             end_date=end_date,
             page=page,

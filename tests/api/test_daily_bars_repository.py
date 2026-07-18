@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from datetime import date
 
+import duckdb
+import pytest
+
 from backend.app.adapters.base import NormalizedDailyBar
 from backend.app.core.config import get_settings
-from backend.app.repositories.daily_bars import DailyBarRepository
+from backend.app.db.duckdb_store import close_duckdb
+from backend.app.repositories.daily_bars import DailyBarArchiveError, DailyBarRepository
 
 
 def test_daily_bars_repository_uses_duckdb_for_filtered_queries(tmp_path, monkeypatch):
@@ -256,3 +260,34 @@ def test_daily_bar_write_many_reports_only_new_rows(tmp_path):
     assert repo.write_many([row]) == 1
     assert repo.write_many([row]) == 0
     assert repo.count(market="A_SHARE") == 1
+
+
+def test_daily_bar_archive_failure_is_visible_after_duckdb_write(tmp_path, monkeypatch):
+    repo = DailyBarRepository(lake_root=tmp_path / "lake", duckdb_path=tmp_path / "bars.duckdb")
+    row = NormalizedDailyBar(
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        trade_date=date(2026, 6, 1),
+        open=1665.0,
+        high=1680.0,
+        low=1660.0,
+        close=1675.0,
+        pre_close=None,
+        volume=1000.0,
+        amount=1675000.0,
+        adjust_factor=1.0,
+        source="fixture",
+    )
+
+    def fail_parquet_write(*args, **kwargs):
+        raise OSError("archive unavailable")
+
+    monkeypatch.setattr("backend.app.repositories.daily_bars.pq.write_table", fail_parquet_write)
+    with pytest.raises(DailyBarArchiveError) as exc_info:
+        repo.write_many([row])
+
+    assert exc_info.value.records_written == 1
+    close_duckdb()
+    with duckdb.connect(str(tmp_path / "bars.duckdb"), read_only=True) as connection:
+        assert connection.execute("select count(*) from daily_bars").fetchone()[0] == 1

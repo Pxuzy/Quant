@@ -35,6 +35,15 @@ DAILY_BAR_COLUMNS = [
     "ingested_at",
 ]
 
+
+class DailyBarArchiveError(RuntimeError):
+    """DuckDB accepted rows, but immutable Parquet archive could not be finalized."""
+
+    def __init__(self, message: str, *, records_written: int) -> None:
+        super().__init__(message)
+        self.records_written = records_written
+
+
 def _duckdb_connect_with_timeout() -> duckdb.DuckDBPyConnection:
     """Create a DuckDB connection."""
     return duckdb.connect()
@@ -88,8 +97,11 @@ class DailyBarRepository:
                 }
                 sorted_rows = sorted(deduped.values(), key=lambda row: (row["symbol"], row["exchange"], row["adjust_type"]))
                 pq.write_table(pa.Table.from_pylist(sorted_rows, schema=DAILY_BAR_ARROW_SCHEMA), file_path)
-        except Exception:
-            pass  # DuckDB 已有数据，Parquet 归档失败不影响业务
+        except Exception as exc:
+            raise DailyBarArchiveError(
+                "Daily bar Parquet archive failed after canonical write.",
+                records_written=written,
+            ) from exc
 
         return written
 
@@ -98,14 +110,18 @@ class DailyBarRepository:
         *,
         symbol: str | None = None,
         market: str | None = None,
+        adjust_type: str | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
         page: int = 1,
         page_size: int = 200,
         sort_order: str = "asc",
     ) -> tuple[list[dict], int]:
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type) if adjust_type is not None else None
         if symbol and market:
             rows = self.symbol_daily_bars(symbol=symbol.strip(), market=market)
+            if adjust_type_code is not None:
+                rows = [row for row in rows if (row.get("adjust_type") or "none") == adjust_type_code]
             if start_date:
                 rows = [row for row in rows if isinstance(row.get("trade_date"), date) and row["trade_date"] >= start_date]
             if end_date:
@@ -116,11 +132,12 @@ class DailyBarRepository:
             end = start + page_size
             return rows[start:end], total
 
-        result = self._try_duckdb("list_daily_bars", symbol=symbol, market=market, start_date=start_date, end_date=end_date, page=page, page_size=page_size, sort_order=sort_order)
+        result = self._try_duckdb("list_daily_bars", symbol=symbol, market=market, adjust_type=adjust_type_code, start_date=start_date, end_date=end_date, page=page, page_size=page_size, sort_order=sort_order)
         if result is not None:
             return result
         return self._list_daily_bars_pyarrow(
             symbol=symbol, market=market, start_date=start_date, end_date=end_date, page=page, page_size=page_size, sort_order=sort_order,
+            adjust_type=adjust_type_code,
         )
 
     def count(self, *, market: str | None = None) -> int:
@@ -251,6 +268,7 @@ class DailyBarRepository:
         *,
         symbol: str | None,
         market: str | None,
+        adjust_type: str | None,
         start_date: date | None,
         end_date: date | None,
         page: int,
@@ -263,6 +281,8 @@ class DailyBarRepository:
             start_date=start_date,
             end_date=end_date,
         )
+        if adjust_type is not None:
+            rows = [row for row in rows if (row.get("adjust_type") or "none") == adjust_type]
         if not rows:
             return [], 0
 
@@ -277,6 +297,7 @@ class DailyBarRepository:
         *,
         symbol: str | None,
         market: str | None,
+        adjust_type: str | None,
         start_date: date | None,
         end_date: date | None,
         page: int,
@@ -286,6 +307,7 @@ class DailyBarRepository:
         where_clause, params = self._duckdb_filters(
             symbol=symbol,
             market=market,
+            adjust_type=adjust_type,
             start_date=start_date,
             end_date=end_date,
         )
@@ -501,6 +523,7 @@ class DailyBarRepository:
         where_clause, params = self._duckdb_filters(
             symbol=None,
             market=market,
+            adjust_type=None,
             start_date=None,
             end_date=None,
         )
@@ -523,6 +546,7 @@ class DailyBarRepository:
         where_clause, params = self._duckdb_filters(
             symbol=None,
             market=market,
+            adjust_type=None,
             start_date=None,
             end_date=None,
         )
@@ -557,6 +581,7 @@ class DailyBarRepository:
         *,
         symbol: str | None,
         market: str | None,
+        adjust_type: str | None,
         start_date: date | None,
         end_date: date | None,
     ) -> tuple[str, list[object]]:
@@ -569,6 +594,9 @@ class DailyBarRepository:
         if market:
             conditions.append("market = ?")
             params.append(market)
+        if adjust_type is not None:
+            conditions.append("coalesce(adjust_type, 'none') = ?")
+            params.append(adjust_type)
         if start_date:
             conditions.append("trade_date >= ?")
             params.append(start_date)
