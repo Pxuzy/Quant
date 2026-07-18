@@ -2,7 +2,21 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, TypeDecorator, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    TypeDecorator,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.db.base import Base
@@ -122,6 +136,16 @@ class StockBoardMember(Base):
 
 class SyncTask(Base):
     __tablename__ = "sync_tasks"
+    __table_args__ = (
+        Index(
+            "uq_sync_tasks_active_raw_replay",
+            "input_raw_artifact_id",
+            "adjust_type",
+            unique=True,
+            sqlite_where=text("task_type = 'daily_bars_raw_replay' AND status IN ('pending', 'running')"),
+            postgresql_where=text("task_type = 'daily_bars_raw_replay' AND status IN ('pending', 'running')"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     task_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)

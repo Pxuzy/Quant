@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.models import SyncTask, SyncTaskLog
@@ -282,3 +283,39 @@ class SyncTaskRepository:
             .order_by(SyncTask.created_at.desc(), SyncTask.id.desc())
             .limit(1)
         )
+
+    def create_or_get_active_raw_replay_task(
+        self,
+        *,
+        raw_artifact_id: int,
+        adjust_type: str,
+        market: str | None,
+        symbol: str | None,
+        start_date: date | None,
+        end_date: date | None,
+    ) -> tuple[SyncTask, bool]:
+        task = SyncTask(
+            task_type="daily_bars_raw_replay",
+            source="replay",
+            market=market,
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            adjust_type=adjust_type,
+            input_raw_artifact_id=raw_artifact_id,
+        )
+        self.db.add(task)
+        try:
+            self.db.flush()
+            return task, True
+        except IntegrityError:
+            self.db.rollback()
+            existing_task = self.find_recent_raw_replay_task(
+                raw_artifact_id=raw_artifact_id,
+                adjust_type=adjust_type,
+                statuses=["pending", "running"],
+                created_after=datetime.min.replace(tzinfo=timezone.utc),
+            )
+            if existing_task is None:
+                raise
+            return existing_task, False

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 
 from backend.app.db.session import SessionLocal, configure_database, init_db
+from backend.app.adapters.base import normalize_daily_bar_adjust_type
 from backend.app.models import RawArtifact, SyncTask
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.services.sync_service import MarketDataSyncService
@@ -13,7 +14,6 @@ from backend.app.services.trading_calendar_service import TradingCalendarService
 from backend.app.services.raw_replay_service import RAW_DAILY_BARS_REPLAY_TASK_TYPE, RawDailyBarsReplayService
 
 SUPPORTED_PENDING_TASK_TYPES = ("stock_list", "daily_bars", "daily_bars_market_repair", "calendars", RAW_DAILY_BARS_REPLAY_TASK_TYPE)
-RAW_REPLAY_IDEMPOTENCY_WINDOW_MINUTES = 5
 
 
 def configure_worker_database(database_url: str | None = None) -> None:
@@ -136,30 +136,23 @@ def enqueue_daily_bars_raw_replay(
     configure_worker_database(database_url)
     db = SessionLocal()
     try:
+        adjust_type = normalize_daily_bar_adjust_type(adjust_type)
         artifact = db.get(RawArtifact, raw_artifact_id)
         if artifact is None:
             raise ValueError(f"Raw artifact {raw_artifact_id} does not exist.")
         if artifact.dataset_name != "daily_bars":
             raise ValueError("Only daily_bars raw artifacts can be replayed by this task.")
         task_repo = SyncTaskRepository(db)
-        existing_task = task_repo.find_recent_raw_replay_task(
+        task, created = task_repo.create_or_get_active_raw_replay_task(
             raw_artifact_id=artifact.id,
             adjust_type=adjust_type,
-            statuses=["pending", "running"],
-            created_after=datetime.now(timezone.utc) - timedelta(minutes=RAW_REPLAY_IDEMPOTENCY_WINDOW_MINUTES),
-        )
-        if existing_task is not None:
-            return existing_task
-        task = task_repo.create_task(
-            task_type=RAW_DAILY_BARS_REPLAY_TASK_TYPE,
-            source="replay",
             market=artifact.market,
             symbol=artifact.symbol,
             start_date=artifact.start_date,
             end_date=artifact.end_date,
-            adjust_type=adjust_type,
-            input_raw_artifact_id=artifact.id,
         )
+        if not created:
+            return task
         task_repo.add_log(
             task,
             level="info",
