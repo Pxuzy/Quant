@@ -35,8 +35,9 @@ Recommended reading order:
 3. [Phase 1 product baseline](./docs/product/phase-1-baseline.md)
 4. [Feature catalog](./docs/product/feature-catalog.md)
 5. [System architecture](./docs/architecture/system-overview.md)
-6. [Development runbook](./docs/operations/development-runbook.md)
-7. [Roadmap and status](./docs/status/roadmap.md)
+6. [Stock data lifecycle](./docs/data/lifecycle.md)
+7. [Development runbook](./docs/operations/development-runbook.md)
+8. [Roadmap and status](./docs/status/roadmap.md)
 
 ## Current Stack
 
@@ -48,7 +49,7 @@ Recommended reading order:
 | Data lake | Parquet |
 | Query engine | DuckDB |
 | Worker | Lightweight Python worker |
-| Data sources | AKShare, BaoStock, AData, Tushare, Stock SDK |
+| Data sources | AKShare, BaoStock, Stock SDK; AData/Tushare are not registered adapters in the current code |
 
 ## Product Entrypoints
 
@@ -63,7 +64,7 @@ Legacy detail routes for market data, datasets, trading calendars, and data qual
 
 ## Local Runtime
 
-Runtime details live in [quant/README.md](./quant/README.md) and [development-runbook.md](./docs/operations/development-runbook.md).
+Runtime details live in [development-runbook.md](./docs/operations/development-runbook.md).
 
 Recommended root-level lifecycle commands:
 
@@ -82,12 +83,11 @@ The lifecycle smoke check verifies both the routed HTML page and the Vite entry 
 Foreground API and frontend commands are still available when you need to run each service manually:
 
 ```powershell
-cd quant
-.\.venv\Scripts\python.exe scripts\run_api_server.py run
+python scripts\run_api_server.py run
 ```
 
 ```powershell
-cd apps\web
+cd frontend
 npm run dev
 ```
 

@@ -24,6 +24,7 @@
 | `product/` | 产品方向、阶段范围、页面和功能 | [个人股票数据管理工作台产品定义](./product/stock-workbench-product-definition.md), [个人股票研究工作台产品方向](./product/personal-stock-workbench.md), [阶段一产品基线](./product/phase-1-baseline.md), [功能矩阵](./product/feature-catalog.md) |
 | `architecture/` | 系统结构、模块边界、API、数据模型 | [系统架构总览](./architecture/system-overview.md), [API 目录](./architecture/api-catalog.md), [数据模型](./architecture/data-model.md) |
 | `data/` | 数据源、同步、质量、血缘、数据集和生命周期 | [生命周期管理](./data/lifecycle.md), [数据源和同步治理](./data/data-source-and-sync-governance.md) |
+| `decisions/` | 已接受架构决策及其取舍 | [ADR-001：Raw Artifact 与离线 Replay](./decisions/ADR-001-raw-artifacts-and-offline-replay.md) |
 | `operations/` | 本地启动、环境变量、验证命令 | [开发运行手册](./operations/development-runbook.md) |
 | `status/` | 当前进度、路线图、决策记录 | [路线图和当前状态](./status/roadmap.md) |
 

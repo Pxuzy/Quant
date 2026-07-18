@@ -61,6 +61,7 @@ class SyncTaskRead(BaseModel):
     max_symbols: int | None = None
     start_policy: str | None = None
     adjust_type: str | None = None
+    input_raw_artifact_id: int | None = None
     status: str
     progress: int
     records_read: int
@@ -90,6 +91,7 @@ class SyncTaskRead(BaseModel):
             "max_symbols": _task_field_value(value, "max_symbols"),
             "start_policy": _task_field_value(value, "start_policy"),
             "adjust_type": _task_field_value(value, "adjust_type"),
+            "input_raw_artifact_id": _task_field_value(value, "input_raw_artifact_id"),
             "status": _task_field_value(value, "status"),
             "progress": _task_field_value(value, "progress"),
             "records_read": _task_field_value(value, "records_read"),
