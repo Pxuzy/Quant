@@ -112,4 +112,5 @@ DATA_LAKE_DIR/raw/<dataset>/source=<provider>/task=<task_id>/symbol=<symbol>-<sh
 - `raw_artifacts` 还未有独立 API 展示层；
 - replay 当前只支持日线，不覆盖股票池或交易日历；
 - raw 文件可能包含 provider 返回的额外字段，日志和 API 不得直接暴露完整 payload；
+- 元数据引用在 SQLite 和 PostgreSQL 均使用 `ON DELETE RESTRICT`；SQLite 连接显式启用 `PRAGMA foreign_keys=ON`，避免把声明的外键误当作实际执行的约束。
 - 完整质量门禁、candidate/active 发布和不可变 dataset version 仍为后续 ADR。
