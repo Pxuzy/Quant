@@ -62,6 +62,7 @@ sync_tasks
 - 单股票日线正式 fetch 的 raw envelope、SHA-256 和 `IngestBatch.raw_artifact_id` 关联；
 - `IngestBatch.dropped_records` 显式记录 provider 原始记录在标准化阶段未进入 canonical 数据的数量；
 - `daily_bars_raw_replay` worker task：校验 raw checksum、长度、metadata 和复权口径后离线 normalize，不重新请求 provider；不同 `adjust_type` 不会伪装为真实价格换算；
+- 同一 raw artifact、相同复权口径的 pending/running replay 在五分钟窗口内复用同一 task，避免重复 worker 入队；
 - provider 退役记录保留：当前 registry 不再删除历史 `DataSource`，而是标记为 retired 并从默认运行列表隐藏；
 - 不同 data lake 的 DuckDB 路径隔离；重复写入返回实际新增行数。
 

@@ -88,6 +88,8 @@ python -m backend.worker.sync_stocks \
 python -m backend.worker.sync_stocks --run-next-pending
 ```
 
+相同 raw artifact 与 `adjust_type` 的 pending/running replay 会在五分钟内返回已有任务，不会重复入队；已结束的 replay 可以显式重新创建以保留新的执行审计记录。
+
 ## 5. 日线契约
 
 日线标准字段由 `NormalizedDailyBar` 和 `DAILY_BAR_SCHEMA` 共同定义：
