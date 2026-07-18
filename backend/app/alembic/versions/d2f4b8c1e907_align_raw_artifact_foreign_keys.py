@@ -82,11 +82,16 @@ def upgrade() -> None:
         return
 
     for table, name, columns in constraints:
-        if not _has_exactly_one_restrict_raw_artifact_fk(table, columns):
-            for foreign_key in _raw_artifact_fks(table, columns):
-                if foreign_key.get("name"):
-                    op.drop_constraint(foreign_key["name"], table, type_="foreignkey")
-            op.create_foreign_key(name, table, "raw_artifacts", columns, ["id"], ondelete="RESTRICT")
+        foreign_keys = _raw_artifact_fks(table, columns)
+        if len(foreign_keys) == 1 and _is_restrict_raw_artifact_fk(foreign_keys[0]):
+            continue
+        for foreign_key in foreign_keys:
+            if not foreign_key.get("name"):
+                raise RuntimeError(
+                    f"Cannot normalize unnamed raw artifact foreign key on {table}.{columns[0]} outside SQLite."
+                )
+            op.drop_constraint(foreign_key["name"], table, type_="foreignkey")
+        op.create_foreign_key(name, table, "raw_artifacts", columns, ["id"], ondelete="RESTRICT")
 
 
 def downgrade() -> None:

@@ -76,3 +76,57 @@ def test_raw_artifact_fk_migration_replaces_wrong_delete_policy_without_duplicat
             assert foreign_keys[0][6] == "RESTRICT"
     finally:
         connection.close()
+
+
+def test_active_replay_index_migration_keeps_lowest_id_and_fails_legacy_duplicates(tmp_path):
+    database_path = tmp_path / "legacy-active-replays.db"
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.executescript(
+            """
+            CREATE TABLE raw_artifacts (id INTEGER PRIMARY KEY);
+            INSERT INTO raw_artifacts(id) VALUES (1);
+            CREATE TABLE sync_tasks (
+              id INTEGER PRIMARY KEY,
+              task_type VARCHAR(64),
+              status VARCHAR(32),
+              adjust_type VARCHAR(16),
+              input_raw_artifact_id INTEGER,
+              error_message TEXT,
+              progress INTEGER NOT NULL DEFAULT 0,
+              finished_at DATETIME
+            );
+            INSERT INTO sync_tasks(id, task_type, status, adjust_type, input_raw_artifact_id)
+            VALUES
+              (12, 'daily_bars_raw_replay', 'pending', 'none', 1),
+              (10, 'daily_bars_raw_replay', 'running', NULL, 1),
+              (11, 'daily_bars_raw_replay', 'pending', 'none', 1);
+            CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL);
+            INSERT INTO alembic_version(version_num) VALUES ('d2f4b8c1e907');
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    configure_database(f"sqlite:///{database_path}")
+    command.upgrade(_alembic_config(), "head")
+
+    connection = sqlite3.connect(database_path)
+    try:
+        tasks = connection.execute(
+            "SELECT id, status, error_message, progress, finished_at, adjust_type FROM sync_tasks ORDER BY id"
+        ).fetchall()
+        assert tasks[0][0] == 10
+        assert tasks[0][1] == "running"
+        assert tasks[0][5] == "none"
+        assert tasks[1][1] == "failed"
+        assert tasks[2][1] == "failed"
+        assert all(task[3] == 100 and task[4] is not None for task in tasks[1:])
+        assert all("survivor task id=10" in task[2] for task in tasks[1:])
+        index_sql = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_sync_tasks_active_raw_replay'"
+        ).fetchone()[0]
+        assert "WHERE task_type" in index_sql
+    finally:
+        connection.close()
