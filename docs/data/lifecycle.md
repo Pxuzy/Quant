@@ -60,6 +60,7 @@ sync_tasks
 - `GET /api/database/lineage` 的批次级血缘；
 - `GET /api/research-data/bars` 的单股票 governed-only `BarReader`；
 - 单股票日线正式 fetch 的 raw envelope、SHA-256 和 `IngestBatch.raw_artifact_id` 关联；
+- `IngestBatch.dropped_records` 显式记录 provider 原始记录在标准化阶段未进入 canonical 数据的数量；
 - `daily_bars_raw_replay` worker task：校验 raw checksum 后离线 normalize，不重新请求 provider；
 - provider 退役记录保留：当前 registry 不再删除历史 `DataSource`，而是标记为 retired 并从默认运行列表隐藏；
 - 不同 data lake 的 DuckDB 路径隔离；重复写入返回实际新增行数。
@@ -119,6 +120,8 @@ provider 退出 registry 后：
 
 1. `validate_*_records`：写入前的字段、类型、市场、日期、OHLC、重复键等硬校验；
 2. `DataQualityService.run_check()`：对已登记数据集执行完整检查并产生历史报告，包括重复、缺失交易日、OHLC 边界、负值和股票池覆盖。
+
+标准化阶段的记录数必须可解释：`dropped_records = raw_records - normalized_records`。当前该指标会写入 `ingest_batches`、任务批次 API 和 batch lineage；后续应再增加逐条 quarantine 原因与字段变更摘要。
 
 当前完整质量检查仍是独立检查入口，不应写成每次 ingest 自动执行的 fail-closed 发布门禁。目标流程是：
 
