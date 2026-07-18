@@ -234,6 +234,7 @@ class IngestBatch(Base):
     normalize_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
     raw_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     normalized_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    dropped_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_written: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     validation_errors_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

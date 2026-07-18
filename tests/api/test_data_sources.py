@@ -39,6 +39,25 @@ class EmptyNormalizeAdapter(StockDataSourceAdapter):
         return []
 
 
+
+def test_stock_sync_records_normalization_loss_in_ingest_batch(client):
+    registry = AdapterRegistry()
+    registry.register(EmptyNormalizeAdapter())
+    db = SessionLocal()
+    try:
+        task = StockSyncService(db, registry).run_stock_sync(source="empty_normalize", market="A_SHARE")
+        batch = db.query(IngestBatch).filter(IngestBatch.task_id == task.id).one()
+    finally:
+        db.close()
+
+    assert task.status == "success"
+    assert task.records_read == 1
+    assert task.records_written == 0
+    assert batch.raw_records == 1
+    assert batch.normalized_records == 0
+    assert batch.dropped_records == 1
+
+
 class FailingFetchAdapter(StockDataSourceAdapter):
     code = "failing_fetch"
     name = "Failing Fetch"

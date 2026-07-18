@@ -149,11 +149,11 @@ def _ensure_sqlite_ingest_batch_columns(engine: Engine) -> None:
         return
 
     existing_columns = {column["name"] for column in inspector.get_columns("ingest_batches")}
-    if "raw_artifact_id" in existing_columns:
-        return
-
     with engine.begin() as connection:
-        connection.execute(text("ALTER TABLE ingest_batches ADD COLUMN raw_artifact_id INTEGER"))
+        if "raw_artifact_id" not in existing_columns:
+            connection.execute(text("ALTER TABLE ingest_batches ADD COLUMN raw_artifact_id INTEGER"))
+        if "dropped_records" not in existing_columns:
+            connection.execute(text("ALTER TABLE ingest_batches ADD COLUMN dropped_records INTEGER NOT NULL DEFAULT 0"))
 
 
 def get_db() -> Iterator[Session]:

@@ -134,6 +134,7 @@ class IngestBatchRead(BaseModel):
     normalize_version: str
     raw_records: int
     normalized_records: int
+    dropped_records: int
     records_written: int
     validation_errors_json: list[str]
     error_message: str | None
