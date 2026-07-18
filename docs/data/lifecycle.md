@@ -61,7 +61,7 @@ sync_tasks
 - `GET /api/research-data/bars` 的单股票 governed-only `BarReader`；
 - 单股票日线正式 fetch 的 raw envelope、SHA-256 和 `IngestBatch.raw_artifact_id` 关联；
 - `IngestBatch.dropped_records` 显式记录 provider 原始记录在标准化阶段未进入 canonical 数据的数量；
-- `daily_bars_raw_replay` worker task：校验 raw checksum 后离线 normalize，不重新请求 provider；
+- `daily_bars_raw_replay` worker task：校验 raw checksum、长度、metadata 和复权口径后离线 normalize，不重新请求 provider；不同 `adjust_type` 不会伪装为真实价格换算；
 - provider 退役记录保留：当前 registry 不再删除历史 `DataSource`，而是标记为 retired 并从默认运行列表隐藏；
 - 不同 data lake 的 DuckDB 路径隔离；重复写入返回实际新增行数。
 
@@ -135,7 +135,7 @@ raw artifact
   -> active snapshot
 ```
 
-质量阻断时不得推进 active dataset；质量 warning 可以发布，但必须记录在 manifest 和报告中。
+质量阻断时不得推进 active dataset；质量 warning 可以发布，但必须记录在 manifest 和报告中。若 `raw_records > 0` 且 `normalized_records == 0`，当前 batch 会因“全部标准化丢弃”失败，而不是静默成功。
 
 ## 8. 研究读取边界
 

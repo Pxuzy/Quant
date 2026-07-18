@@ -70,7 +70,7 @@ DATA_LAKE_DIR/raw/<dataset>/source=<provider>/task=<task_id>/symbol=<symbol>-<sh
 1. 读取 `raw_artifacts` 中的输入 artifact；
 2. 校验 SHA-256 与记录数；
 3. 使用记录的 provider adapter 做本地 normalize；
-4. 可指定 `none`、`qfq`、`hfq` 复权口径；
+4. 必须沿用 artifact 已记录的 `adjust_type`；离线 replay 不执行价格复权换算，因此不同口径请求会失败；
 5. 通过标准 ingest batch 路径写回 canonical 日线；
 6. **不请求任何 provider**。
 
@@ -108,6 +108,7 @@ DATA_LAKE_DIR/raw/<dataset>/source=<provider>/task=<task_id>/symbol=<symbol>-<sh
 限制与后续：
 
 - raw 保留期、清理策略和 snapshot 引用保护尚未实现；
+- raw 文件与 SQL metadata 是可恢复的跨存储边界，不是单一 ACID 事务；若 DuckDB 已写入而后续 metadata 更新失败，batch 会标记 `reconcile_required`，不得将其误解为可自动回滚；
 - `raw_artifacts` 还未有独立 API 展示层；
 - replay 当前只支持日线，不覆盖股票池或交易日历；
 - raw 文件可能包含 provider 返回的额外字段，日志和 API 不得直接暴露完整 payload；

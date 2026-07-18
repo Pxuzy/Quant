@@ -62,7 +62,7 @@ sync task
   -> quality report / lineage / BarReader
 ```
 
-当前日线、股票列表、交易日历和市场级 repair 正式管线会在 normalize 前保存 provider raw envelope，并通过 `raw_artifacts` 与 `ingest_batches.raw_artifact_id` 关联。`scripts/ops/fetch_daily_bars.py` 与 `scripts/ops/merge_raw_to_silver.py` 产生的 `storage/raw` 仍是旁路运维数据，不自动等同于 `sync_tasks`、`ingest_batches`、quality 和 lineage。
+当前日线、股票列表、交易日历和市场级 repair 正式管线会在 normalize 前保存 provider raw envelope，并通过 `raw_artifacts` 与 `ingest_batches.raw_artifact_id` 关联。日线 artifact 同时保存实际 `adjust_type`，replay 不允许仅改标签而不做真实价格换算。`scripts/ops/fetch_daily_bars.py` 与 `scripts/ops/merge_raw_to_silver.py` 产生的 `storage/raw` 仍是旁路运维数据，不自动等同于 `sync_tasks`、`ingest_batches`、quality 和 lineage。
 
 目标正式链路：
 
