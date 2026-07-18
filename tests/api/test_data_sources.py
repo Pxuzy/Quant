@@ -50,12 +50,14 @@ def test_stock_sync_records_normalization_loss_in_ingest_batch(client):
     finally:
         db.close()
 
-    assert task.status == "success"
-    assert task.records_read == 1
+    assert task.status == "failed"
+    assert task.records_read == 0
     assert task.records_written == 0
     assert batch.raw_records == 1
     assert batch.normalized_records == 0
     assert batch.dropped_records == 1
+    assert batch.status == "failed"
+    assert batch.quality_status == "failed"
 
 
 class FailingFetchAdapter(StockDataSourceAdapter):

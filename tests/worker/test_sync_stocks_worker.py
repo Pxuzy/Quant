@@ -499,10 +499,19 @@ def test_worker_replays_raw_daily_bars_without_provider_fetch(tmp_path, monkeypa
         database_url=database_url,
     )
     replay_task = run_daily_bars_raw_replay_task(task_id=replay_task.id, database_url=database_url)
+    assert replay_task.status == "failed"
+    assert replay_task.records_read == 2
+    assert replay_task.records_written == 0
 
+    replay_task = enqueue_daily_bars_raw_replay(
+        raw_artifact_id=artifact.id,
+        adjust_type="none",
+        database_url=database_url,
+    )
+    replay_task = run_daily_bars_raw_replay_task(task_id=replay_task.id, database_url=database_url)
     assert replay_task.status == "success"
     assert replay_task.records_read == 2
-    assert replay_task.records_written == 2
+    assert replay_task.records_written == 0
 
     db = SessionLocal()
     try:

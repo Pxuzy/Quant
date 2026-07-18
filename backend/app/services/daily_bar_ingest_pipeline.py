@@ -71,6 +71,7 @@ class DailyBarIngestPipeline:
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
+            adjust_type=adjust_type,
             records=raw_records,
         )
         raw_artifact = self.raw_artifact_repo.create_artifact(
@@ -82,6 +83,7 @@ class DailyBarIngestPipeline:
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
+            adjust_type=adjust_type,
             metadata=raw_metadata,
         )
 
@@ -156,6 +158,7 @@ class DailyBarIngestPipeline:
         if validation_errors:
             raise RuntimeError(f"Daily bars schema validation failed: {validation_errors[0]}")
 
+        records_written = 0
         try:
             records_written = self.daily_bar_repo.write_many(normalized)
             total_rows = self.daily_bar_repo.count(market=market)
@@ -174,6 +177,9 @@ class DailyBarIngestPipeline:
                 )
         except Exception as exc:
             if batch is not None:
-                self.ingest_batch_repo.fail_batch(batch, message=str(exc))
+                if records_written > 0:
+                    self.ingest_batch_repo.mark_reconcile_required(batch, message=str(exc))
+                else:
+                    self.ingest_batch_repo.fail_batch(batch, message=str(exc))
             raise
         return records_written

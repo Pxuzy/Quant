@@ -23,6 +23,7 @@ class RawArtifactRepository:
         symbol: str | None,
         start_date: date | None,
         end_date: date | None,
+        adjust_type: str | None = None,
         metadata: RawArtifactMetadata,
     ) -> RawArtifact:
         artifact = RawArtifact(
@@ -34,6 +35,7 @@ class RawArtifactRepository:
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
+            adjust_type=adjust_type or metadata.adjust_type,
             uri=metadata.uri,
             sha256=metadata.sha256,
             byte_size=metadata.byte_size,

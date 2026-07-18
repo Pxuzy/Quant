@@ -42,23 +42,38 @@ class RawDailyBarsReplayService:
             artifact = self.db.get(RawArtifact, task.input_raw_artifact_id)
             if artifact is None:
                 raise ValueError(f"Raw artifact {task.input_raw_artifact_id} does not exist.")
+            if artifact.status != "stored":
+                raise RuntimeError(f"Raw artifact {artifact.id} has status '{artifact.status}', expected stored.")
 
             self.task_repo.mark_running(task)
-            path = Path(artifact.uri)
+            raw_store = RawArtifactStore()
+            path = raw_store.resolve_uri(artifact.uri)
             content = path.read_bytes()
             digest = hashlib.sha256(content).hexdigest()
             if digest != artifact.sha256:
                 raise RuntimeError(f"Raw artifact checksum mismatch: {artifact.id}")
+            if len(content) != artifact.byte_size:
+                raise RuntimeError(f"Raw artifact byte size mismatch: {artifact.id}")
 
             envelope = RawArtifactStore.read(path)
+            _validate_envelope_metadata(envelope, artifact)
             records = envelope["records"]
             if len(records) != artifact.row_count:
                 raise RuntimeError(
                     f"Raw artifact row count mismatch: expected {artifact.row_count}, got {len(records)}"
                 )
             records_read = len(records)
+            artifact_adjust_type = artifact.adjust_type or envelope.get("adjust_type")
+            if not artifact_adjust_type:
+                raise RuntimeError(f"Raw artifact {artifact.id} has no recorded adjust_type.")
+            artifact_adjust_type = normalize_daily_bar_adjust_type(artifact_adjust_type)
             adapter = self.registry.get(artifact.source)
             adjust_type = normalize_daily_bar_adjust_type(task.adjust_type or "none")
+            if adjust_type != artifact_adjust_type:
+                raise ValueError(
+                    f"Replay adjust_type '{adjust_type}' does not match raw artifact '{artifact_adjust_type}'; "
+                    "offline replay cannot perform price adjustment."
+                )
             start_date = artifact.start_date or task.start_date
             end_date = artifact.end_date or task.end_date
             if start_date is None or end_date is None:
@@ -108,3 +123,21 @@ class RawDailyBarsReplayService:
             self.db.commit()
             self.db.refresh(task)
             return task
+
+
+def _validate_envelope_metadata(envelope: dict, artifact: RawArtifact) -> None:
+    expected = {
+        "dataset_name": artifact.dataset_name,
+        "task_id": artifact.task_id,
+        "source": artifact.source,
+        "requested_source": artifact.requested_source,
+        "market": artifact.market,
+        "symbol": artifact.symbol,
+        "start_date": artifact.start_date.isoformat() if artifact.start_date else None,
+        "end_date": artifact.end_date.isoformat() if artifact.end_date else None,
+        "adjust_type": artifact.adjust_type,
+        "row_count": artifact.row_count,
+    }
+    for field, value in expected.items():
+        if envelope.get(field) != value:
+            raise RuntimeError(f"Raw artifact metadata mismatch for {field}: {artifact.id}")

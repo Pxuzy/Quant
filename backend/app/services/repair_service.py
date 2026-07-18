@@ -508,6 +508,7 @@ class _MarketRepairMixin:
                         symbol=symbol_item.symbol,
                         start_date=symbol_item.start_date,
                         end_date=symbol_item.end_date,
+                        adjust_type=adjust_type,
                         records=raw_records,
                     )
                     raw_artifact = raw_artifact_repo.create_artifact(
@@ -519,6 +520,7 @@ class _MarketRepairMixin:
                         symbol=symbol_item.symbol,
                         start_date=symbol_item.start_date,
                         end_date=symbol_item.end_date,
+                        adjust_type=adjust_type,
                         metadata=raw_metadata,
                     )
                     normalized = [replace(record, adjust_type=adjust_type)

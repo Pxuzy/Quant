@@ -20,6 +20,7 @@ class RawArtifactMetadata:
     sha256: str
     byte_size: int
     row_count: int
+    adjust_type: str | None = None
     content_type: str = "application/json"
 
 
@@ -34,6 +35,18 @@ class RawArtifactStore:
 
     def __init__(self, lake_root: str | Path | None = None) -> None:
         self.lake_root = Path(lake_root or get_settings().data_lake_dir)
+        self.raw_root = (self.lake_root / "raw").resolve()
+
+    def resolve_uri(self, uri: str | Path) -> Path:
+        candidate = Path(uri)
+        if not candidate.is_absolute():
+            candidate = self.raw_root / candidate
+        resolved = candidate.resolve(strict=True)
+        if self.raw_root not in resolved.parents:
+            raise ValueError(f"Raw artifact URI escapes configured raw root: {uri}")
+        if any(parent.is_symlink() for parent in [candidate, *candidate.parents]):
+            raise ValueError(f"Raw artifact URI cannot use symlinks: {uri}")
+        return resolved
 
     def persist(
         self,
@@ -46,6 +59,7 @@ class RawArtifactStore:
         symbol: str | None,
         start_date: date | None,
         end_date: date | None,
+        adjust_type: str | None = None,
         records: list[dict[str, Any]],
     ) -> RawArtifactMetadata:
         envelope = {
@@ -59,6 +73,7 @@ class RawArtifactStore:
             "symbol": symbol,
             "start_date": start_date,
             "end_date": end_date,
+            "adjust_type": adjust_type,
             "row_count": len(records),
             "records": records,
         }
@@ -73,7 +88,7 @@ class RawArtifactStore:
         safe_dataset = _safe_component(dataset_name)
         safe_source = _safe_component(source)
         safe_symbol = _safe_component(symbol or "market")
-        directory = self.lake_root / "raw" / safe_dataset / f"source={safe_source}" / f"task={task_id}"
+        directory = (self.lake_root / "raw" / safe_dataset / f"source={safe_source}" / f"task={task_id}").resolve()
         path = directory / f"symbol={safe_symbol}-{digest[:16]}.json"
         directory.mkdir(parents=True, exist_ok=True)
         if not path.exists():
@@ -93,6 +108,7 @@ class RawArtifactStore:
             sha256=digest,
             byte_size=len(content),
             row_count=len(records),
+            adjust_type=adjust_type,
         )
 
     @staticmethod

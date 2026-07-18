@@ -133,7 +133,11 @@ class SyncTask(Base):
     max_symbols: Mapped[int | None] = mapped_column(Integer, nullable=True)
     start_policy: Mapped[str | None] = mapped_column(String(32), nullable=True)
     adjust_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    input_raw_artifact_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    input_raw_artifact_id: Mapped[int | None] = mapped_column(
+        ForeignKey("raw_artifacts.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_read: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -203,6 +207,7 @@ class RawArtifact(Base):
     symbol: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    adjust_type: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     uri: Mapped[str] = mapped_column(String(1024), nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -212,8 +217,11 @@ class RawArtifact(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
-    task: Mapped[SyncTask] = relationship()
-    ingest_batches: Mapped[list["IngestBatch"]] = relationship(back_populates="raw_artifact")
+    task: Mapped[SyncTask] = relationship(foreign_keys=[task_id])
+    ingest_batches: Mapped[list["IngestBatch"]] = relationship(
+        back_populates="raw_artifact",
+        foreign_keys="IngestBatch.raw_artifact_id",
+    )
 
 
 class IngestBatch(Base):
@@ -244,7 +252,10 @@ class IngestBatch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     task: Mapped[SyncTask] = relationship(back_populates="ingest_batches")
-    raw_artifact: Mapped["RawArtifact | None"] = relationship(back_populates="ingest_batches")
+    raw_artifact: Mapped["RawArtifact | None"] = relationship(
+        back_populates="ingest_batches",
+        foreign_keys=[raw_artifact_id],
+    )
 
 
 class Dataset(Base):
