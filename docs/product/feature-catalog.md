@@ -14,8 +14,8 @@
 | 项目 | 内容 |
 | --- | --- |
 | 产品层级 | 工作台层 |
-| 前端路由 | `/data-system/overview` |
-| 页面文件 | `frontend/src/pages/data-system/overview/DataSystemOverviewPage.tsx` |
+| 前端路由 | `/dashboard` |
+| 页面文件 | `frontend/src/pages/dashboard/DashboardPage.tsx` |
 | 主要能力 | 系统总览、股票数量、任务概览、数据源健康、质量风险、快捷跳转 |
 | 下一步方向 | 从后台总览调整为研究首页：关注股票、行情摘要、新闻事件、数据新鲜度 |
 | 相关 API | `/api/database/integration-overview`, `/api/data-quality/overview`, `/api/sync-tasks`, `/api/data-sources`, `/api/datasets` |
@@ -30,7 +30,7 @@
 | 页面文件 | `StocksWorkbenchPage.tsx`, `StockDetailPage.tsx` |
 | 主要能力 | 股票列表、搜索、市场/状态筛选、服务端分页、单股详情、日线数据、覆盖、质量、批次 |
 | 下一步方向 | 股票详情成为研究主页面，后续聚合新闻事件、常用指标和自选股上下文 |
-| 相关 API | `GET /api/stocks`, `GET /api/stocks/{symbol}`, `GET /api/stocks/{symbol}/daily-coverage`, `GET /api/stocks/{symbol}/daily-quality`, `GET /api/stocks/{symbol}/daily-ingest-batches`, `GET /api/market-data/daily-bars/{symbol}`, `POST /api/stocks/sync`, `POST /api/market-data/daily-bars/sync` |
+| 相关 API | `GET /api/stocks`, `GET /api/stocks/{symbol}`, `GET /api/stocks/{symbol}/daily-coverage`, `GET /api/stocks/{symbol}/daily-quality`, `GET /api/stocks/{symbol}/daily-ingest-batches`, `GET /api/market-data/daily-bars?symbol={symbol}`, `POST /api/stocks/sync`, `POST /api/market-data/daily-bars/sync` |
 | 数据对象 | `stocks`, `daily_bars`, `ingest_batches`, `data_quality_reports` |
 | 测试参考 | `tests/api/test_health_and_stocks.py`, `tests/api/test_market_data.py` |
 

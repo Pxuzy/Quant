@@ -74,7 +74,7 @@ Recommended root-level lifecycle commands:
 .\scripts\quant-dev.cmd smoke
 ```
 
-Open the workbench at `http://127.0.0.1:5175/data-system/overview`.
+Open the workbench at `http://127.0.0.1:5175/dashboard`.
 
 If Windows refuses the default web port, use the explicit `-ApiPort` / `-WebPort` commands in [development-runbook.md](./docs/operations/development-runbook.md).
 

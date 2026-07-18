@@ -57,7 +57,7 @@ DataQualityReport
 
 | 字段 | 说明 |
 | --- | --- |
-| `code` | `akshare`, `baostock`, `adata`, `tushare`, `stock_sdk` |
+| `code` | 当前 `akshare`, `baostock`, `stock_sdk`；`adata`、`tushare` 为后续候选 |
 | `enabled` | 是否参与自动选择 |
 | `priority` | 自动选择优先级 |
 | `requires_token` | 是否需要凭证 |

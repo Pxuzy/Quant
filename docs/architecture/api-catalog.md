@@ -46,7 +46,7 @@
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | GET | `/api/market-data/daily-bars` | 分页查询日线行情 |
-| GET | `/api/market-data/daily-bars/{symbol}` | 按股票查询日线行情 |
+| GET | `/api/market-data/daily-bars?symbol={symbol}` | 按股票查询日线行情 |
 | POST | `/api/market-data/daily-bars/sync` | 创建单股日线同步任务 |
 | POST | `/api/market-data/daily-bars/market-repair/preview` | 预览市场级日线缺口补齐计划 |
 | POST | `/api/market-data/daily-bars/market-repair` | 创建市场级日线缺口补齐任务 |

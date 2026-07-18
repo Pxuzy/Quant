@@ -49,7 +49,7 @@ docker compose up -d postgres
 默认地址：
 
 - API: `http://127.0.0.1:8021/health`
-- Web: `http://127.0.0.1:5175/data-system/overview`
+- Web: `http://127.0.0.1:5175/dashboard`
 
 如果 Windows 拒绝绑定默认 Web 端口（例如 `5175` 返回 `WinError 10013`），或者 `frontend/.env.local` 指向了备用 API 端口，可以显式指定端口。当前本机验证通过的组合是：
 
