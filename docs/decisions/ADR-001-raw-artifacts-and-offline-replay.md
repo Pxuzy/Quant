@@ -72,7 +72,8 @@ DATA_LAKE_DIR/raw/<dataset>/source=<provider>/task=<task_id>/symbol=<symbol>-<sh
 3. 使用记录的 provider adapter 做本地 normalize；
 4. 必须沿用 artifact 已记录的 `adjust_type`；离线 replay 不执行价格复权换算，因此不同口径请求会失败；
 5. 通过标准 ingest batch 路径写回 canonical 日线；
-6. **不请求任何 provider**。
+6. **不请求任何 provider**；
+7. 相同 raw artifact 与规范化后的 `adjust_type` 由数据库局部唯一索引保证只有一个 pending/running replay。
 
 当前没有 HTTP replay API，避免未审计的用户输入直接触发数据重写；replay 由受控 worker/CLI 执行。
 
