@@ -261,3 +261,24 @@ class SyncTaskRepository:
         if market:
             stmt = stmt.where(SyncTask.market == market)
         return self.db.scalar(stmt)
+
+    def find_recent_raw_replay_task(
+        self,
+        *,
+        raw_artifact_id: int,
+        adjust_type: str,
+        statuses: list[str],
+        created_after: datetime,
+    ) -> SyncTask | None:
+        return self.db.scalar(
+            select(SyncTask)
+            .where(
+                SyncTask.task_type == "daily_bars_raw_replay",
+                SyncTask.input_raw_artifact_id == raw_artifact_id,
+                SyncTask.adjust_type == adjust_type,
+                SyncTask.status.in_(statuses),
+                SyncTask.created_at >= created_after,
+            )
+            .order_by(SyncTask.created_at.desc(), SyncTask.id.desc())
+            .limit(1)
+        )

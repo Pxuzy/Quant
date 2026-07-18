@@ -508,6 +508,12 @@ def test_worker_replays_raw_daily_bars_without_provider_fetch(tmp_path, monkeypa
         adjust_type="none",
         database_url=database_url,
     )
+    duplicate_replay_task = enqueue_daily_bars_raw_replay(
+        raw_artifact_id=artifact.id,
+        adjust_type="none",
+        database_url=database_url,
+    )
+    assert duplicate_replay_task.id == replay_task.id
     replay_task = run_daily_bars_raw_replay_task(task_id=replay_task.id, database_url=database_url)
     assert replay_task.status == "success"
     assert replay_task.records_read == 2

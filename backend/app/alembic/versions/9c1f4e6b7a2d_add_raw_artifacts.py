@@ -63,14 +63,6 @@ def upgrade() -> None:
     ingest_columns = {column["name"] for column in inspect(bind).get_columns("ingest_batches")}
     if "raw_artifact_id" not in ingest_columns:
         op.add_column("ingest_batches", sa.Column("raw_artifact_id", sa.Integer(), nullable=True))
-        if bind.dialect.name != "sqlite":
-            op.create_foreign_key(
-                "fk_ingest_batches_raw_artifact_id",
-                "ingest_batches",
-                "raw_artifacts",
-                ["raw_artifact_id"],
-                ["id"],
-            )
         op.create_index("ix_ingest_batches_raw_artifact_id", "ingest_batches", ["raw_artifact_id"], unique=False)
 
 
@@ -83,10 +75,6 @@ def downgrade() -> None:
             op.drop_index("ix_ingest_batches_raw_artifact_id", table_name="ingest_batches")
         columns = {column["name"] for column in inspect(bind).get_columns("ingest_batches")}
         if "raw_artifact_id" in columns:
-            try:
-                op.drop_constraint("fk_ingest_batches_raw_artifact_id", "ingest_batches", type_="foreignkey")
-            except Exception:
-                pass
             op.drop_column("ingest_batches", "raw_artifact_id")
 
     if "raw_artifacts" in inspect(bind).get_table_names():
