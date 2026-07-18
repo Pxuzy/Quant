@@ -14,7 +14,7 @@
 provider fetch -> normalize -> schema validation -> DuckDB/Parquet + metadata
 ```
 
-这使得 provider 字段变更、normalizer 修复、复权口径调整或质量规则升级后，必须再次请求第三方数据源才能重新处理历史数据。旁路 `scripts/ops` 虽会产生 raw 文件，但它未稳定关联 `sync_tasks`、`ingest_batches`、checksum 与 batch lineage，不能作为正式回放依据。
+这使得 provider 字段变更、normalizer 修复、复权口径调整或质量规则升级后，必须再次请求第三方数据源才能重新处理历史数据。旧旁路采集脚本未稳定关联 `sync_tasks`、`ingest_batches`、checksum 与 batch lineage，不能作为正式回放依据。
 
 约束条件：
 
@@ -79,7 +79,7 @@ DATA_LAKE_DIR/raw/<dataset>/source=<provider>/task=<task_id>/symbol=<symbol>-<sh
 
 ## 备选方案
 
-### 只保留 `scripts/ops` 的 raw 文件
+### 只保留旧旁路脚本产生的 raw 文件
 
 - 优点：没有元数据迁移；
 - 缺点：不与 task、batch、checksum、lineage 统一，无法可靠审计或回放；

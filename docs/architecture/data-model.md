@@ -1,6 +1,6 @@
 ﻿# 数据模型
 
-本文档依据 `apps/api/models/entities.py` 整理当前核心实体。
+本文档依据 `backend/app/models/entities.py` 整理当前核心实体。
 
 ## 实体总览
 

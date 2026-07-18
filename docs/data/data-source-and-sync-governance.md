@@ -43,7 +43,7 @@ provider 从 registry 退役时，不删除历史 `DataSource`：
 | `daily_bars_market_repair` | `POST /api/market-data/daily-bars/market-repair` | 按股票池、交易日历和缺口计划执行市场级修复 |
 | `calendars` | `POST /api/trading-calendars/sync` | 交易日历同步 |
 
-任务执行入口：`backend/worker/sync_stocks.py`。`daily_bars_raw_replay` 已作为 worker/CLI task type 实现；它只读取 `raw_artifacts`，不访问 provider。当前尚无 replay API；`scripts/ops` 中的 raw 合并脚本也不能被写成 replay API。
+任务执行入口：`backend/worker/sync_stocks.py`。`daily_bars_raw_replay` 已作为 worker/CLI task type 实现；它只读取 `raw_artifacts`，不访问 provider。当前尚无 replay API；replay 只能通过受控 worker/CLI 入口执行。
 
 ## 4. 当前正式接入链路
 
@@ -62,7 +62,7 @@ sync task
   -> quality report / lineage / BarReader
 ```
 
-当前日线、股票列表、交易日历和市场级 repair 正式管线会在 normalize 前保存 provider raw envelope，并通过 `raw_artifacts` 与 `ingest_batches.raw_artifact_id` 关联。日线 artifact 同时保存实际 `adjust_type`，replay 不允许仅改标签而不做真实价格换算。`scripts/ops/fetch_daily_bars.py` 与 `scripts/ops/merge_raw_to_silver.py` 产生的 `storage/raw` 仍是旁路运维数据，不自动等同于 `sync_tasks`、`ingest_batches`、quality 和 lineage。
+当前日线、股票列表、交易日历和市场级 repair 正式管线会在 normalize 前保存 provider raw envelope，并通过 `raw_artifacts` 与 `ingest_batches.raw_artifact_id` 关联。日线 artifact 同时保存实际 `adjust_type`，replay 不允许仅改标签而不做真实价格换算。历史旁路 raw/silver 脚本已删除，持久化采集统一进入 `sync_tasks`、`ingest_batches`、quality 和 lineage。
 
 目标正式链路：
 
@@ -140,14 +140,14 @@ python -m backend.worker.sync_stocks --run-next-pending
 - 长时间同步必须先创建 `sync_tasks`，再由 worker 执行；
 - provider 失败必须记录错误原因、task、batch 和日志；
 - 市场修复不得用空 `symbol` 的普通 `daily_bars` 任务伪装；
-- `scripts/ops` 旁路在纳入正式任务前只适用于受控本地运维，不能作为研究模块的数据入口；
+- 历史旁路采集脚本已删除，不再维护第二套 raw/silver 写入入口；
 - 研究、因子、回测和策略只能通过 API、silver/gold 数据集或 `BarReader` 获取数据，不能直连 provider 或拼 Parquet 路径。
 
 ## 8. 未来治理增量
 
-1. raw artifact 表与不可变原始文件，记录 task、provider、checksum 和保留期限；
+1. raw artifact 保留期、清理策略和 orphan/reconcile 运维；
 2. provider attempt、retry 和错误分类；
 3. quality run/result 与 candidate → active 原子发布；
 4. dataset version、partition manifest、snapshot 和 watermark；
-5. replay 只读取 raw，不访问 provider；
+5. replay 已实现只读取 raw、不访问 provider；后续补充失败恢复和运维观测；
 6. BarReader 扩展多股票、列投影、snapshot 和质量策略。

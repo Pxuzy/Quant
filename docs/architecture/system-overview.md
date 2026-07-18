@@ -37,6 +37,7 @@ React stock workbench
 | 模块 | 代码位置 | 职责 |
 | --- | --- | --- |
 | health | `backend/app/routers/health.py` | 健康检查 |
+| market | `backend/app/routers/market.py` | 研究台实时行情、指数、板块、新闻和搜索 |
 | database | `backend/app/routers/database.py` | 数据库状态、集成总览、血缘 |
 | data_quality | `backend/app/routers/data_quality.py` | 质量总览、报告、检查运行 |
 | data_sources | `backend/app/routers/data_sources.py` | 数据源管理、健康检查、真实取样 |
@@ -46,6 +47,7 @@ React stock workbench
 | research_data | `backend/app/routers/research_data.py` | 研究数据读取契约 |
 | sync_tasks | `backend/app/routers/sync_tasks.py` | 同步任务、日志、批次、定时配置 |
 | trading_calendars | `backend/app/routers/trading_calendars.py` | 交易日历查询和同步 |
+| watchlist | `backend/app/routers/watchlist.py` | 默认自选股管理 |
 
 后续新闻能力进入正式范围时，应新增独立 news 领域模块，并接入标准化、批次、质量和股票关联，不从前端直接拉取外部新闻。
 
@@ -106,7 +108,7 @@ download/fetch raw
   -> BarReader/DataPortal
 ```
 
-当前正式采集会先保存带 SHA-256 的 raw artifact，再做标准化、校验和写入；`daily_bars_raw_replay` 从已登记的 `raw_artifacts` 离线重跑标准化，不重新请求 provider。详情见 [ADR-001](../decisions/ADR-001-raw-artifacts-and-offline-replay.md)。
+当前正式采集会先保存带 SHA-256 的 raw artifact，再做标准化、校验和写入；`daily_bars_raw_replay` 从已登记的 `raw_artifacts` 离线重跑标准化，不重新请求 provider。历史旁路脚本已删除，所有持久化采集统一走正式任务链路。详情见 [ADR-001](../decisions/ADR-001-raw-artifacts-and-offline-replay.md)。
 
 ## 数据源架构
 
@@ -127,7 +129,7 @@ download/fetch raw
 | Parquet | 日线行情等大表数据 |
 | DuckDB | 查询 Parquet 的执行引擎 |
 
-前端、后续因子、回测、策略模块不得直接拼接 Parquet 路径或调用第三方 provider。
+前端、后续因子、回测、策略模块不得直接拼接 Parquet 路径或调用第三方 provider。数据集版本、manifest、snapshot 和回测输入的后续实现以 [Dataset Version、Manifest 与 Snapshot 规格](./dataset-version-snapshot-design.md) 为准。
 
 ## 研究、回测和 AI 边界
 

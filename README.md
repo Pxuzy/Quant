@@ -31,10 +31,10 @@ Start from the documentation center:
 Recommended reading order:
 
 1. [Project overview](./docs/overview/project-overview.md)
-2. [Personal stock workbench direction](./docs/product/personal-stock-workbench.md)
-3. [Phase 1 product baseline](./docs/product/phase-1-baseline.md)
-4. [Feature catalog](./docs/product/feature-catalog.md)
-5. [System architecture](./docs/architecture/system-overview.md)
+2. [Product definition](./docs/product/stock-workbench-product-definition.md)
+3. [Feature catalog](./docs/product/feature-catalog.md)
+4. [System architecture](./docs/architecture/system-overview.md)
+5. [Dataset version and snapshot design](./docs/architecture/dataset-version-snapshot-design.md)
 6. [Stock data lifecycle](./docs/data/lifecycle.md)
 7. [Development runbook](./docs/operations/development-runbook.md)
 8. [Roadmap and status](./docs/status/roadmap.md)

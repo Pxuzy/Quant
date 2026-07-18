@@ -308,4 +308,4 @@ result_sha256
 ## 9. 参考依据
 
 - 本地知识库：`developer-roadmap` 的 DVC、MLOps、data lineage、metadata-first、Delta Lake、MVCC、backup validation 条目；仅提取原则，不照搬平台。
-- `docs/references/OSkhQuant-review.md`：仅借鉴成本、T+1/T+0、结果留档等原则，不复制 MiniQMT/GUI/交易耦合。
+- OSkhQuant 固定版本研究结论：只借鉴成本模型、T+1/T+0 和结果留档原则，不复制 MiniQMT、GUI 或交易耦合；关键取舍已写入本规格，原始研究记录由 Git 历史保留。

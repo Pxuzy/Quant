@@ -73,7 +73,7 @@ sync_tasks
 - 物化 watermark、provider attempt、quarantine 记录；
 - 完整 DataPortal、多股票批量读取、列投影和固定回测 snapshot。
 
-`scripts/ops/` 下的 raw → silver 脚本是旁路运维工具，不等价于 API/Worker 正式生命周期；在正式 replay 接入前不得把它们描述为同一条已闭环管线。
+历史 raw → silver 旁路脚本已删除。正式持久化采集、修复和 replay 必须经过 API/Worker 生命周期，不再维护第二套不可追溯写入路径。
 
 ## 4. 数据层语义
 
