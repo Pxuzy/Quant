@@ -17,12 +17,15 @@ _BATCH_FK = "fk_ingest_batches_raw_artifact"
 
 def _has_fk(table: str, name: str, columns: list[str]) -> bool:
     return any(
-        fk.get("name") == name
-        or (
-            fk.get("referred_table") == "raw_artifacts"
-            and fk.get("constrained_columns") == columns
-            and fk.get("referred_columns") == ["id"]
+        (
+            fk.get("name") == name
+            or (
+                fk.get("referred_table") == "raw_artifacts"
+                and fk.get("constrained_columns") == columns
+                and fk.get("referred_columns") == ["id"]
+            )
         )
+        and (fk.get("options", {}).get("ondelete") or "").upper() == "RESTRICT"
         for fk in inspect(op.get_bind()).get_foreign_keys(table)
     )
 

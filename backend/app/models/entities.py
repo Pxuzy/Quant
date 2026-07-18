@@ -236,7 +236,11 @@ class IngestBatch(Base):
     symbol: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    raw_artifact_id: Mapped[int | None] = mapped_column(ForeignKey("raw_artifacts.id"), nullable=True, index=True)
+    raw_artifact_id: Mapped[int | None] = mapped_column(
+        ForeignKey("raw_artifacts.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="running", index=True)
     schema_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
     normalize_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
