@@ -64,7 +64,7 @@ sync_tasks
 - `daily_bars_raw_replay` worker task：校验 raw checksum、长度、metadata 和复权口径后离线 normalize，不重新请求 provider；不同 `adjust_type` 不会伪装为真实价格换算；
 - 相同 raw artifact、相同复权口径只能有一个 pending/running replay；该身份由数据库局部唯一索引强制，而不是依赖时间窗口查询；
 - provider 退役记录保留：当前 registry 不再删除历史 `DataSource`，而是标记为 retired 并从默认运行列表隐藏；
-- 不同 data lake 的 DuckDB 路径隔离；重复写入返回实际新增行数。
+- 不同 data lake 的 DuckDB 路径隔离；重复写入返回实际新增行数；Parquet 归档失败不再静默吞掉，而是携带实际写入行数进入 `reconcile_required` 处理。
 
 ### 尚未实现或不应误称已完成
 

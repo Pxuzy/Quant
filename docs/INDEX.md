@@ -12,9 +12,10 @@
 4. [阶段一产品基线](./product/phase-1-baseline.md)
 5. [功能矩阵](./product/feature-catalog.md)
 6. [系统架构总览](./architecture/system-overview.md)
-7. [股票数据全生命周期管理](./data/lifecycle.md)
-8. [开发运行手册](./operations/development-runbook.md)
-9. [路线图和当前状态](./status/roadmap.md)
+7. [Dataset Version、Manifest 与 Snapshot 规格](./architecture/dataset-version-snapshot-design.md)
+8. [股票数据全生命周期管理](./data/lifecycle.md)
+9. [开发运行手册](./operations/development-runbook.md)
+10. [路线图和当前状态](./status/roadmap.md)
 
 ## 文档分区
 
