@@ -15,6 +15,8 @@
 | `Dataset` | `datasets` | 数据集目录和最新状态 |
 | `DatasetVersion` | `dataset_versions` | 不可变数据集 candidate/published 版本元数据与 manifest 身份 |
 | `DatasetVersionPartition` | `dataset_version_partitions` | 版本固定的 sealed partition 清单、checksum、行数和范围 |
+| `Snapshot` | `snapshots` | 一组已发布数据版本的不可变研究输入；单用户场景最多一个 active |
+| `SnapshotMember` | `snapshot_members` | snapshot 到 dataset/version 的固定引用 |
 | `TradingCalendar` | `trading_calendars` | 市场交易日历 |
 | `DataQualityReport` | `data_quality_reports` | 数据质量检查结果 |
 

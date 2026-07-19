@@ -257,7 +257,7 @@ BarReader：
 - 生成 canonical manifest 和 hash；
 - 不切换 BarReader 默认读取。
 
-当前已实现 Slice 1a/1b：`dataset_manifest.py` 提供 canonical JSON、volatile timestamp 排除、manifest SHA-256、partition URI/row count/checksum 结构校验和 immutable manifest 文件写入；`dataset_versions` 与 `dataset_version_partitions` 已提供 candidate 元数据、稳定内容去重和 sealed partition 登记。repository 已强制 `candidate → ready → published` 质量状态门禁以及 candidate/ready → rejected；尚未接入 partition materialization、active snapshot 或 BarReader。
+当前已实现 Slice 1a/1b：`dataset_manifest.py` 提供 canonical JSON、volatile timestamp 排除、manifest SHA-256、partition URI/row count/checksum 结构校验和 immutable manifest 文件写入；`dataset_versions` 与 `dataset_version_partitions` 已提供 candidate 元数据、稳定内容去重和 sealed partition 登记。repository 已强制 `candidate → ready → published` 质量状态门禁以及 candidate/ready → rejected；Snapshot 已能只引用 published version，并用 `draft → active → retired` 和 active partial unique index 固定单用户研究输入。尚未接入 partition materialization、snapshot-bound BarReader 或离线回测。
 
 验收：重复输入 hash 稳定、任一字节改变校验失败、row count 求和一致、无绝对路径。
 

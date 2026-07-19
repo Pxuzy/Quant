@@ -11,9 +11,10 @@
 3. [功能矩阵](./product/feature-catalog.md)
 4. [系统架构总览](./architecture/system-overview.md)
 5. [Dataset Version、Manifest 与 Snapshot 规格](./architecture/dataset-version-snapshot-design.md)
-6. [股票数据全生命周期管理](./data/lifecycle.md)
-7. [开发运行手册](./operations/development-runbook.md)
-8. [路线图和当前状态](./status/roadmap.md)
+6. [本地 A 股日线研究数据库设计](./architecture/local-a-share-daily-database-design.md)
+7. [股票数据全生命周期管理](./data/lifecycle.md)
+8. [开发运行手册](./operations/development-runbook.md)
+9. [路线图和当前状态](./status/roadmap.md)
 
 ## 文档分区
 
@@ -21,7 +22,7 @@
 | --- | --- | --- |
 | `overview/` | 项目定位、目标、术语 | [项目总览](./overview/project-overview.md), [术语表](./overview/glossary.md) |
 | `product/` | 产品定位、页面和功能 | [个人股票数据管理工作台产品定义](./product/stock-workbench-product-definition.md), [功能矩阵](./product/feature-catalog.md) |
-| `architecture/` | 系统结构、模块边界、API、数据模型 | [系统架构总览](./architecture/system-overview.md), [API 目录](./architecture/api-catalog.md), [数据模型](./architecture/data-model.md) |
+| `architecture/` | 系统结构、模块边界、API、数据模型 | [系统架构总览](./architecture/system-overview.md), [API 目录](./architecture/api-catalog.md), [数据模型](./architecture/data-model.md), [本地 A 股日线研究数据库设计](./architecture/local-a-share-daily-database-design.md) |
 | `data/` | 数据源、同步、质量、血缘、数据集和生命周期 | [生命周期管理](./data/lifecycle.md), [数据源和同步治理](./data/data-source-and-sync-governance.md) |
 | `decisions/` | 已接受架构决策及其取舍 | [ADR-001：Raw Artifact 与离线 Replay](./decisions/ADR-001-raw-artifacts-and-offline-replay.md) |
 | `operations/` | 本地启动、环境变量、验证命令 | [开发运行手册](./operations/development-runbook.md) |

@@ -66,12 +66,16 @@ sync_tasks
 - provider 退役记录保留：当前 registry 不再删除历史 `DataSource`，而是标记为 retired 并从默认运行列表隐藏；
 - 不同 data lake 的 DuckDB 路径隔离；重复写入返回实际新增行数；Parquet 归档失败不再静默吞掉，而是携带实际写入行数进入 `reconcile_required` 处理。
 
-### 尚未实现或不应误称已完成
+### 当前状态
 
-- 独立 `dataset_versions`、`dataset_partitions`、`snapshots` 和持久 manifest；
-- 以质量检查为阻断条件的 candidate → active 原子发布；
+Manifest、`dataset_versions`、`dataset_version_partitions`、`snapshots` 和基础状态机已在内部实现并有迁移/测试覆盖；但它们尚未接入本地行情库初始化、每日增量、三口径一致性校验、管理 API/UI 和 snapshot-bound BarReader 主链。
+
+### 尚未接入本地行情库主链或后续建设
+
+- 以质量检查为阻断条件的全量 candidate → published 原子发布；
 - 物化 watermark、provider attempt、quarantine 记录；
-- 完整 DataPortal、多股票批量读取、列投影和固定回测 snapshot。
+- 完整 DataPortal、多股票批量读取、列投影和固定回测 snapshot；
+- 全 A 股近 5 年三种复权口径的初始化与每日增量。
 
 历史 raw → silver 旁路脚本已删除。正式持久化采集、修复和 replay 必须经过 API/Worker 生命周期，不再维护第二套不可追溯写入路径。
 
