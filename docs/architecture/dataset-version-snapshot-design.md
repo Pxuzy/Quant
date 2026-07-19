@@ -162,16 +162,17 @@ snapshot_members
   snapshot_id       FK snapshots.id
   dataset_id        FK datasets.id
   dataset_version_id FK dataset_versions.id
-  role              bars/calendar/universe
+  role              bars-none/bars-qfq/bars-hfq/calendar/universe
 ```
 
-主键：`(snapshot_id, dataset_id)`。
+唯一约束：`(snapshot_id, role)`；同一 `daily_bars` dataset 可以通过不同 role 固定三种复权版本。
 
 不变量：
 
 - active snapshot 只能引用 published version；
 - snapshot 激活后 members 不可修改；
-- 同一 dataset 在一个 snapshot 中只能出现一次；
+- 同一 role 在一个 snapshot 中只能出现一次；
+- `bars-none`、`bars-qfq`、`bars-hfq` 必须分别引用 `adjust_type=none`、`qfq`、`hfq` 的版本；
 - 被回测引用的 snapshot 不可删除；
 - BarReader 在请求开始时解析一次 snapshot，分页不得重新解析 latest/active。
 

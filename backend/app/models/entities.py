@@ -380,6 +380,58 @@ class DatasetVersionPartition(Base):
     dataset_version: Mapped[DatasetVersion] = relationship(back_populates="partitions")
 
 
+class Snapshot(Base):
+    __tablename__ = "snapshots"
+    __table_args__ = (
+        Index(
+            "uq_snapshots_active",
+            "status",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    members: Mapped[list["SnapshotMember"]] = relationship(
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        order_by="SnapshotMember.id",
+    )
+
+
+class SnapshotMember(Base):
+    __tablename__ = "snapshot_members"
+    __table_args__ = (UniqueConstraint("snapshot_id", "role", name="uq_snapshot_role"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    snapshot_id: Mapped[int] = mapped_column(
+        ForeignKey("snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dataset_id: Mapped[int] = mapped_column(
+        ForeignKey("datasets.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    dataset_version_id: Mapped[int] = mapped_column(
+        ForeignKey("dataset_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="bars")
+
+    snapshot: Mapped[Snapshot] = relationship(back_populates="members")
+    dataset_version: Mapped[DatasetVersion] = relationship()
+
+
 class TradingCalendar(Base):
     __tablename__ = "trading_calendars"
     __table_args__ = (UniqueConstraint("market", "trade_date", name="uq_trading_calendars_market_date"),)
