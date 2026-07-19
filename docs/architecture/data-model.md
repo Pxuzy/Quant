@@ -1,6 +1,6 @@
 ﻿# 数据模型
 
-本文档依据 `apps/api/models/entities.py` 整理当前核心实体。
+本文档依据 `backend/app/models/entities.py` 整理当前核心实体。
 
 ## 实体总览
 
@@ -13,6 +13,10 @@
 | `SyncSchedule` | `sync_schedules` | 定时同步配置和手动触发配置 |
 | `IngestBatch` | `ingest_batches` | 正式写入批次、来源、范围、版本和质量状态 |
 | `Dataset` | `datasets` | 数据集目录和最新状态 |
+| `DatasetVersion` | `dataset_versions` | 不可变数据集 candidate/published 版本元数据与 manifest 身份 |
+| `DatasetVersionPartition` | `dataset_version_partitions` | 版本固定的 sealed partition 清单、checksum、行数和范围 |
+| `Snapshot` | `snapshots` | 一组已发布数据版本的不可变研究输入；单用户场景最多一个 active |
+| `SnapshotMember` | `snapshot_members` | snapshot 到 dataset/version 的固定引用 |
 | `TradingCalendar` | `trading_calendars` | 市场交易日历 |
 | `DataQualityReport` | `data_quality_reports` | 数据质量检查结果 |
 
@@ -57,7 +61,7 @@ DataQualityReport
 
 | 字段 | 说明 |
 | --- | --- |
-| `code` | `akshare`, `baostock`, `adata`, `tushare`, `stock_sdk` |
+| `code` | 当前 `akshare`, `baostock`, `stock_sdk`；`adata`、`tushare` 为后续候选 |
 | `enabled` | 是否参与自动选择 |
 | `priority` | 自动选择优先级 |
 | `requires_token` | 是否需要凭证 |

@@ -582,7 +582,7 @@ export function buildLineageColumns(): ColumnsType<DatabaseLineageItem> {
         <Space direction="vertical" size={0}>
           <Typography.Text strong>写入 {formatNumber(item.records_written)}</Typography.Text>
           <Typography.Text type="secondary">
-            原始 {formatNumber(item.raw_records)} / 标准化 {formatNumber(item.normalized_records)}
+            原始 {formatNumber(item.raw_records)} / 标准化 {formatNumber(item.normalized_records)} / 丢弃 {formatNumber(item.dropped_records)}
           </Typography.Text>
         </Space>
       ),

@@ -5,10 +5,10 @@
 当前项目已经具备数据可信后台的核心骨架，并开始具备股票研究台的基础入口：
 
 - FastAPI 后端路由已覆盖健康检查、股票、行情、数据源、同步任务、数据集、数据质量、交易日历和数据库管理。
-- 元数据模型已覆盖股票、数据源、同步任务、日志、定时配置、入库批次、数据集、交易日历和质量报告。
-- Worker 已支持股票池、单股日线、市场级日线缺口补齐和交易日历任务。
+- 元数据模型已覆盖股票、数据源、同步任务、日志、定时配置、入库批次、raw artifact、数据集、交易日历和质量报告。
+- Worker 已支持股票池、单股日线、市场级日线缺口补齐、交易日历和日线 raw replay 任务。
 - 前端已具备总控台、新闻汇总、数值数据、股票池、数据源管理、同步调度和数据库管理页面。
-- 数据源 registry 已注册 AKShare、BaoStock、AData、Tushare、Stock SDK。
+- 数据源 registry 已注册 AKShare、BaoStock、Stock SDK；AData/Tushare 为后续候选，不是当前 adapter。
 - 日线数据已按 Parquet 数据湖和 DuckDB 查询方向建设。
 - 数据管线目标已收敛为 Qlib 式三段：raw/staging 原始留痕、normalize/schema_validate 标准化、silver/gold/research 统一读取。
 - 研究数据读取契约已返回 `daily_bars` 数据集 manifest/watermark，研究层可以看到行数、最新数据日、质量状态和最新成功入库批次。
@@ -29,7 +29,8 @@
 | 定时同步配置和手动触发 | 已完成 |
 | 单股日线查询和同步任务创建 | 已完成 |
 | 市场级日线缺口补齐预览和任务创建 | 已完成 |
-| 日线 raw/staging 原始记录留痕和重跑标准化 | 已完成 |
+- 正式 fetch raw artifact、checksum、batch 关联和日线离线 replay | 已完成 |
+- 标准化丢弃记录计数（`dropped_records`） | 已完成 |
 | `BarReader` 返回数据集 manifest/watermark | 已完成 |
 | 最近半年日线覆盖和补齐范围展示 | 已完成 |
 | 交易日历查询和同步任务创建 | 已完成 |
@@ -106,7 +107,7 @@
 | 行情大表 | Parquet |
 | 查询引擎 | DuckDB |
 | 任务执行 | 第一阶段轻量 worker |
-| 数据源 | AKShare、BaoStock、AData、Tushare、Stock SDK |
+| 数据源 | AKShare、BaoStock、Stock SDK；AData/Tushare 待实现 |
 | 新闻方向 | 服务股票研究，接入后必须有批次、质量和股票关联 |
 | 回测方向 | 先做受控读取契约，再做最小离线回测，不直接连接 provider |
 | AI 方向 | 做研究助手和数据解释层，持久化输入必须可追溯到治理数据 |

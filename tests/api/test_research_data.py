@@ -76,6 +76,38 @@ def test_bar_reader_returns_governed_daily_bars_with_contract_metadata(tmp_path)
     assert [item["close"] for item in payload["items"]] == [1680.0, 1690.0]
 
 
+def test_bar_reader_filters_declared_adjust_type_when_multiple_variants_exist(tmp_path):
+    service = ResearchDataService(lake_root=tmp_path / "lake")
+    none_bar = make_bar("600519", date(2026, 6, 1), 1680.0)
+    qfq_bar = NormalizedDailyBar(
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        trade_date=date(2026, 6, 1),
+        open=1600.0,
+        high=1601.0,
+        low=1599.0,
+        close=1600.0,
+        pre_close=None,
+        volume=1000.0,
+        amount=1600000.0,
+        adjust_factor=1.0,
+        adjust_type="qfq",
+        source="fixture",
+    )
+    service.daily_bar_repo.write_many([none_bar, qfq_bar])
+
+    payload = service.read_bars(
+        symbol="600519",
+        market="A_SHARE",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 1),
+    )
+
+    assert payload["total"] == 1
+    assert [item["adjust_type"] for item in payload["items"]] == ["none"]
+
+
 def test_bar_reader_rejects_blank_symbol(tmp_path):
     service = ResearchDataService(lake_root=tmp_path / "lake")
 

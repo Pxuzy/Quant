@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.models import SyncTask, SyncTaskLog
@@ -25,6 +26,7 @@ class SyncTaskRepository:
         max_symbols: int | None = None,
         start_policy: str | None = None,
         adjust_type: str | None = None,
+        input_raw_artifact_id: int | None = None,
     ) -> SyncTask:
         task = SyncTask(
             task_type=task_type,
@@ -36,6 +38,7 @@ class SyncTaskRepository:
             max_symbols=max_symbols,
             start_policy=start_policy,
             adjust_type=adjust_type,
+            input_raw_artifact_id=input_raw_artifact_id,
         )
         self.db.add(task)
         self.db.flush()
@@ -259,3 +262,60 @@ class SyncTaskRepository:
         if market:
             stmt = stmt.where(SyncTask.market == market)
         return self.db.scalar(stmt)
+
+    def find_recent_raw_replay_task(
+        self,
+        *,
+        raw_artifact_id: int,
+        adjust_type: str,
+        statuses: list[str],
+        created_after: datetime,
+    ) -> SyncTask | None:
+        return self.db.scalar(
+            select(SyncTask)
+            .where(
+                SyncTask.task_type == "daily_bars_raw_replay",
+                SyncTask.input_raw_artifact_id == raw_artifact_id,
+                SyncTask.adjust_type == adjust_type,
+                SyncTask.status.in_(statuses),
+                SyncTask.created_at >= created_after,
+            )
+            .order_by(SyncTask.created_at.desc(), SyncTask.id.desc())
+            .limit(1)
+        )
+
+    def create_or_get_active_raw_replay_task(
+        self,
+        *,
+        raw_artifact_id: int,
+        adjust_type: str,
+        market: str | None,
+        symbol: str | None,
+        start_date: date | None,
+        end_date: date | None,
+    ) -> tuple[SyncTask, bool]:
+        task = SyncTask(
+            task_type="daily_bars_raw_replay",
+            source="replay",
+            market=market,
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            adjust_type=adjust_type,
+            input_raw_artifact_id=raw_artifact_id,
+        )
+        self.db.add(task)
+        try:
+            self.db.flush()
+            return task, True
+        except IntegrityError:
+            self.db.rollback()
+            existing_task = self.find_recent_raw_replay_task(
+                raw_artifact_id=raw_artifact_id,
+                adjust_type=adjust_type,
+                statuses=["pending", "running"],
+                created_after=datetime.min.replace(tzinfo=timezone.utc),
+            )
+            if existing_task is None:
+                raise
+            return existing_task, False

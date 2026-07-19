@@ -8,16 +8,19 @@ from sqlalchemy import func, select
 
 from backend.app.core.config import reset_settings_cache
 from backend.app.db.session import SessionLocal, configure_database, init_db
-from backend.app.models import Dataset, Stock, SyncTask, TradingCalendar
+from backend.app.models import Dataset, IngestBatch, RawArtifact, Stock, SyncTask, TradingCalendar
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.worker.sync_stocks import (
     enqueue_calendar_sync,
     enqueue_daily_bars_sync,
+    enqueue_daily_bars_raw_replay,
     enqueue_market_daily_bars_repair,
     enqueue_stock_sync,
     main,
     run_next_pending_calendar_sync,
     run_next_pending_stock_sync,
+    run_daily_bars_raw_replay_task,
+    run_daily_bars_sync_task,
     run_stock_sync,
 )
 
@@ -99,6 +102,8 @@ def install_fake_baostock(monkeypatch) -> None:
 
 def test_worker_claims_pending_stock_sync_task(tmp_path, monkeypatch):
     install_fake_akshare(monkeypatch)
+    monkeypatch.setenv("DATA_LAKE_DIR", str(tmp_path / "lake"))
+    reset_settings_cache()
     database_url = f"sqlite:///{tmp_path / 'worker-test.db'}"
     pending_task = enqueue_stock_sync(database_url=database_url)
 
@@ -116,13 +121,21 @@ def test_worker_claims_pending_stock_sync_task(tmp_path, monkeypatch):
     try:
         stock_count = db.scalar(select(func.count(Stock.id)))
         dataset = db.scalar(select(Dataset).where(Dataset.name == "stocks"))
+        batch = db.scalar(select(IngestBatch).where(IngestBatch.task_id == pending_task.id))
+        artifact = db.get(RawArtifact, batch.raw_artifact_id) if batch and batch.raw_artifact_id else None
     finally:
         db.close()
+        reset_settings_cache()
 
     assert stock_count >= 8
     assert dataset is not None
     assert dataset.storage_type == "postgres"
     assert dataset.layer == "silver"
+    assert batch is not None
+    assert batch.raw_artifact_id is not None
+    assert artifact is not None
+    assert artifact.source == "akshare"
+    assert artifact.row_count == 8
 
 
 def test_worker_claim_commit_is_visible_to_other_sessions(tmp_path):
@@ -236,6 +249,13 @@ def test_worker_cli_run_next_pending_claims_market_repair_without_task_type(tmp_
     assert exit_code == 0
     assert '"task_type": "daily_bars_market_repair"' in captured.out
     assert '"status": "success"' in captured.out
+    db = SessionLocal()
+    try:
+        batches = list(db.scalars(select(IngestBatch).where(IngestBatch.task_id == pending_task.id)).all())
+    finally:
+        db.close()
+    assert len(batches) == 1
+    assert batches[0].raw_artifact_id is not None
     assert task is not None
     assert task.status == "success"
     assert task.records_written == 2
@@ -243,7 +263,7 @@ def test_worker_cli_run_next_pending_claims_market_repair_without_task_type(tmp_
     assert dataset.storage_type == "parquet"
 
 
-def test_worker_cli_run_next_pending_claims_raw_daily_bars_replay(tmp_path, capsys, monkeypatch):
+def test_worker_cli_run_next_pending_is_idempotent_for_repeated_daily_bars(tmp_path, capsys, monkeypatch):
     install_fake_baostock(monkeypatch)
     monkeypatch.setenv("DATA_LAKE_DIR", str(tmp_path / "lake"))
     reset_settings_cache()
@@ -300,7 +320,7 @@ def test_worker_cli_run_next_pending_claims_raw_daily_bars_replay(tmp_path, caps
     assert task is not None
     assert task.status == "success"
     assert task.records_read == 2
-    assert task.records_written == 2
+    assert task.records_written == 0
     assert dataset is not None
     assert dataset.storage_type == "parquet"
 
@@ -440,3 +460,70 @@ def test_worker_claims_pending_calendar_sync_task(tmp_path, monkeypatch):
     assert calendar_count == 3
     assert dataset is not None
     assert dataset.storage_type == "postgres"
+
+
+def test_worker_replays_raw_daily_bars_without_provider_fetch(tmp_path, monkeypatch):
+    install_fake_baostock(monkeypatch)
+    monkeypatch.setenv("DATA_LAKE_DIR", str(tmp_path / "lake"))
+    reset_settings_cache()
+    database_url = f"sqlite:///{tmp_path / 'worker-replay.db'}"
+
+    source_task = enqueue_daily_bars_sync(
+        source="baostock",
+        market="A_SHARE",
+        symbol="600519",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 2),
+        adjust_type="none",
+        database_url=database_url,
+    )
+    source_task = run_daily_bars_sync_task(task_id=source_task.id, database_url=database_url)
+    assert source_task.status == "success"
+
+    db = SessionLocal()
+    try:
+        artifact = db.scalar(select(RawArtifact).where(RawArtifact.task_id == source_task.id))
+    finally:
+        db.close()
+    assert artifact is not None
+
+    monkeypatch.setattr(
+        sys.modules["baostock"],
+        "query_history_k_data_plus",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("replay must not fetch from provider")),
+    )
+
+    replay_task = enqueue_daily_bars_raw_replay(
+        raw_artifact_id=artifact.id,
+        adjust_type="qfq",
+        database_url=database_url,
+    )
+    replay_task = run_daily_bars_raw_replay_task(task_id=replay_task.id, database_url=database_url)
+    assert replay_task.status == "failed"
+    assert replay_task.records_read == 2
+    assert replay_task.records_written == 0
+
+    replay_task = enqueue_daily_bars_raw_replay(
+        raw_artifact_id=artifact.id,
+        adjust_type="none",
+        database_url=database_url,
+    )
+    duplicate_replay_task = enqueue_daily_bars_raw_replay(
+        raw_artifact_id=artifact.id,
+        adjust_type=" NONE ",
+        database_url=database_url,
+    )
+    assert duplicate_replay_task.id == replay_task.id
+    replay_task = run_daily_bars_raw_replay_task(task_id=replay_task.id, database_url=database_url)
+    assert replay_task.status == "success"
+    assert replay_task.records_read == 2
+    assert replay_task.records_written == 0
+
+    db = SessionLocal()
+    try:
+        replay_batch = db.scalar(select(IngestBatch).where(IngestBatch.task_id == replay_task.id))
+    finally:
+        db.close()
+    assert replay_batch is not None
+    assert replay_batch.requested_source == "replay"
+    assert replay_batch.raw_artifact_id == artifact.id

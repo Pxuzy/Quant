@@ -6,7 +6,7 @@
 | 工作台层 | 面向日常使用的产品层，包含总控台、股票池、股票详情、新闻汇总和数值数据 |
 | 控制面 | 面向数据维护的产品层，包含数据源、同步任务、数据库状态、质量、批次和血缘 |
 | 股票池 | 系统管理的 A 股股票基础资料集合，对应后端 `stocks` 领域 |
-| 数据源 | AKShare、BaoStock、AData、Tushare、Stock SDK 等外部数据入口 |
+| 数据源 | 当前注册的 AKShare、BaoStock、Stock SDK 等外部数据入口；AData/Tushare 仅是后续候选 |
 | provider | 具体数据源实现，正式写入时必须记录真实 provider |
 | `auto` | 自动选择模式，按启用状态、能力、健康和优先级选择 provider |
 | adapter | 数据源适配器，负责 fetch、normalize、capabilities、health check |

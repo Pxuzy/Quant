@@ -48,6 +48,10 @@ function getBatchNormalizedRecords(batch: IngestBatch) {
   return batch.normalized_records ?? batch.normalizedRecords ?? 0;
 }
 
+function getBatchDroppedRecords(batch: IngestBatch) {
+  return batch.dropped_records ?? batch.droppedRecords ?? 0;
+}
+
 function getBatchRecordsWritten(batch: IngestBatch) {
   return batch.records_written ?? batch.recordsWritten ?? 0;
 }
@@ -151,8 +155,7 @@ export function TaskBatchesTable({ task, batches, loading, error }: TaskBatchesT
       width: 190,
       render: (_, record) => (
         <Typography.Text>
-          原始 {formatNumber(getBatchRawRecords(record))} / 标准化 {formatNumber(getBatchNormalizedRecords(record))} / 写入{' '}
-          {formatNumber(getBatchRecordsWritten(record))}
+          原始 {formatNumber(getBatchRawRecords(record))} / 标准化 {formatNumber(getBatchNormalizedRecords(record))} / 丢弃 {formatNumber(getBatchDroppedRecords(record))} / 写入 {formatNumber(getBatchRecordsWritten(record))}
         </Typography.Text>
       ),
     },

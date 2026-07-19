@@ -98,6 +98,7 @@ export type DatabaseLineageItem = {
   normalize_version: string;
   raw_records: number;
   normalized_records: number;
+  dropped_records: number;
   records_written: number;
   validation_errors_json: string[];
   error_message?: string | null;
