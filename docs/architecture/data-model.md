@@ -13,6 +13,8 @@
 | `SyncSchedule` | `sync_schedules` | 定时同步配置和手动触发配置 |
 | `IngestBatch` | `ingest_batches` | 正式写入批次、来源、范围、版本和质量状态 |
 | `Dataset` | `datasets` | 数据集目录和最新状态 |
+| `DatasetVersion` | `dataset_versions` | 不可变数据集 candidate/published 版本元数据与 manifest 身份 |
+| `DatasetVersionPartition` | `dataset_version_partitions` | 版本固定的 sealed partition 清单、checksum、行数和范围 |
 | `TradingCalendar` | `trading_calendars` | 市场交易日历 |
 | `DataQualityReport` | `data_quality_reports` | 数据质量检查结果 |
 

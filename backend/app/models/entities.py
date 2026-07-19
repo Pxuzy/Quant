@@ -308,6 +308,77 @@ class Dataset(Base):
         nullable=False,
     )
 
+    versions: Mapped[list["DatasetVersion"]] = relationship(
+        back_populates="dataset",
+        order_by="DatasetVersion.version_seq",
+    )
+
+
+class DatasetVersion(Base):
+    __tablename__ = "dataset_versions"
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "version_seq", name="uq_dataset_versions_sequence"),
+        UniqueConstraint("dataset_id", "version_key", name="uq_dataset_versions_key"),
+        UniqueConstraint("dataset_id", "manifest_sha256", name="uq_dataset_versions_manifest"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    dataset_id: Mapped[int] = mapped_column(ForeignKey("datasets.id", ondelete="RESTRICT"), nullable=False, index=True)
+    version_seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    version_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="candidate", index=True)
+    schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    normalize_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    schema_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    adjust_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    quality_policy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    min_trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    max_trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    manifest_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    dataset: Mapped[Dataset] = relationship(back_populates="versions")
+    partitions: Mapped[list["DatasetVersionPartition"]] = relationship(
+        back_populates="dataset_version",
+        cascade="all, delete-orphan",
+        order_by="DatasetVersionPartition.id",
+    )
+
+
+class DatasetVersionPartition(Base):
+    __tablename__ = "dataset_version_partitions"
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_version_id",
+            "partition_spec_json",
+            "relative_uri",
+            name="uq_dataset_version_partitions_identity",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    dataset_version_id: Mapped[int] = mapped_column(
+        ForeignKey("dataset_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    partition_spec_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    relative_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    min_trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    max_trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="sealed", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    dataset_version: Mapped[DatasetVersion] = relationship(back_populates="partitions")
+
 
 class TradingCalendar(Base):
     __tablename__ = "trading_calendars"
