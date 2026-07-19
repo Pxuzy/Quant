@@ -1,6 +1,6 @@
 ﻿# API 目录
 
-本文档按后端路由整理当前 API。所有接口由 `apps/api/main.py` 注册。
+本文档按后端路由整理当前 API。所有接口由 `backend/app/main.py` 注册。
 
 ## 健康检查
 
@@ -46,7 +46,7 @@
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | GET | `/api/market-data/daily-bars` | 分页查询日线行情 |
-| GET | `/api/market-data/daily-bars/{symbol}` | 按股票查询日线行情 |
+| GET | `/api/market-data/daily-bars?symbol={symbol}` | 按股票查询日线行情 |
 | POST | `/api/market-data/daily-bars/sync` | 创建单股日线同步任务 |
 | POST | `/api/market-data/daily-bars/market-repair/preview` | 预览市场级日线缺口补齐计划 |
 | POST | `/api/market-data/daily-bars/market-repair` | 创建市场级日线缺口补齐任务 |
@@ -56,6 +56,21 @@
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | GET | `/api/research-data/bars` | 通过 `BarReader` 契约读取已治理日线，供后续研究、回测和 AI 消费 |
+
+## 研究工作台
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/api/market/quote` | 查询实时股票行情 |
+| GET | `/api/market/index` | 查询主要指数行情 |
+| GET | `/api/market/kline` | 查询研究页 K 线 |
+| GET | `/api/market/news` | 查询已入库新闻 |
+| GET | `/api/market/search` | 搜索股票 |
+| GET | `/api/market/sectors` | 查询板块排行 |
+| GET | `/api/watchlist` | 查询默认自选股 |
+| POST | `/api/watchlist/items` | 添加自选股 |
+| DELETE | `/api/watchlist/items/{symbol}` | 删除自选股 |
+| PUT | `/api/watchlist/items/reorder` | 调整自选股顺序 |
 
 ## 股票
 

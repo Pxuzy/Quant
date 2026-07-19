@@ -16,10 +16,10 @@ React stock workbench
 
 | 路径 | 职责 |
 | --- | --- |
-| `apps/web` | 前端股票研究台和数据可信后台 |
-| `apps/api` | FastAPI 服务、领域服务、仓储、数据源适配器 |
-| `apps/worker` | 同步任务执行入口 |
-| `quant` | 本地运行脚本、环境示例、依赖和 Docker Compose |
+| `frontend` | 前端股票研究台和数据可信后台 |
+| `backend/app` | FastAPI 服务、领域服务、仓储、数据源适配器 |
+| `backend/worker` | 同步任务执行入口 |
+| `scripts` | 本地运行和运维脚本 |
 | `tests` | API、worker、数据源和数据质量测试 |
 | `docs` | 项目文档 |
 
@@ -36,16 +36,18 @@ React stock workbench
 
 | 模块 | 代码位置 | 职责 |
 | --- | --- | --- |
-| health | `apps/api/routers/health.py` | 健康检查 |
-| database | `apps/api/routers/database.py` | 数据库状态、集成总览、血缘 |
-| data_quality | `apps/api/routers/data_quality.py` | 质量总览、报告、检查运行 |
-| data_sources | `apps/api/routers/data_sources.py` | 数据源管理、健康检查、真实取样 |
-| datasets | `apps/api/routers/datasets.py` | 数据集目录 |
-| market_data | `apps/api/routers/market_data.py` | 日线查询、日线同步、市场补齐 |
-| stocks | `apps/api/routers/stocks.py` | 股票池、股票详情、股票同步 |
-| research_data | `apps/api/routers/research_data.py` | 研究数据读取契约 |
-| sync_tasks | `apps/api/routers/sync_tasks.py` | 同步任务、日志、批次、定时配置 |
-| trading_calendars | `apps/api/routers/trading_calendars.py` | 交易日历查询和同步 |
+| health | `backend/app/routers/health.py` | 健康检查 |
+| market | `backend/app/routers/market.py` | 研究台实时行情、指数、板块、新闻和搜索 |
+| database | `backend/app/routers/database.py` | 数据库状态、集成总览、血缘 |
+| data_quality | `backend/app/routers/data_quality.py` | 质量总览、报告、检查运行 |
+| data_sources | `backend/app/routers/data_sources.py` | 数据源管理、健康检查、真实取样 |
+| datasets | `backend/app/routers/datasets.py` | 数据集目录 |
+| market_data | `backend/app/routers/market_data.py` | 日线查询、日线同步、市场补齐 |
+| stocks | `backend/app/routers/stocks.py` | 股票池、股票详情、股票同步 |
+| research_data | `backend/app/routers/research_data.py` | 研究数据读取契约 |
+| sync_tasks | `backend/app/routers/sync_tasks.py` | 同步任务、日志、批次、定时配置 |
+| trading_calendars | `backend/app/routers/trading_calendars.py` | 交易日历查询和同步 |
+| watchlist | `backend/app/routers/watchlist.py` | 默认自选股管理 |
 
 后续新闻能力进入正式范围时，应新增独立 news 领域模块，并接入标准化、批次、质量和股票关联，不从前端直接拉取外部新闻。
 
@@ -53,11 +55,11 @@ React stock workbench
 
 | 层级 | 代码位置 | 说明 |
 | --- | --- | --- |
-| app | `apps/web/src/app` | Router、Provider、主题 |
-| layout | `apps/web/src/layouts` | 侧边栏、顶部栏、内容容器 |
-| pages | `apps/web/src/pages/data-system` | 页面级编排 |
-| features | `apps/web/src/features` | 业务域 API、类型、组件 |
-| shared | `apps/web/src/shared` | API client、通用组件、标签和格式化 |
+| app | `frontend/src/app` | Router、Provider、主题 |
+| layout | `frontend/src/layouts` | 侧边栏、顶部栏、内容容器 |
+| pages | `frontend/src/pages/data-system` | 页面级编排 |
+| features | `frontend/src/features` | 业务域 API、类型、组件 |
+| shared | `frontend/src/shared` | API client、通用组件、标签和格式化 |
 
 前端路由使用 TanStack Router，页面使用 lazy import。查询状态使用 TanStack Query，服务端业务数据不放入 Zustand。
 
@@ -106,7 +108,7 @@ download/fetch raw
   -> BarReader/DataPortal
 ```
 
-当前日线同步已经先把 provider 原始记录保存到 `storage/lake/raw/daily_bars`，再写入 `silver/daily_bars`；`daily_bars_raw_replay` 会从 raw/staging 重跑标准化，并生成新的 success ingest batch。后续修复复权、字段映射或 normalize 版本时，应优先走 replay，而不是每次重新请求第三方 provider。
+当前正式采集会先保存带 SHA-256 的 raw artifact，再做标准化、校验和写入；`daily_bars_raw_replay` 从已登记的 `raw_artifacts` 离线重跑标准化，不重新请求 provider。历史旁路脚本已删除，所有持久化采集统一走正式任务链路。详情见 [ADR-001](../decisions/ADR-001-raw-artifacts-and-offline-replay.md)。
 
 ## 数据源架构
 
@@ -114,8 +116,6 @@ download/fetch raw
 
 - `akshare`
 - `baostock`
-- `adata`
-- `tushare`
 - `stock_sdk`
 
 每个 adapter 需要声明能力、元数据、健康检查和标准化输出。正式同步使用 `source=auto` 时，系统按启用状态、能力和优先级选择真实 provider，并在批次中记录最终来源。
@@ -129,7 +129,7 @@ download/fetch raw
 | Parquet | 日线行情等大表数据 |
 | DuckDB | 查询 Parquet 的执行引擎 |
 
-前端、后续因子、回测、策略模块不得直接拼接 Parquet 路径或调用第三方 provider。
+前端、后续因子、回测、策略模块不得直接拼接 Parquet 路径或调用第三方 provider。数据集版本、manifest、snapshot 和回测输入的后续实现以 [Dataset Version、Manifest 与 Snapshot 规格](./dataset-version-snapshot-design.md) 为准。
 
 ## 研究、回测和 AI 边界
 

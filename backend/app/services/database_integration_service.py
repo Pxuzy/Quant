@@ -475,6 +475,7 @@ def _lineage_item(*, batch: IngestBatch, task: SyncTask) -> dict:
         "normalize_version": batch.normalize_version,
         "raw_records": batch.raw_records,
         "normalized_records": batch.normalized_records,
+        "dropped_records": batch.dropped_records,
         "records_written": batch.records_written,
         "validation_errors_json": batch.validation_errors_json,
         "error_message": batch.error_message,

@@ -2,7 +2,21 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, TypeDecorator, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    TypeDecorator,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.db.base import Base
@@ -122,6 +136,16 @@ class StockBoardMember(Base):
 
 class SyncTask(Base):
     __tablename__ = "sync_tasks"
+    __table_args__ = (
+        Index(
+            "uq_sync_tasks_active_raw_replay",
+            "input_raw_artifact_id",
+            "adjust_type",
+            unique=True,
+            sqlite_where=text("task_type = 'daily_bars_raw_replay' AND status IN ('pending', 'running')"),
+            postgresql_where=text("task_type = 'daily_bars_raw_replay' AND status IN ('pending', 'running')"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     task_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
@@ -133,6 +157,11 @@ class SyncTask(Base):
     max_symbols: Mapped[int | None] = mapped_column(Integer, nullable=True)
     start_policy: Mapped[str | None] = mapped_column(String(32), nullable=True)
     adjust_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    input_raw_artifact_id: Mapped[int | None] = mapped_column(
+        ForeignKey("raw_artifacts.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_read: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -190,6 +219,35 @@ class SyncSchedule(Base):
     )
 
 
+class RawArtifact(Base):
+    __tablename__ = "raw_artifacts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("sync_tasks.id"), nullable=False, index=True)
+    dataset_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    requested_source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    market: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    symbol: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    adjust_type: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    uri: Mapped[str] = mapped_column(String(1024), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False, default="application/json")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="stored", index=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    task: Mapped[SyncTask] = relationship(foreign_keys=[task_id])
+    ingest_batches: Mapped[list["IngestBatch"]] = relationship(
+        back_populates="raw_artifact",
+        foreign_keys="IngestBatch.raw_artifact_id",
+    )
+
+
 class IngestBatch(Base):
     __tablename__ = "ingest_batches"
 
@@ -202,11 +260,17 @@ class IngestBatch(Base):
     symbol: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    raw_artifact_id: Mapped[int | None] = mapped_column(
+        ForeignKey("raw_artifacts.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="running", index=True)
     schema_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
     normalize_version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
     raw_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     normalized_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    dropped_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_written: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     validation_errors_json: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -216,6 +280,10 @@ class IngestBatch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     task: Mapped[SyncTask] = relationship(back_populates="ingest_batches")
+    raw_artifact: Mapped["RawArtifact | None"] = relationship(
+        back_populates="ingest_batches",
+        foreign_keys=[raw_artifact_id],
+    )
 
 
 class Dataset(Base):
@@ -239,6 +307,129 @@ class Dataset(Base):
         onupdate=utcnow,
         nullable=False,
     )
+
+    versions: Mapped[list["DatasetVersion"]] = relationship(
+        back_populates="dataset",
+        order_by="DatasetVersion.version_seq",
+    )
+
+
+class DatasetVersion(Base):
+    __tablename__ = "dataset_versions"
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "version_seq", name="uq_dataset_versions_sequence"),
+        UniqueConstraint("dataset_id", "version_key", name="uq_dataset_versions_key"),
+        UniqueConstraint("dataset_id", "manifest_sha256", name="uq_dataset_versions_manifest"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    dataset_id: Mapped[int] = mapped_column(ForeignKey("datasets.id", ondelete="RESTRICT"), nullable=False, index=True)
+    version_seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    version_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="candidate", index=True)
+    schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    normalize_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    schema_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    adjust_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    quality_policy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    min_trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    max_trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    manifest_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    dataset: Mapped[Dataset] = relationship(back_populates="versions")
+    partitions: Mapped[list["DatasetVersionPartition"]] = relationship(
+        back_populates="dataset_version",
+        cascade="all, delete-orphan",
+        order_by="DatasetVersionPartition.id",
+    )
+
+
+class DatasetVersionPartition(Base):
+    __tablename__ = "dataset_version_partitions"
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_version_id",
+            "partition_spec_json",
+            "relative_uri",
+            name="uq_dataset_version_partitions_identity",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    dataset_version_id: Mapped[int] = mapped_column(
+        ForeignKey("dataset_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    partition_spec_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    relative_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    min_trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    max_trade_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="sealed", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    dataset_version: Mapped[DatasetVersion] = relationship(back_populates="partitions")
+
+
+class Snapshot(Base):
+    __tablename__ = "snapshots"
+    __table_args__ = (
+        Index(
+            "uq_snapshots_active",
+            "status",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    members: Mapped[list["SnapshotMember"]] = relationship(
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        order_by="SnapshotMember.id",
+    )
+
+
+class SnapshotMember(Base):
+    __tablename__ = "snapshot_members"
+    __table_args__ = (UniqueConstraint("snapshot_id", "role", name="uq_snapshot_role"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    snapshot_id: Mapped[int] = mapped_column(
+        ForeignKey("snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    dataset_id: Mapped[int] = mapped_column(
+        ForeignKey("datasets.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    dataset_version_id: Mapped[int] = mapped_column(
+        ForeignKey("dataset_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="bars")
+
+    snapshot: Mapped[Snapshot] = relationship(back_populates="members")
+    dataset_version: Mapped[DatasetVersion] = relationship()
 
 
 class TradingCalendar(Base):

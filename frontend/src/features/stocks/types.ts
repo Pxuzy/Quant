@@ -80,6 +80,8 @@ export type StockDailyIngestBatch = {
   rawRecords?: number;
   normalized_records?: number;
   normalizedRecords?: number;
+  dropped_records?: number;
+  droppedRecords?: number;
   records_written?: number;
   recordsWritten?: number;
   validation_errors_json?: string[];

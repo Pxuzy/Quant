@@ -19,10 +19,10 @@ from backend.app.models import entities  # noqa: E402, F401
 
 target_metadata = Base.metadata
 
-# Try to read URL from project config, fall back to .ini value
+# Read the same URL override used by the application and tests.
 try:
-    from backend.app.core.config import get_settings
-    url = get_settings().database_url
+    from backend.app.db.session import get_database_url
+    url = get_database_url()
 except Exception:
     url = config.get_main_option("sqlalchemy.url")
 

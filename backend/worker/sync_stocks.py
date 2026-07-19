@@ -5,13 +5,15 @@ import json
 from datetime import date
 
 from backend.app.db.session import SessionLocal, configure_database, init_db
-from backend.app.models import SyncTask
+from backend.app.adapters.base import normalize_daily_bar_adjust_type
+from backend.app.models import RawArtifact, SyncTask
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.services.sync_service import MarketDataSyncService
 from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE, StockSyncService
 from backend.app.services.trading_calendar_service import TradingCalendarService
+from backend.app.services.raw_replay_service import RAW_DAILY_BARS_REPLAY_TASK_TYPE, RawDailyBarsReplayService
 
-SUPPORTED_PENDING_TASK_TYPES = ("stock_list", "daily_bars", "daily_bars_market_repair", "calendars")
+SUPPORTED_PENDING_TASK_TYPES = ("stock_list", "daily_bars", "daily_bars_market_repair", "calendars", RAW_DAILY_BARS_REPLAY_TASK_TYPE)
 
 
 def configure_worker_database(database_url: str | None = None) -> None:
@@ -76,6 +78,8 @@ def run_next_pending_sync(*, database_url: str | None = None) -> SyncTask | None
         return run_market_daily_bars_repair_task(task_id=task_id, database_url=database_url)
     if task_type == "calendars":
         return run_calendar_sync_task(task_id=task_id, database_url=database_url)
+    if task_type == RAW_DAILY_BARS_REPLAY_TASK_TYPE:
+        return run_daily_bars_raw_replay_task(task_id=task_id, database_url=database_url)
     raise ValueError(f"Unsupported pending sync task type: {task_type}")
 
 
@@ -121,6 +125,67 @@ def run_daily_bars_sync_task(*, task_id: int, database_url: str | None = None) -
         return MarketDataSyncService(db).run_daily_bars_sync_task(task_id)
     finally:
         db.close()
+
+
+def enqueue_daily_bars_raw_replay(
+    *,
+    raw_artifact_id: int,
+    adjust_type: str = "none",
+    database_url: str | None = None,
+) -> SyncTask:
+    configure_worker_database(database_url)
+    db = SessionLocal()
+    try:
+        adjust_type = normalize_daily_bar_adjust_type(adjust_type)
+        artifact = db.get(RawArtifact, raw_artifact_id)
+        if artifact is None:
+            raise ValueError(f"Raw artifact {raw_artifact_id} does not exist.")
+        if artifact.dataset_name != "daily_bars":
+            raise ValueError("Only daily_bars raw artifacts can be replayed by this task.")
+        task_repo = SyncTaskRepository(db)
+        task, created = task_repo.create_or_get_active_raw_replay_task(
+            raw_artifact_id=artifact.id,
+            adjust_type=adjust_type,
+            market=artifact.market,
+            symbol=artifact.symbol,
+            start_date=artifact.start_date,
+            end_date=artifact.end_date,
+        )
+        if not created:
+            return task
+        task_repo.add_log(
+            task,
+            level="info",
+            message="Raw daily bars replay task created.",
+            payload={"raw_artifact_id": artifact.id, "adjust_type": adjust_type},
+        )
+        db.commit()
+        db.refresh(task)
+        return task
+    finally:
+        db.close()
+
+
+def run_daily_bars_raw_replay_task(*, task_id: int, database_url: str | None = None) -> SyncTask:
+    configure_worker_database(database_url)
+    db = SessionLocal()
+    try:
+        return RawDailyBarsReplayService(db).run_task(task_id)
+    finally:
+        db.close()
+
+
+def run_next_pending_daily_bars_raw_replay(*, database_url: str | None = None) -> SyncTask | None:
+    configure_worker_database(database_url)
+    db = SessionLocal()
+    try:
+        task = SyncTaskRepository(db).get_next_pending_task(RAW_DAILY_BARS_REPLAY_TASK_TYPE)
+        task_id = task.id if task is not None else None
+    finally:
+        db.close()
+    if task_id is None:
+        return None
+    return run_daily_bars_raw_replay_task(task_id=task_id, database_url=database_url)
 
 
 def run_next_pending_daily_bars_sync(*, database_url: str | None = None) -> SyncTask | None:
@@ -299,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run a stock data sync task.")
     parser.add_argument(
         "--task-type",
-        choices=["stock_list", "daily_bars", "daily_bars_market_repair", "calendars"],
+        choices=["stock_list", "daily_bars", "daily_bars_market_repair", "calendars", RAW_DAILY_BARS_REPLAY_TASK_TYPE],
         default=None,
     )
     parser.add_argument("--source", default=AUTO_SOURCE_CODE)
@@ -307,6 +372,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--symbol", default=None)
     parser.add_argument("--start-date", default=None)
     parser.add_argument("--end-date", default=None)
+    parser.add_argument("--raw-artifact-id", type=int, default=None)
     parser.add_argument("--max-symbols", type=int, default=20)
     parser.add_argument("--start-policy", choices=["requested_start", "listing_date"], default="requested_start")
     parser.add_argument("--adjust-type", choices=["none", "qfq", "hfq"], default="none")
@@ -319,6 +385,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.run_next_pending and args.task_type is None:
         task = run_next_pending_sync(database_url=args.database_url)
+    elif task_type == RAW_DAILY_BARS_REPLAY_TASK_TYPE:
+        if args.task_id is not None:
+            task = run_daily_bars_raw_replay_task(task_id=args.task_id, database_url=args.database_url)
+        elif args.run_next_pending:
+            task = run_next_pending_daily_bars_raw_replay(database_url=args.database_url)
+        else:
+            if args.raw_artifact_id is None:
+                parser.error("--raw-artifact-id is required for daily_bars_raw_replay tasks.")
+            if not args.enqueue:
+                parser.error("--enqueue or --task-id is required for daily_bars_raw_replay tasks.")
+            task = enqueue_daily_bars_raw_replay(
+                raw_artifact_id=args.raw_artifact_id,
+                adjust_type=args.adjust_type,
+                database_url=args.database_url,
+            )
     elif task_type == "daily_bars":
         if args.task_id is not None:
             task = run_daily_bars_sync_task(task_id=args.task_id, database_url=args.database_url)

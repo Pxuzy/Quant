@@ -94,7 +94,7 @@ class MarketDataSyncService(_MarketRepairMixin):
             raise ValueError("第一阶段日线同步仅支持单只股票，请选择股票代码。")
 
         if source_code == AUTO_SOURCE_CODE:
-            candidates = self._enabled_adapters_for_capability("daily_bars")
+            candidates = self._enabled_adapters_for_capability("daily_bars", require_healthy=False)
             if not candidates:
                 self.db.rollback()
                 raise ValueError("No enabled data source supports daily_bars.")
@@ -244,7 +244,12 @@ class MarketDataSyncService(_MarketRepairMixin):
         self.task_repo.add_log(task, level="info", message="Daily bars sync task created.", payload=payload)
         return task
 
-    def _enabled_adapters_for_capability(self, capability: str) -> list[StockDataSourceAdapter]:
+    def _enabled_adapters_for_capability(
+        self,
+        capability: str,
+        *,
+        require_healthy: bool = True,
+    ) -> list[StockDataSourceAdapter]:
         self.data_source_repo.sync_registered_adapters(self.registry)
         candidates: list[StockDataSourceAdapter] = []
         for source in self.data_source_repo.list_enabled():
@@ -252,10 +257,11 @@ class MarketDataSyncService(_MarketRepairMixin):
                 adapter = self.registry.get(source.code)
             except ValueError:
                 continue
-            health = adapter.health_check()
-            self.data_source_repo.update_health(adapter.code, health)
-            if not health.healthy:
-                continue
+            if require_healthy:
+                health = adapter.health_check()
+                self.data_source_repo.update_health(adapter.code, health)
+                if not health.healthy:
+                    continue
             if bool(getattr(adapter.capabilities(), capability, False)):
                 candidates.append(adapter)
 

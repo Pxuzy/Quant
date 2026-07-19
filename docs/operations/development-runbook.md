@@ -2,19 +2,18 @@
 
 ## 环境位置
 
-当前仓库根目录是 `E:\hermes\workspace\Quant`。
+当前仓库根目录由 Git checkout 决定；本文中的路径均相对于仓库根目录。
 
 Python 运行材料位于：
 
-- `quant/requirements.txt`
-- `quant/.env.example`
-- `quant/scripts/run_api_server.py`
-- `quant/docker-compose.yml`
+- `backend/`
+- `scripts/run_api_server.py`
+- `backend/alembic.ini`
 
 前端运行材料位于：
 
-- `apps/web/package.json`
-- `apps/web/vite.config.ts`
+- `frontend/package.json`
+- `frontend/vite.config.ts`
 
 ## 关键环境变量
 
@@ -25,12 +24,11 @@ Python 运行材料位于：
 | `DATABASE_URL` | `sqlite:///./storage/quant.db` | 元数据库连接 |
 | `DATA_LAKE_DIR` | `./storage/lake` | Parquet 数据湖路径 |
 | `CORS_ORIGINS` | `http://127.0.0.1:5173,http://localhost:5173` | CORS 白名单 |
-| `TUSHARE_TOKEN` | 空 | Tushare 可选凭证 |
 | `STOCK_SDK_CWD` | 空 | Stock SDK 可选 Node 包目录 |
 
 ## 启动 PostgreSQL
 
-在 `quant` 目录运行：
+当前仓库没有受版本控制的 PostgreSQL Compose 配置。SQLite fallback 已验证可用；在补齐 PostgreSQL Compose/部署配置前，不要把下面命令当作当前可执行 runbook。
 
 ```powershell
 docker compose up -d postgres
@@ -51,9 +49,9 @@ docker compose up -d postgres
 默认地址：
 
 - API: `http://127.0.0.1:8021/health`
-- Web: `http://127.0.0.1:5175/data-system/overview`
+- Web: `http://127.0.0.1:5175/dashboard`
 
-如果 Windows 拒绝绑定默认 Web 端口（例如 `5175` 返回 `WinError 10013`），或者 `apps/web/.env.local` 指向了备用 API 端口，可以显式指定端口。当前本机验证通过的组合是：
+如果 Windows 拒绝绑定默认 Web 端口（例如 `5175` 返回 `WinError 10013`），或者 `frontend/.env.local` 指向了备用 API 端口，可以显式指定端口。当前本机验证通过的组合是：
 
 ```powershell
 .\scripts\quant-dev.cmd restart -ApiPort 8023 -WebPort 5176 -ForcePortOwner
@@ -80,25 +78,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\quant-dev.ps1 stop
 
 ## 启动 API
 
-在 `quant` 目录运行前台服务：
+在仓库根目录运行前台服务：
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\run_api_server.py run
+python scripts\run_api_server.py run
 ```
 
 后台服务：
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\run_api_server.py start
-.\.venv\Scripts\python.exe scripts\run_api_server.py status
-.\.venv\Scripts\python.exe scripts\run_api_server.py stop
+python scripts\run_api_server.py start
+python scripts\run_api_server.py status
+python scripts\run_api_server.py stop
 ```
 
 默认 API 端口以脚本配置为准；前端代理默认指向本地 API。
 
 ## 启动前端
 
-在 `apps/web` 目录运行：
+在 `frontend` 目录运行：
 
 ```powershell
 npm run dev
@@ -113,42 +111,42 @@ npm run build
 
 ## Worker 命令
 
-Worker 入口是 `apps/worker/sync_stocks.py`。
+Worker 入口是 `backend/worker/sync_stocks.py`。
 
 查看支持参数：
 
 ```powershell
-python -m apps.worker.sync_stocks --help
+python -m backend.worker.sync_stocks --help
 ```
 
 执行股票池同步：
 
 ```powershell
-python -m apps.worker.sync_stocks --task-type stock_list --source auto --market A_SHARE
+python -m backend.worker.sync_stocks --task-type stock_list --source auto --market A_SHARE
 ```
 
 创建单股日线同步：
 
 ```powershell
-python -m apps.worker.sync_stocks --task-type daily_bars --source auto --market A_SHARE --symbol 600519 --start-date 2024-01-01 --end-date 2024-12-31
+python -m backend.worker.sync_stocks --task-type daily_bars --source auto --market A_SHARE --symbol 600519 --start-date 2024-01-01 --end-date 2024-12-31
 ```
 
 创建市场级日线缺口补齐：
 
 ```powershell
-python -m apps.worker.sync_stocks --task-type daily_bars_market_repair --source auto --market A_SHARE --start-date 2024-01-01 --end-date 2024-01-31 --max-symbols 20
+python -m backend.worker.sync_stocks --task-type daily_bars_market_repair --source auto --market A_SHARE --start-date 2024-01-01 --end-date 2024-01-31 --max-symbols 20
 ```
 
-从 raw/staging 重跑单股日线标准化：
+从已登记 raw artifact 离线重跑单股日线标准化：
 
 ```powershell
-python -m apps.worker.sync_stocks --task-type daily_bars_raw_replay --source baostock --market A_SHARE --symbol 600519 --start-date 2024-01-01 --end-date 2024-12-31 --adjust-type none
+python -m backend.worker.sync_stocks --task-type daily_bars_raw_replay --raw-artifact-id <artifact_id> --adjust-type none --enqueue
 ```
 
 执行最早的 pending 任务：
 
 ```powershell
-python -m apps.worker.sync_stocks --run-next-pending
+python -m backend.worker.sync_stocks --run-next-pending
 ```
 
 ## 测试
@@ -165,7 +163,7 @@ pytest tests/worker
 前端验证：
 
 ```powershell
-cd apps\web
+cd frontend
 npm run type-check
 npm run build
 ```

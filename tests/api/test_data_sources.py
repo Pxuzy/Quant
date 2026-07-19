@@ -39,6 +39,27 @@ class EmptyNormalizeAdapter(StockDataSourceAdapter):
         return []
 
 
+
+def test_stock_sync_records_normalization_loss_in_ingest_batch(client):
+    registry = AdapterRegistry()
+    registry.register(EmptyNormalizeAdapter())
+    db = SessionLocal()
+    try:
+        task = StockSyncService(db, registry).run_stock_sync(source="empty_normalize", market="A_SHARE")
+        batch = db.query(IngestBatch).filter(IngestBatch.task_id == task.id).one()
+    finally:
+        db.close()
+
+    assert task.status == "failed"
+    assert task.records_read == 0
+    assert task.records_written == 0
+    assert batch.raw_records == 1
+    assert batch.normalized_records == 0
+    assert batch.dropped_records == 1
+    assert batch.status == "failed"
+    assert batch.quality_status == "failed"
+
+
 class FailingFetchAdapter(StockDataSourceAdapter):
     code = "failing_fetch"
     name = "Failing Fetch"
@@ -437,6 +458,20 @@ def test_data_sources_api_removes_non_v1_provider_rows(client):
     assert response.status_code == 200
     source_codes = {source["code"] for source in response.json()}
     assert source_codes == {"akshare", "baostock", "stock_sdk"}
+
+    db = SessionLocal()
+    try:
+        retired = {
+            source.code: source
+            for source in db.query(DataSource).filter(DataSource.code.in_(["eastmoney", "mock_seed_provider"])).all()
+        }
+    finally:
+        db.close()
+
+    assert set(retired) == {"eastmoney", "mock_seed_provider"}
+    assert all(source.enabled is False for source in retired.values())
+    assert all(source.health_status == "retired" for source in retired.values())
+    assert all(source.config_json.get("retired") is True for source in retired.values())
 
 
 def test_disabled_data_source_cannot_create_stock_sync(client):
