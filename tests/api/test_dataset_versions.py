@@ -42,12 +42,7 @@ def _manifest(*, close_checksum: str = "b" * 64) -> dict:
 def test_dataset_version_repository_registers_candidate_with_partitions(client, tmp_path):
     db = SessionLocal()
     try:
-        dataset = Dataset(
-            name="daily_bars",
-            layer="silver",
-            storage_type="parquet",
-            source="fixture",
-        )
+        dataset = Dataset(name="daily_bars", layer="silver", storage_type="parquet", source="fixture")
         db.add(dataset)
         db.commit()
         db.refresh(dataset)
@@ -55,9 +50,7 @@ def test_dataset_version_repository_registers_candidate_with_partitions(client, 
         manifest = _manifest()
         artifact = DatasetManifestStore(tmp_path / "lake").write(manifest)
         version, created = DatasetVersionRepository(db).create_candidate(
-            dataset=dataset,
-            manifest=manifest,
-            manifest_artifact=artifact,
+            dataset=dataset, manifest=manifest, manifest_artifact=artifact
         )
         db.commit()
 
@@ -80,12 +73,7 @@ def test_dataset_version_repository_registers_candidate_with_partitions(client, 
 def test_dataset_version_repository_reuses_same_manifest_and_increments_changed_version(client, tmp_path):
     db = SessionLocal()
     try:
-        dataset = Dataset(
-            name="daily_bars",
-            layer="silver",
-            storage_type="parquet",
-            source="fixture",
-        )
+        dataset = Dataset(name="daily_bars", layer="silver", storage_type="parquet", source="fixture")
         db.add(dataset)
         db.commit()
         db.refresh(dataset)
@@ -95,16 +83,12 @@ def test_dataset_version_repository_reuses_same_manifest_and_increments_changed_
         first_manifest = _manifest()
         first_artifact = store.write(first_manifest)
         first, first_created = repository.create_candidate(
-            dataset=dataset,
-            manifest=first_manifest,
-            manifest_artifact=first_artifact,
+            dataset=dataset, manifest=first_manifest, manifest_artifact=first_artifact
         )
         db.commit()
 
         repeated, repeated_created = repository.create_candidate(
-            dataset=dataset,
-            manifest=first_manifest,
-            manifest_artifact=first_artifact,
+            dataset=dataset, manifest=first_manifest, manifest_artifact=first_artifact
         )
         assert repeated.id == first.id
         assert repeated_created is False
@@ -112,9 +96,7 @@ def test_dataset_version_repository_reuses_same_manifest_and_increments_changed_
         changed_manifest = _manifest(close_checksum="c" * 64)
         changed_artifact = store.write(changed_manifest)
         changed, changed_created = repository.create_candidate(
-            dataset=dataset,
-            manifest=changed_manifest,
-            manifest_artifact=changed_artifact,
+            dataset=dataset, manifest=changed_manifest, manifest_artifact=changed_artifact
         )
         db.commit()
 
@@ -129,21 +111,14 @@ def test_dataset_version_repository_reuses_same_manifest_and_increments_changed_
 def test_dataset_with_registered_version_cannot_be_deleted(client, tmp_path):
     db = SessionLocal()
     try:
-        dataset = Dataset(
-            name="daily_bars",
-            layer="silver",
-            storage_type="parquet",
-            source="fixture",
-        )
+        dataset = Dataset(name="daily_bars", layer="silver", storage_type="parquet", source="fixture")
         db.add(dataset)
         db.commit()
         db.refresh(dataset)
         manifest = _manifest()
         artifact = DatasetManifestStore(tmp_path / "lake").write(manifest)
         DatasetVersionRepository(db).create_candidate(
-            dataset=dataset,
-            manifest=manifest,
-            manifest_artifact=artifact,
+            dataset=dataset, manifest=manifest, manifest_artifact=artifact
         )
         db.commit()
 
@@ -153,5 +128,75 @@ def test_dataset_with_registered_version_cannot_be_deleted(client, tmp_path):
         db.rollback()
 
         assert db.query(DatasetVersion).count() == 1
+    finally:
+        db.close()
+
+
+def test_dataset_version_moves_candidate_to_ready_then_published(client, tmp_path):
+    db = SessionLocal()
+    try:
+        dataset = Dataset(name="daily_bars", layer="silver", storage_type="parquet", source="fixture")
+        db.add(dataset)
+        db.commit()
+        db.refresh(dataset)
+        manifest = _manifest()
+        artifact = DatasetManifestStore(tmp_path / "lake").write(manifest)
+        version, _ = DatasetVersionRepository(db).create_candidate(
+            dataset=dataset, manifest=manifest, manifest_artifact=artifact
+        )
+        repository = DatasetVersionRepository(db)
+
+        ready = repository.mark_ready(version)
+        assert ready.status == "ready"
+        published = repository.publish(version)
+        db.commit()
+
+        assert published.status == "published"
+        assert published.published_at is not None
+    finally:
+        db.close()
+
+
+def test_dataset_version_quality_failure_cannot_become_ready(client, tmp_path):
+    db = SessionLocal()
+    try:
+        dataset = Dataset(name="daily_bars", layer="silver", storage_type="parquet", source="fixture")
+        db.add(dataset)
+        db.commit()
+        db.refresh(dataset)
+        manifest = _manifest()
+        manifest["quality"]["status"] = "error"
+        artifact = DatasetManifestStore(tmp_path / "lake").write(manifest)
+        version, _ = DatasetVersionRepository(db).create_candidate(
+            dataset=dataset, manifest=manifest, manifest_artifact=artifact
+        )
+
+        with pytest.raises(ValueError, match="quality"):
+            DatasetVersionRepository(db).mark_ready(version)
+        assert version.status == "candidate"
+    finally:
+        db.close()
+
+
+def test_dataset_version_cannot_publish_before_ready_or_publish_twice(client, tmp_path):
+    db = SessionLocal()
+    try:
+        dataset = Dataset(name="daily_bars", layer="silver", storage_type="parquet", source="fixture")
+        db.add(dataset)
+        db.commit()
+        db.refresh(dataset)
+        manifest = _manifest()
+        artifact = DatasetManifestStore(tmp_path / "lake").write(manifest)
+        version, _ = DatasetVersionRepository(db).create_candidate(
+            dataset=dataset, manifest=manifest, manifest_artifact=artifact
+        )
+        repository = DatasetVersionRepository(db)
+
+        with pytest.raises(ValueError, match="ready"):
+            repository.publish(version)
+        repository.mark_ready(version)
+        repository.publish(version)
+        with pytest.raises(ValueError, match="published"):
+            repository.publish(version)
     finally:
         db.close()

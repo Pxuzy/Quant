@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.models import Dataset, DatasetVersion, DatasetVersionPartition
+from backend.app.models.entities import utcnow
 from backend.app.services.dataset_manifest import ManifestArtifact, validate_manifest
 
 
@@ -75,6 +76,37 @@ class DatasetVersionRepository:
                 return existing, False
             raise
         return version, True
+
+    def mark_ready(self, version: DatasetVersion) -> DatasetVersion:
+        if version.status != "candidate":
+            raise ValueError(f"only candidate versions can become ready; current status={version.status}")
+        if version.quality_status not in {"good", "warning"}:
+            raise ValueError("quality gate must pass before version becomes ready")
+        if not version.partitions:
+            raise ValueError("version must contain at least one partition before becoming ready")
+        if any(partition.status != "sealed" for partition in version.partitions):
+            raise ValueError("all version partitions must be sealed before becoming ready")
+        version.status = "ready"
+        self.db.flush()
+        return version
+
+    def publish(self, version: DatasetVersion) -> DatasetVersion:
+        if version.status != "ready":
+            raise ValueError(f"only ready versions can be published; current status={version.status}")
+        version.status = "published"
+        version.published_at = utcnow()
+        self.db.flush()
+        return version
+
+    def reject(self, version: DatasetVersion, *, reason: str) -> DatasetVersion:
+        if version.status not in {"candidate", "ready"}:
+            raise ValueError(f"only candidate or ready versions can be rejected; current status={version.status}")
+        if not reason.strip():
+            raise ValueError("rejection reason must not be empty")
+        version.status = "rejected"
+        version.failure_reason = reason.strip()
+        self.db.flush()
+        return version
 
 
 def _parse_date(value: Any) -> date | None:
