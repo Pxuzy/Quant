@@ -54,6 +54,7 @@ def _mark_duplicate_active_replays_failed(bind) -> None:
         .where(
             active.c.task_type == "daily_bars_raw_replay",
             active.c.status.in_(["pending", "running"]),
+            active.c.input_raw_artifact_id.is_not(None),
         )
         .group_by(active.c.input_raw_artifact_id, active.c.adjust_type)
         .having(func.count(active.c.id) > 1)

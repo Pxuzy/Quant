@@ -100,7 +100,9 @@ def test_active_replay_index_migration_keeps_lowest_id_and_fails_legacy_duplicat
             VALUES
               (12, 'daily_bars_raw_replay', 'pending', 'none', 1),
               (10, 'daily_bars_raw_replay', 'running', NULL, 1),
-              (11, 'daily_bars_raw_replay', 'pending', 'none', 1);
+              (11, 'daily_bars_raw_replay', 'pending', 'none', 1),
+              (20, 'daily_bars_raw_replay', 'pending', 'none', NULL),
+              (21, 'daily_bars_raw_replay', 'running', 'none', NULL);
             CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL);
             INSERT INTO alembic_version(version_num) VALUES ('d2f4b8c1e907');
             """
@@ -122,8 +124,9 @@ def test_active_replay_index_migration_keeps_lowest_id_and_fails_legacy_duplicat
         assert tasks[0][5] == "none"
         assert tasks[1][1] == "failed"
         assert tasks[2][1] == "failed"
-        assert all(task[3] == 100 and task[4] is not None for task in tasks[1:])
-        assert all("survivor task id=10" in task[2] for task in tasks[1:])
+        assert all(task[3] == 100 and task[4] is not None for task in tasks[1:3])
+        assert all("survivor task id=10" in task[2] for task in tasks[1:3])
+        assert [(task[0], task[1]) for task in tasks[3:]] == [(20, "pending"), (21, "running")]
         index_sql = connection.execute(
             "SELECT sql FROM sqlite_master WHERE type='index' AND name='uq_sync_tasks_active_raw_replay'"
         ).fetchone()[0]
