@@ -19,12 +19,15 @@ from backend.app.models import entities  # noqa: E402, F401
 
 target_metadata = Base.metadata
 
-# Read the same URL override used by the application and tests.
-try:
-    from backend.app.db.session import get_database_url
-    url = get_database_url()
-except Exception:
-    url = config.get_main_option("sqlalchemy.url")
+# Prefer the URL explicitly supplied by Alembic (including test/app overrides).
+# Fall back to project settings only when the config has no URL.
+url = config.get_main_option("sqlalchemy.url")
+if not url or url.startswith("driver://"):
+    try:
+        from backend.app.db.session import get_database_url
+        url = get_database_url()
+    except Exception:
+        url = None
 
 
 def run_migrations_offline() -> None:

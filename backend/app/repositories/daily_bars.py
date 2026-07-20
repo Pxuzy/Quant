@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import os
+import fcntl
 from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
+from threading import Lock
+from collections.abc import Sequence
+from contextlib import contextmanager
 
 try:
     import duckdb
@@ -15,7 +19,6 @@ import pyarrow.parquet as pq
 
 from backend.app.adapters.base import NormalizedDailyBar, normalize_daily_bar_adjust_type
 from backend.app.core.config import get_settings
-
 
 DAILY_BAR_COLUMNS = [
     "symbol",
@@ -35,14 +38,23 @@ DAILY_BAR_COLUMNS = [
     "ingested_at",
 ]
 
+_PARQUET_LOCK = Lock()
 
-class DailyBarArchiveError(RuntimeError):
-    """DuckDB accepted rows, but immutable Parquet archive could not be finalized."""
 
-    def __init__(self, message: str, *, records_written: int) -> None:
-        super().__init__(message)
-        self.records_written = records_written
-
+@contextmanager
+def parquet_data_lock(lake_root: str | Path):
+    """Serialize silver reads/writes across threads and processes."""
+    root = Path(lake_root).expanduser().resolve()
+    lock_dir = root / ".locks"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = lock_dir / "daily_bars.lock"
+    with _PARQUET_LOCK:
+        with lock_path.open("a+b") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 def _duckdb_connect_with_timeout() -> duckdb.DuckDBPyConnection:
     """Create a DuckDB connection."""
@@ -56,54 +68,92 @@ class DailyBarRepository:
         lake_root: str | Path | None = None,
         dataset_dir: str | Path | None = None,
         duckdb_path: str | Path | None = None,
+        partition_paths: Sequence[str | Path] | None = None,
     ) -> None:
         settings = get_settings()
-        self.lake_root = Path(lake_root or settings.data_lake_dir)
+        self.lake_root = Path(lake_root or settings.data_lake_dir).expanduser().resolve()
         self.dataset_dir = Path(dataset_dir) if dataset_dir is not None else self.lake_root / "silver" / "daily_bars"
-        if duckdb_path is not None:
-            self.duckdb_path = Path(duckdb_path)
-        elif os.getenv("DUCKDB_PATH"):
-            self.duckdb_path = Path(settings.duckdb_path)
-        else:
-            self.duckdb_path = self.lake_root.parent / "quant.duckdb"
+        default_duckdb_path = settings.duckdb_path if lake_root is None else self.lake_root / "quant.duckdb"
+        self.duckdb_path = Path(duckdb_path or default_duckdb_path)
+        self.partition_paths = (
+            tuple(Path(path).expanduser().resolve() for path in partition_paths)
+            if partition_paths is not None
+            else None
+        )
 
     def write_many(self, records: list[NormalizedDailyBar]) -> int:
         if not records:
             return 0
 
-        rows = [_normalize_row(asdict(record)) for record in records]
+        rows_by_key = {}
+        for record in records:
+            row = _normalize_row(asdict(record))
+            key = (row["symbol"], row["exchange"], row["market"], row["trade_date"], row["adjust_type"])
+            rows_by_key[key] = row
+        rows = list(rows_by_key.values())
 
-        # Primary write: DuckDB persistent store (幂等去重)
-        from backend.app.db.duckdb_store import write_daily_bars
-        written = write_daily_bars(rows, db_path=self.duckdb_path)
-
-        # Archive: Parquet 湖存储 (best-effort, 非阻塞)
-        try:
+        with parquet_data_lock(self.lake_root):
+            parquet_snapshots: dict[Path, bytes | None] = {}
             rows_by_partition: dict[tuple[str, date], list[dict]] = {}
             for row in rows:
                 rows_by_partition.setdefault((row["market"], row["trade_date"]), []).append(row)
 
-            for (market, trade_date), group in rows_by_partition.items():
-                partition_dir = self.dataset_dir / f"market={market}" / f"trade_date={trade_date.isoformat()}"
-                partition_dir.mkdir(parents=True, exist_ok=True)
-                file_path = partition_dir / "part-000.parquet"
+            changed_total = 0
+            try:
+                for (market, trade_date), group in rows_by_partition.items():
+                    partition_dir = self.dataset_dir / f"market={market}" / f"trade_date={trade_date.isoformat()}"
+                    partition_dir.mkdir(parents=True, exist_ok=True)
+                    file_path = partition_dir / "part-000.parquet"
+                    parquet_snapshots[file_path] = file_path.read_bytes() if file_path.exists() else None
 
-                if file_path.exists():
-                    group = [_normalize_row(row) for row in _read_parquet_file(file_path)] + group
+                    existing_rows = (
+                        [_normalize_row(row) for row in _read_parquet_file(file_path)]
+                        if file_path.exists()
+                        else []
+                    )
+                    existing_by_key = {
+                        _daily_bar_identity(row): row
+                        for row in existing_rows
+                    }
+                    changed_rows = [
+                        row
+                        for row in group
+                        if _daily_bar_content(existing_by_key.get(_daily_bar_identity(row)))
+                        != _daily_bar_content(row)
+                    ]
+                    if not changed_rows:
+                        continue
 
-                deduped = {
-                    (row["symbol"], row["exchange"], row["market"], row["trade_date"], row["adjust_type"]): row
-                    for row in group
-                }
-                sorted_rows = sorted(deduped.values(), key=lambda row: (row["symbol"], row["exchange"], row["adjust_type"]))
-                pq.write_table(pa.Table.from_pylist(sorted_rows, schema=DAILY_BAR_ARROW_SCHEMA), file_path)
-        except Exception as exc:
-            raise DailyBarArchiveError(
-                "Daily bar Parquet archive failed after canonical write.",
-                records_written=written,
-            ) from exc
-
-        return written
+                    deduped = {
+                        (row["symbol"], row["exchange"], row["market"], row["trade_date"], row["adjust_type"]): row
+                        for row in existing_rows
+                    }
+                    deduped.update({_daily_bar_identity(row): row for row in group})
+                    sorted_rows = sorted(
+                        deduped.values(),
+                        key=lambda row: (row["symbol"], row["exchange"], row["adjust_type"]),
+                    )
+                    temporary_path = file_path.with_suffix(".parquet.tmp")
+                    pq.write_table(pa.Table.from_pylist(sorted_rows, schema=DAILY_BAR_ARROW_SCHEMA), temporary_path)
+                    with temporary_path.open("r+b") as handle:
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    os.replace(temporary_path, file_path)
+                    directory_fd = os.open(partition_dir, os.O_DIRECTORY)
+                    try:
+                        os.fsync(directory_fd)
+                    finally:
+                        os.close(directory_fd)
+                    changed_total += len(changed_rows)
+                return changed_total
+            except Exception:
+                for file_path, snapshot in parquet_snapshots.items():
+                    file_path.with_suffix(".parquet.tmp").unlink(missing_ok=True)
+                    if snapshot is None:
+                        file_path.unlink(missing_ok=True)
+                    else:
+                        file_path.write_bytes(snapshot)
+                raise
 
     def list_daily_bars(
         self,
@@ -117,27 +167,51 @@ class DailyBarRepository:
         page_size: int = 200,
         sort_order: str = "asc",
     ) -> tuple[list[dict], int]:
-        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type) if adjust_type is not None else None
         if symbol and market:
-            rows = self.symbol_daily_bars(symbol=symbol.strip(), market=market)
-            if adjust_type_code is not None:
-                rows = [row for row in rows if (row.get("adjust_type") or "none") == adjust_type_code]
+            symbol_query = {"symbol": symbol.strip(), "market": market}
+            if adjust_type is not None:
+                symbol_query["adjust_type"] = adjust_type
+            rows = self.symbol_daily_bars(**symbol_query)
             if start_date:
-                rows = [row for row in rows if isinstance(row.get("trade_date"), date) and row["trade_date"] >= start_date]
+                rows = [
+                    row
+                    for row in rows
+                    if isinstance(row.get("trade_date"), date) and row["trade_date"] >= start_date
+                ]
             if end_date:
-                rows = [row for row in rows if isinstance(row.get("trade_date"), date) and row["trade_date"] <= end_date]
+                rows = [
+                    row
+                    for row in rows
+                    if isinstance(row.get("trade_date"), date) and row["trade_date"] <= end_date
+                ]
             rows = sorted(rows, key=lambda row: _daily_bar_sort_key(row, sort_order=sort_order))
             total = len(rows)
             start = (page - 1) * page_size
             end = start + page_size
             return rows[start:end], total
 
-        result = self._try_duckdb("list_daily_bars", symbol=symbol, market=market, adjust_type=adjust_type_code, start_date=start_date, end_date=end_date, page=page, page_size=page_size, sort_order=sort_order)
+        result = self._try_duckdb(
+            "list_daily_bars",
+            symbol=symbol,
+            market=market,
+            adjust_type=adjust_type,
+            start_date=start_date,
+            end_date=end_date,
+            page=page,
+            page_size=page_size,
+            sort_order=sort_order,
+        )
         if result is not None:
             return result
         return self._list_daily_bars_pyarrow(
-            symbol=symbol, market=market, start_date=start_date, end_date=end_date, page=page, page_size=page_size, sort_order=sort_order,
-            adjust_type=adjust_type_code,
+            symbol=symbol,
+            market=market,
+            adjust_type=adjust_type,
+            start_date=start_date,
+            end_date=end_date,
+            page=page,
+            page_size=page_size,
+            sort_order=sort_order,
         )
 
     def count(self, *, market: str | None = None) -> int:
@@ -188,11 +262,28 @@ class DailyBarRepository:
             if isinstance(row.get("trade_date"), date)
         }
 
-    def symbol_daily_bars(self, *, symbol: str, market: str) -> list[dict]:
-        result = self._try_duckdb("symbol_daily_bars", symbol=symbol, market=market)
+    def symbol_daily_bars(
+        self,
+        *,
+        symbol: str,
+        market: str,
+        adjust_type: str | None = None,
+    ) -> list[dict]:
+        adjust_type_code = normalize_daily_bar_adjust_type(adjust_type) if adjust_type is not None else None
+        result = self._try_duckdb(
+            "symbol_daily_bars",
+            symbol=symbol,
+            market=market,
+            adjust_type=adjust_type_code,
+        )
         if result is not None:
             return result
         rows = self._read_partition_rows(symbol=symbol, market=market)
+        if adjust_type_code is not None:
+            rows = [
+                row for row in rows
+                if (row.get("adjust_type") or "none") == adjust_type_code
+            ]
         return sorted(
             [row for row in rows if isinstance(row.get("trade_date"), date)],
             key=lambda row: (row["trade_date"], row.get("adjust_type") or "none"),
@@ -225,7 +316,7 @@ class DailyBarRepository:
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> list[dict]:
-        if not self.dataset_dir.exists():
+        if self.partition_paths is None and not self.dataset_dir.exists():
             return []
 
         rows: list[dict] = []
@@ -251,8 +342,15 @@ class DailyBarRepository:
         end_date: date | None = None,
     ) -> list[Path]:
         market_glob = f"market={market}" if market else "market=*"
+        candidates = (
+            self.partition_paths
+            if self.partition_paths is not None
+            else tuple(self.dataset_dir.glob(f"{market_glob}/trade_date=*/part-*.parquet"))
+        )
         paths = []
-        for path in self.dataset_dir.glob(f"{market_glob}/trade_date=*/part-*.parquet"):
+        for path in candidates:
+            if market and path.parent.parent.name != f"market={market}":
+                continue
             partition_trade_date = _partition_trade_date(path)
             if partition_trade_date is None:
                 continue
@@ -282,7 +380,11 @@ class DailyBarRepository:
             end_date=end_date,
         )
         if adjust_type is not None:
-            rows = [row for row in rows if (row.get("adjust_type") or "none") == adjust_type]
+            rows = [
+                row
+                for row in rows
+                if (row.get("adjust_type") or "none") == adjust_type
+            ]
         if not rows:
             return [], 0
 
@@ -357,7 +459,7 @@ class DailyBarRepository:
 
     def _summarize_symbols_duckdb(self, *, symbols: list[str], market: str | None) -> dict[tuple[str, str], dict]:
         conditions = [f"symbol in ({', '.join(['?'] * len(symbols))})"]
-        params: list[object] = [str(self.dataset_dir / "market=*" / "trade_date=*" / "part-*.parquet"), *symbols]
+        params: list[object] = [self._duckdb_source(), *symbols]
         if market:
             conditions.append("market = ?")
             params.append(market)
@@ -406,7 +508,7 @@ class DailyBarRepository:
                 from {self._duckdb_scan()}
                 where market = ?
                 """,
-                [str(self.dataset_dir / "market=*" / "trade_date=*" / "part-*.parquet"), market],
+                [self._duckdb_source(), market],
             ).fetchall()
         finally:
             con.close()
@@ -429,64 +531,63 @@ class DailyBarRepository:
                 from {self._duckdb_scan()}
                 where market = ? and symbol = ?
                 """,
-                [str(self.dataset_dir / "market=*" / "trade_date=*" / "part-*.parquet"), market, symbol],
+                [self._duckdb_source(), market, symbol],
             ).fetchall()
         finally:
             con.close()
 
         return {_coerce_date(row[0]) for row in rows}
 
-    def _symbol_daily_bars_duckdb(self, *, symbol: str, market: str) -> list[dict]:
+    def _symbol_daily_bars_duckdb(
+        self,
+        *,
+        symbol: str,
+        market: str,
+        adjust_type: str | None = None,
+    ) -> list[dict]:
         if duckdb is None:
+            rows = self._read_partition_rows(symbol=symbol, market=market)
+            if adjust_type is not None:
+                rows = [
+                    row for row in rows
+                    if (row.get("adjust_type") or "none") == adjust_type
+                ]
             return sorted(
-                self._read_partition_rows(symbol=symbol, market=market),
+                rows,
                 key=lambda row: (row["trade_date"], row.get("adjust_type") or "none"),
             )
 
-        settings = get_settings()
-        default_lake_root = Path(settings.data_lake_dir)
-        default_dataset_dir = default_lake_root / "silver" / "daily_bars"
-        uses_default_dataset = (
-            self.lake_root.resolve() == default_lake_root.resolve()
-            and self.dataset_dir.resolve() == default_dataset_dir.resolve()
-        )
-
-        if uses_default_dataset:
-            try:
-                from backend.app.db.duckdb_store import get_duckdb
-
-                store = get_duckdb(db_path=self.duckdb_path)
-                rows = store.execute(
-                    f"""
-                    select {", ".join(DAILY_BAR_COLUMNS)}
-                    from daily_bars
-                    where market = ? and symbol = ?
-                    order by trade_date asc, adjust_type asc
-                    """,
-                    [market, symbol],
-                ).fetchall()
-                if rows:
-                    return [_normalize_row(dict(zip(DAILY_BAR_COLUMNS, row))) for row in rows]
-            except duckdb.Error:
-                pass
-
+        conditions = ["market = ?", "symbol = ?"]
+        params: list[object] = [
+            self._duckdb_source(),
+            market,
+            symbol,
+        ]
+        if adjust_type is not None:
+            conditions.append("coalesce(adjust_type, 'none') = ?")
+            params.append(adjust_type)
         con = _duckdb_connect_with_timeout()
         try:
             rows = con.execute(
                 f"""
                 select {", ".join(DAILY_BAR_COLUMNS)}
                 from {self._duckdb_scan()}
-                where market = ? and symbol = ?
+                where {" and ".join(conditions)}
                 order by trade_date asc, adjust_type asc
                 """,
-                [str(self.dataset_dir / "market=*" / "trade_date=*" / "part-*.parquet"), market, symbol],
+                params,
             ).fetchall()
         finally:
             con.close()
 
         return [_normalize_row(dict(zip(DAILY_BAR_COLUMNS, row))) for row in rows]
 
-    def _market_symbol_trade_date_pairs_duckdb(self, *, market: str, adjust_type: str | None = None) -> set[tuple[str, date]]:
+    def _market_symbol_trade_date_pairs_duckdb(
+        self,
+        *,
+        market: str,
+        adjust_type: str | None = None,
+    ) -> set[tuple[str, date]]:
         if duckdb is None:
             return {
                 (str(row["symbol"]), row["trade_date"])
@@ -496,7 +597,7 @@ class DailyBarRepository:
             }
 
         conditions = ["market = ?"]
-        params: list[object] = [str(self.dataset_dir / "market=*" / "trade_date=*" / "part-*.parquet"), market]
+        params: list[object] = [self._duckdb_source(), market]
         if adjust_type is not None:
             conditions.append("coalesce(adjust_type, 'none') = ?")
             params.append(adjust_type)
@@ -523,7 +624,6 @@ class DailyBarRepository:
         where_clause, params = self._duckdb_filters(
             symbol=None,
             market=market,
-            adjust_type=None,
             start_date=None,
             end_date=None,
         )
@@ -546,7 +646,6 @@ class DailyBarRepository:
         where_clause, params = self._duckdb_filters(
             symbol=None,
             market=market,
-            adjust_type=None,
             start_date=None,
             end_date=None,
         )
@@ -562,7 +661,7 @@ class DailyBarRepository:
         return _coerce_date(result) if result is not None else None
 
     def _can_query_with_duckdb(self) -> bool:
-        return duckdb is not None and any(self.dataset_dir.glob("market=*/trade_date=*/part-*.parquet"))
+        return duckdb is not None and bool(self._partition_file_paths())
 
     def _try_duckdb(self, method_name: str, *args, **kwargs):
         """Try DuckDB path; returns None on failure or if DuckDB unavailable."""
@@ -576,17 +675,22 @@ class DailyBarRepository:
     def _duckdb_scan(self) -> str:
         return "read_parquet(?, hive_partitioning=true)"
 
+    def _duckdb_source(self) -> str | list[str]:
+        if self.partition_paths is not None:
+            return [str(path) for path in self.partition_paths]
+        return str(self.dataset_dir / "market=*" / "trade_date=*" / "part-*.parquet")
+
     def _duckdb_filters(
         self,
         *,
         symbol: str | None,
         market: str | None,
-        adjust_type: str | None,
-        start_date: date | None,
-        end_date: date | None,
+        adjust_type: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> tuple[str, list[object]]:
         conditions: list[str] = []
-        params: list[object] = [str(self.dataset_dir / "market=*" / "trade_date=*" / "part-*.parquet")]
+        params: list[object] = [self._duckdb_source()]
 
         if symbol:
             conditions.append("symbol = ?")
@@ -594,7 +698,7 @@ class DailyBarRepository:
         if market:
             conditions.append("market = ?")
             params.append(market)
-        if adjust_type is not None:
+        if adjust_type:
             conditions.append("coalesce(adjust_type, 'none') = ?")
             params.append(adjust_type)
         if start_date:
@@ -636,6 +740,19 @@ def _normalize_row(row: dict) -> dict:
     normalized["adjust_type"] = normalized.get("adjust_type") or "none"
     normalized["ingested_at"] = _coerce_datetime(normalized.get("ingested_at"))
     return normalized
+
+
+def _daily_bar_identity(row: dict) -> tuple:
+    return tuple(
+        row.get(column)
+        for column in ("symbol", "exchange", "market", "trade_date", "adjust_type")
+    )
+
+
+def _daily_bar_content(row: dict | None) -> tuple | None:
+    if row is None:
+        return None
+    return tuple(row.get(column) for column in DAILY_BAR_COLUMNS if column != "ingested_at")
 
 
 def _daily_bar_sort_key(row: dict, *, sort_order: str) -> tuple:

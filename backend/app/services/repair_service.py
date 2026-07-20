@@ -242,8 +242,20 @@ class _MarketRepairMixin:
             if not data_source.enabled:
                 raise RuntimeError(f"Data source '{task.source}' is disabled.")
 
-            records_read, records_written = self._repair_market_with_adapter(task=task, adapter=adapter)
-            self.task_repo.complete(task, records_read=records_read, records_written=records_written)
+            records_read, records_written, failed_symbols, failed_chunks = self._repair_market_with_adapter(
+                task=task,
+                adapter=adapter,
+            )
+            if not failed_symbols:
+                self._publish_daily_bars_version(task=task, source=adapter.code)
+            self.task_repo.complete(
+                task,
+                records_read=records_read,
+                records_written=records_written,
+                failed_symbols=failed_symbols,
+                failed_chunks=failed_chunks,
+                failure_reason=f"{len(failed_symbols)} market repair symbol(s) failed." if failed_symbols else None,
+            )
             self.task_repo.add_log(
                 task,
                 level="info",
@@ -335,7 +347,12 @@ class _MarketRepairMixin:
                     },
                 )
                 try:
-                    records_read, records_written = self._repair_market_with_adapter(task=task, adapter=adapter)
+                    records_read, records_written, failed_symbols, failed_chunks = self._repair_market_with_adapter(
+                        task=task,
+                        adapter=adapter,
+                    )
+                    if not failed_symbols:
+                        self._publish_daily_bars_version(task=task, source=adapter.code)
                 except Exception as exc:
                     error_message = str(exc)
                     errors.append(f"{adapter.code}: {error_message}")
@@ -352,7 +369,14 @@ class _MarketRepairMixin:
                     self._record_adapter_result(adapter.code, success=False, capability="daily_bars")
                     continue
 
-                self.task_repo.complete(task, records_read=records_read, records_written=records_written)
+                self.task_repo.complete(
+                    task,
+                    records_read=records_read,
+                    records_written=records_written,
+                    failed_symbols=failed_symbols,
+                    failed_chunks=failed_chunks,
+                    failure_reason=f"{len(failed_symbols)} market repair symbol(s) failed." if failed_symbols else None,
+                )
                 self._record_adapter_result(adapter.code, success=True, capability="daily_bars")
                 self.task_repo.add_log(
                     task,
@@ -377,7 +401,12 @@ class _MarketRepairMixin:
             self.db.refresh(task)
             return task
 
-    def _repair_market_with_adapter(self, *, task: SyncTask, adapter: StockDataSourceAdapter) -> tuple[int, int]:
+    def _repair_market_with_adapter(
+        self,
+        *,
+        task: SyncTask,
+        adapter: StockDataSourceAdapter,
+    ) -> tuple[int, int, list[str], list[str]]:
         health = adapter.health_check()
         self.data_source_repo.update_health(adapter.code, health)
         if not health.healthy:
@@ -398,8 +427,7 @@ class _MarketRepairMixin:
             start_policy=start_policy,
             adjust_type=adjust_type,
         )
-        records_read, records_written, failed_count = self._repair_market_plan_with_adapter(task=task, adapter=adapter, plan=plan)
-        return records_read, records_written
+        return self._repair_market_plan_with_adapter(task=task, adapter=adapter, plan=plan)
 
     def _repair_market_plan_with_adapter(
         self,
@@ -407,7 +435,7 @@ class _MarketRepairMixin:
         task: SyncTask,
         adapter: StockDataSourceAdapter,
         plan: MarketRepairPlan,
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int, list[str], list[str]]:
         market = plan.market
         self.task_repo.add_log(
             task,
@@ -428,7 +456,7 @@ class _MarketRepairMixin:
         )
 
         if not plan.items:
-            return 0, 0, 0
+            return 0, 0, [], []
 
         from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
         from backend.app.core.config import get_settings
@@ -461,9 +489,12 @@ class _MarketRepairMixin:
         records_read = 0
         records_written = 0
         symbol_errors: list[str] = []
+        failed_symbols: list[str] = []
+        failed_chunks: list[str] = []
 
         try:
             for future in as_completed([f for f, _ in raw_results.values()], timeout=stock_timeout * 2):
+                self.task_repo.require_heartbeat(task)
                 # 找到这个 future 对应的 item
                 symbol_item = None
                 for sym, (f, item) in raw_results.items():
@@ -477,6 +508,10 @@ class _MarketRepairMixin:
                     raw_records = future.result(timeout=stock_timeout)
                 except TimeoutError:
                     symbol_errors.append(f"{symbol_item.symbol}: Timed out after {stock_timeout}s")
+                    failed_symbols.append(symbol_item.symbol)
+                    failed_chunks.append(
+                        f"{symbol_item.symbol}:{symbol_item.start_date.isoformat()}:{symbol_item.end_date.isoformat()}"
+                    )
                     self.task_repo.add_log(task, level="warning", message="Market repair symbol failed.",
                                            payload={"symbol": symbol_item.symbol, "error": "Timeout"})
                     self._record_failed_market_repair_batch(
@@ -487,6 +522,10 @@ class _MarketRepairMixin:
                 except Exception as exc:
                     err = str(exc)
                     symbol_errors.append(f"{symbol_item.symbol}: {err}")
+                    failed_symbols.append(symbol_item.symbol)
+                    failed_chunks.append(
+                        f"{symbol_item.symbol}:{symbol_item.start_date.isoformat()}:{symbol_item.end_date.isoformat()}"
+                    )
                     self.task_repo.add_log(task, level="warning", message="Market repair symbol failed.",
                                            payload={"symbol": symbol_item.symbol, "error": err[:200]})
                     self._record_failed_market_repair_batch(
@@ -549,6 +588,10 @@ class _MarketRepairMixin:
                         pass
                 except Exception as exc:
                     symbol_errors.append(f"{symbol_item.symbol}(write): {exc}")
+                    failed_symbols.append(symbol_item.symbol)
+                    failed_chunks.append(
+                        f"{symbol_item.symbol}:{symbol_item.start_date.isoformat()}:{symbol_item.end_date.isoformat()}"
+                    )
                     self.task_repo.add_log(task, level="warning", message="Market repair symbol failed.",
                                            payload={"symbol": symbol_item.symbol, "error": str(exc)[:200]})
 
@@ -567,7 +610,12 @@ class _MarketRepairMixin:
         if plan.items and records_written == 0 and symbol_errors:
             raise RuntimeError(f"Market daily bars repair wrote no records: {'; '.join(symbol_errors[:5])}")
 
-        return records_read, records_written, len(symbol_errors)
+        return (
+            records_read,
+            records_written,
+            list(dict.fromkeys(failed_symbols)),
+            list(dict.fromkeys(failed_chunks)),
+        )
 
     def _build_market_repair_plan(
         self,

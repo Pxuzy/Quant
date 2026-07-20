@@ -131,6 +131,13 @@ def _ensure_sqlite_sync_task_columns(engine: Engine) -> None:
         "start_policy": "VARCHAR(32)",
         "adjust_type": "VARCHAR(16)",
         "input_raw_artifact_id": "INTEGER",
+        "failed_symbols": "JSON NOT NULL DEFAULT '[]'",
+        "failed_chunks": "JSON NOT NULL DEFAULT '[]'",
+        "failure_reason": "TEXT",
+        "heartbeat_at": "DATETIME",
+        "lease_owner": "VARCHAR(128)",
+        "lease_expires_at": "DATETIME",
+        "attempt": "INTEGER NOT NULL DEFAULT 0",
     }
     missing_columns = [
         (name, column_type)

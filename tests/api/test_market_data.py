@@ -1,7 +1,7 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-import json
-from datetime import date
+from datetime import date, timedelta
+from math import inf, nan
 
 import pytest
 from sqlalchemy import delete
@@ -17,12 +17,10 @@ from backend.app.adapters.base import (
 )
 from backend.app.adapters.registry import AdapterRegistry
 from backend.app.db.session import SessionLocal
-from backend.app.models import Dataset, IngestBatch, RawArtifact, Stock, SyncTask, SyncTaskLog, TradingCalendar
-from backend.app.repositories.daily_bars import DailyBarRepository
+from backend.app.models import Dataset, DatasetVersion, IngestBatch, Stock, SyncTask, SyncTaskLog, TradingCalendar
 from backend.app.repositories.daily_bars import DailyBarRepository
 from backend.app.services.sync_service import MarketDataSyncService
-from backend.app.services.research_data_service import ResearchDataService
-from backend.app.services.raw_artifact_store import RawArtifactStore
+from backend.app.services.normalized_data_validation import validate_daily_bar_records
 
 
 class FailingDailyBarAdapter(StockDataSourceAdapter):
@@ -88,7 +86,11 @@ class SuccessDailyBarAdapter(StockDataSourceAdapter):
                 symbol="600519",
                 exchange="SSE",
                 market="A_SHARE",
-                trade_date=date.fromisoformat(record["trade_date"]) if isinstance(record["trade_date"], str) else record["trade_date"],
+                trade_date=(
+                    date.fromisoformat(record["trade_date"])
+                    if isinstance(record["trade_date"], str)
+                    else record["trade_date"]
+                ),
                 open=record["close"] - 10.0,
                 high=record["close"] + 5.0,
                 low=record["close"] - 15.0,
@@ -127,6 +129,14 @@ class InvalidDailyBarAdapter(SuccessDailyBarAdapter):
         ]
 
 
+class EmptyDailyBarAdapter(SuccessDailyBarAdapter):
+    code = "empty_daily"
+    name = "Empty Daily"
+
+    def fetch_daily_bars(self, **kwargs) -> list[dict]:
+        return []
+
+
 class MultiSymbolDailyBarAdapter(SuccessDailyBarAdapter):
     code = "multi_symbol_daily"
     name = "Multi Symbol Daily"
@@ -137,9 +147,22 @@ class MultiSymbolDailyBarAdapter(SuccessDailyBarAdapter):
     def fetch_daily_bars(self, **kwargs) -> list[dict]:
         self.fetch_calls.append(kwargs)
         symbol = kwargs["symbol"]
+        records = [
+            {
+                "symbol": symbol,
+                "trade_date": kwargs["start_date"],
+                "close": 10.0 if symbol == "000001" else 20.0,
+            },
+            {
+                "symbol": symbol,
+                "trade_date": kwargs["start_date"] + timedelta(days=1),
+                "close": 11.0 if symbol == "000001" else 21.0,
+            },
+        ]
         return [
-            {"symbol": symbol, "trade_date": date(2026, 6, 1), "close": 10.0 if symbol == "000001" else 20.0},
-            {"symbol": symbol, "trade_date": date(2026, 6, 2), "close": 11.0 if symbol == "000001" else 21.0},
+            record
+            for record in records
+            if kwargs["start_date"] <= record["trade_date"] <= kwargs["end_date"]
         ]
 
     def normalize_daily_bars(self, raw_records: list[dict]) -> list[NormalizedDailyBar]:
@@ -173,7 +196,7 @@ class FailsFirstSymbolDailyBarAdapter(MultiSymbolDailyBarAdapter):
         return super().fetch_daily_bars(**kwargs)
 
 
-def test_daily_bars_sync_api_creates_pending_task(client):
+def test_daily_bars_sync_api_creates_pending_task(client, fake_akshare):
     response = client.post(
         "/api/market-data/daily-bars/sync",
         json={
@@ -208,7 +231,7 @@ def test_daily_bars_sync_api_creates_pending_task(client):
     )
 
 
-def test_market_daily_bars_repair_api_creates_explicit_market_task(client):
+def test_market_daily_bars_repair_api_creates_explicit_market_task(client, fake_akshare):
     response = client.post(
         "/api/market-data/daily-bars/market-repair",
         json={
@@ -246,6 +269,36 @@ def test_market_daily_bars_repair_api_creates_explicit_market_task(client):
     )
 
 
+def test_daily_bars_sync_and_repair_preview_reject_future_request_dates(client, fake_akshare):
+    future = date.today() + timedelta(days=1)
+
+    sync_response = client.post(
+        "/api/market-data/daily-bars/sync",
+        json={
+            "source": "akshare",
+            "market": "A_SHARE",
+            "symbol": "600519",
+            "start_date": date.today().isoformat(),
+            "end_date": future.isoformat(),
+        },
+    )
+    preview_response = client.post(
+        "/api/market-data/daily-bars/market-repair/preview",
+        json={
+            "source": "akshare",
+            "market": "A_SHARE",
+            "start_date": date.today().isoformat(),
+            "end_date": future.isoformat(),
+            "max_symbols": 1,
+        },
+    )
+
+    assert sync_response.status_code == 400
+    assert "future" in sync_response.json()["detail"]
+    assert preview_response.status_code == 400
+    assert "future" in preview_response.json()["detail"]
+
+
 def test_market_daily_bars_repair_preview_does_not_create_sync_task(client, monkeypatch):
     registry = AdapterRegistry()
     registry.register(MultiSymbolDailyBarAdapter())
@@ -279,8 +332,8 @@ def test_market_daily_bars_repair_preview_does_not_create_sync_task(client, monk
             [
                 TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
                 TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 2), is_open=True, source="fixture"),
-                TradingCalendar(market="A_SHARE", trade_date=date(2099, 6, 1), is_open=True, source="fixture"),
-                TradingCalendar(market="A_SHARE", trade_date=date(2099, 6, 2), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 7, 1), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 7, 2), is_open=True, source="fixture"),
             ]
         )
         db.commit()
@@ -292,8 +345,8 @@ def test_market_daily_bars_repair_preview_does_not_create_sync_task(client, monk
         json={
             "source": "auto",
             "market": "A_SHARE",
-            "start_date": "2099-06-01",
-            "end_date": "2099-06-02",
+            "start_date": "2026-07-01",
+            "end_date": "2026-07-02",
             "max_symbols": 2,
             "adjust_type": "qfq",
         },
@@ -353,8 +406,8 @@ def test_market_daily_bars_repair_preview_limits_plan_by_max_symbols(client, mon
             [
                 TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
                 TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 2), is_open=True, source="fixture"),
-                TradingCalendar(market="A_SHARE", trade_date=date(2099, 6, 1), is_open=True, source="fixture"),
-                TradingCalendar(market="A_SHARE", trade_date=date(2099, 6, 2), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 7, 1), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 7, 2), is_open=True, source="fixture"),
             ]
         )
         db.commit()
@@ -366,8 +419,8 @@ def test_market_daily_bars_repair_preview_limits_plan_by_max_symbols(client, mon
         json={
             "source": "auto",
             "market": "A_SHARE",
-            "start_date": "2099-06-01",
-            "end_date": "2099-06-02",
+            "start_date": "2026-07-01",
+            "end_date": "2026-07-02",
             "max_symbols": 1,
         },
     )
@@ -484,8 +537,8 @@ def test_market_daily_bars_repair_preview_skips_a_share_index_rows(client, monke
         )
         db.add_all(
             [
-                TradingCalendar(market="A_SHARE", trade_date=date(2099, 6, 1), is_open=True, source="fixture"),
-                TradingCalendar(market="A_SHARE", trade_date=date(2099, 6, 2), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 7, 1), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 7, 2), is_open=True, source="fixture"),
             ]
         )
         db.commit()
@@ -497,8 +550,8 @@ def test_market_daily_bars_repair_preview_skips_a_share_index_rows(client, monke
         json={
             "source": "auto",
             "market": "A_SHARE",
-            "start_date": "2099-06-01",
-            "end_date": "2099-06-02",
+            "start_date": "2026-07-01",
+            "end_date": "2026-07-02",
             "max_symbols": 2,
         },
     )
@@ -598,7 +651,9 @@ def test_market_daily_bars_repair_expands_stock_pool_and_writes_per_symbol_batch
             max_symbols=2,
             adjust_type="qfq",
         )
-        batches = db.scalars(select(IngestBatch).where(IngestBatch.task_id == task.id).order_by(IngestBatch.symbol)).all()
+        batches = db.scalars(
+            select(IngestBatch).where(IngestBatch.task_id == task.id).order_by(IngestBatch.symbol)
+        ).all()
         logs = list(task.logs)
     finally:
         db.close()
@@ -771,7 +826,9 @@ def test_market_daily_bars_full_history_repair_uses_listing_date_batches(client,
             max_symbols=2,
             start_policy="listing_date",
         )
-        batches = db.scalars(select(IngestBatch).where(IngestBatch.task_id == task.id).order_by(IngestBatch.symbol)).all()
+        batches = db.scalars(
+            select(IngestBatch).where(IngestBatch.task_id == task.id).order_by(IngestBatch.symbol)
+        ).all()
         logs = list(task.logs)
     finally:
         db.close()
@@ -929,7 +986,10 @@ def test_market_daily_bars_repair_skips_failed_symbol_and_continues(client, tmp_
             max_symbols=2,
         )
         log_messages = [log.message for log in task.logs]
-        batches = db.scalars(select(IngestBatch).where(IngestBatch.task_id == task.id).order_by(IngestBatch.symbol)).all()
+        batches = db.scalars(
+            select(IngestBatch).where(IngestBatch.task_id == task.id).order_by(IngestBatch.symbol)
+        ).all()
+        versions = db.scalars(select(DatasetVersion)).all()
     finally:
         db.close()
 
@@ -942,9 +1002,13 @@ def test_market_daily_bars_repair_skips_failed_symbol_and_continues(client, tmp_
         page_size=10,
     )
 
-    assert task.status == "success"
+    assert task.status == "partial_success"
     assert task.records_read == 2
     assert task.records_written == 2
+    assert task.failed_symbols == ["920000"]
+    assert task.failed_chunks == ["920000:2026-06-01:2026-06-02"]
+    assert task.failure_reason == "1 market repair symbol(s) failed."
+    assert versions == []
     assert "Market repair symbol failed." in log_messages
     assert [batch.symbol for batch in batches] == ["600519", "920000"]
     batches_by_symbol = {batch.symbol: batch for batch in batches}
@@ -978,7 +1042,6 @@ def test_auto_daily_bars_sync_falls_back_and_writes_parquet(client, tmp_path):
         logs = list(task.logs)
         dataset = db.scalar(select(Dataset).where(Dataset.name == "daily_bars"))
         batches = db.scalars(select(IngestBatch).where(IngestBatch.task_id == task.id).order_by(IngestBatch.id)).all()
-        artifact = db.scalar(select(RawArtifact).where(RawArtifact.id == batches[0].raw_artifact_id)) if batches else None
     finally:
         db.close()
 
@@ -1008,20 +1071,16 @@ def test_auto_daily_bars_sync_falls_back_and_writes_parquet(client, tmp_path):
     assert batches[0].normalized_records == 2
     assert batches[0].records_written == 2
     assert batches[0].validation_errors_json == []
-    assert batches[0].raw_artifact_id is not None
-    assert artifact is not None
-    assert artifact.source == "success_daily"
-    assert artifact.row_count == 2
-    assert RawArtifactStore.read(artifact.uri)["records"] == [
-        {"trade_date": "2026-06-01", "close": 1675.0},
-        {"trade_date": "2026-06-02", "close": 1688.0},
-    ]
     assert total == 2
     assert items[0]["symbol"] == "600519"
     assert items[0]["source"] == "success_daily"
     assert items[0]["adjust_type"] == "hfq"
     assert items[0]["ingested_at"] is not None
-    assert any(log.message == "Provider attempt failed." and log.payload_json["source"] == "failing_daily" for log in logs)
+    assert any(
+        log.message == "Provider attempt failed."
+        and log.payload_json["source"] == "failing_daily"
+        for log in logs
+    )
     assert any(
         log.message == "Daily bars sync completed." and log.payload_json["selected_source"] == "success_daily"
         for log in logs
@@ -1097,3 +1156,87 @@ def test_daily_bars_schema_validation_failure_creates_failed_ingest_batch(client
     assert batches[0].source == "invalid_daily"
     assert batches[0].records_written == 0
     assert any("high" in error for error in batches[0].validation_errors_json)
+
+
+def test_empty_daily_bar_provider_result_fails_task_and_ingest_batch(client, tmp_path):
+    registry = AdapterRegistry()
+    registry.register(EmptyDailyBarAdapter())
+
+    db = SessionLocal()
+    try:
+        service = MarketDataSyncService(db, registry, lake_root=tmp_path / "lake")
+        task = service.run_daily_bars_sync(
+            source="empty_daily",
+            market="A_SHARE",
+            symbol="600519",
+            start_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 2),
+        )
+        batches = db.scalars(select(IngestBatch).where(IngestBatch.task_id == task.id)).all()
+    finally:
+        db.close()
+
+    assert task.status == "failed"
+    assert task.records_read == 0
+    assert task.records_written == 0
+    assert len(batches) == 1
+    assert batches[0].status == "failed"
+    assert any("no daily bar records" in error for error in batches[0].validation_errors_json)
+
+
+def test_daily_bar_validation_rejects_out_of_range_future_and_non_finite_values():
+    def make_bar(trade_date: date, close: float = 10.0) -> NormalizedDailyBar:
+        return NormalizedDailyBar(
+            symbol="600519",
+            exchange="SSE",
+            market="A_SHARE",
+            trade_date=trade_date,
+            open=close,
+            high=close,
+            low=close,
+            close=close,
+            pre_close=None,
+            volume=100.0,
+            amount=1000.0,
+            adjust_factor=1.0,
+            source="fixture",
+        )
+
+    errors = validate_daily_bar_records(
+        [
+            make_bar(date(2026, 6, 3)),
+            make_bar(date.today() + timedelta(days=1), close=inf),
+            make_bar(date(2026, 6, 2), close=nan),
+        ],
+        source="fixture",
+        market="A_SHARE",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 2),
+    )
+
+    assert any("trade_date must be within requested range" in error for error in errors)
+    assert any("trade_date cannot be in the future" in error for error in errors)
+    assert sum("must be finite" in error for error in errors) >= 2
+
+
+def test_daily_bar_validation_reports_invalid_ohlc_types_without_comparing_them():
+    invalid = NormalizedDailyBar(
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        trade_date=date(2026, 6, 2),
+        open=None,
+        high=10.0,
+        low=9.0,
+        close="invalid",
+        pre_close=None,
+        volume=100.0,
+        amount=1000.0,
+        adjust_factor=1.0,
+        source="fixture",
+    )
+
+    errors = validate_daily_bar_records([invalid], source="fixture", market="A_SHARE")
+
+    assert any("open must be numeric" in error for error in errors)
+    assert any("close must be numeric" in error for error in errors)

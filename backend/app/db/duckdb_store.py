@@ -8,45 +8,31 @@ from __future__ import annotations
 
 from pathlib import Path
 from threading import Lock
-from typing import Any
 
 import duckdb
 
 from backend.app.core.config import get_settings
 
-
-_CONN: duckdb.DuckDBPyConnection | None = None
-_DB_PATH: str = ""
+_CONNECTIONS: dict[str, duckdb.DuckDBPyConnection] = {}
 _WRITE_LOCK = Lock()
 
 
 def get_duckdb(db_path: str | Path | None = None) -> duckdb.DuckDBPyConnection:
-    """获取线程安全的持久 DuckDB 连接（单例）。"""
-    global _CONN, _DB_PATH
-
-    requested_path = str(db_path or get_settings().duckdb_path)
-    if _CONN is not None and _DB_PATH == requested_path:
-        return _CONN
-
-    if _CONN is not None:
-        try:
-            _CONN.close()
-        except Exception:
-            pass
-
-    path = Path(requested_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _CONN = duckdb.connect(str(path))
-    _DB_PATH = requested_path
-    _init_schema()
-    return _CONN
+    resolved_path = Path(db_path or get_settings().duckdb_path).expanduser().resolve()
+    key = str(resolved_path)
+    with _WRITE_LOCK:
+        connection = _CONNECTIONS.get(key)
+        if connection is None:
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+            connection = duckdb.connect(key)
+            _CONNECTIONS[key] = connection
+            _init_schema(connection)
+        return connection
 
 
-def _init_schema() -> None:
+def _init_schema(connection: duckdb.DuckDBPyConnection) -> None:
     """Auto-create tables if not exist."""
-    if _CONN is None:
-        return
-    _CONN.execute("""
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS daily_bars (
             symbol          VARCHAR,
             exchange        VARCHAR,
@@ -65,7 +51,7 @@ def _init_schema() -> None:
             ingested_at     TIMESTAMP
         )
     """)
-    _CONN.execute("""
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS factors_daily (
             symbol      VARCHAR,
             trade_date  DATE,
@@ -73,7 +59,7 @@ def _init_schema() -> None:
             value       DOUBLE
         )
     """)
-    _CONN.execute("""
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS financials_quarterly (
             symbol      VARCHAR,
             report_date DATE,
@@ -87,60 +73,94 @@ def write_daily_bars(rows: list[dict], *, db_path: str | Path | None = None) -> 
     """将行情数据写入 DuckDB 持久表（幂等去重 + 线程安全），批量 INSERT VALUES 加速。"""
     if not rows:
         return 0
-    con = get_duckdb(db_path=db_path)
+    con = get_duckdb(db_path)
     with _WRITE_LOCK:
-        # Build bulk VALUES clause using parameterized approach via temp table
-        chunk_size = 5000
-        written_total = 0
-        for i in range(0, len(rows), chunk_size):
-            chunk = rows[i : i + chunk_size]
-            con.execute("CREATE TEMP TABLE IF NOT EXISTS _tmp_bars AS SELECT * FROM daily_bars WHERE 1=0")
-            con.executemany(
-                "INSERT INTO _tmp_bars VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                [(
-                    r.get("symbol"),
-                    r.get("exchange"),
-                    r.get("market"),
-                    r.get("trade_date"),
-                    r.get("open"),
-                    r.get("high"),
-                    r.get("low"),
-                    r.get("close"),
-                    r.get("pre_close"),
-                    r.get("volume"),
-                    r.get("amount"),
-                    r.get("adjust_factor"),
-                    r.get("adjust_type") or "none",
-                    r.get("source"),
-                    r.get("ingested_at"),
-                ) for r in chunk],
-            )
-            # Dedup insert: only rows not already in daily_bars
-            result = con.execute("""
-                INSERT INTO daily_bars
-                SELECT DISTINCT * FROM _tmp_bars
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM daily_bars d
-                    WHERE d.symbol = _tmp_bars.symbol
-                      AND d.exchange = _tmp_bars.exchange
-                      AND d.market = _tmp_bars.market
-                      AND d.trade_date = _tmp_bars.trade_date
-                      AND d.adjust_type = _tmp_bars.adjust_type
-                )
-            """)
-            written_total += result.fetchone()[0]
-            con.execute("DROP TABLE IF EXISTS _tmp_bars")
+        key_columns = ("symbol", "exchange", "market", "trade_date", "adjust_type")
+        value_columns = (
+            "symbol", "exchange", "market", "trade_date", "open", "high", "low",
+            "close", "pre_close", "volume", "amount", "adjust_factor", "adjust_type",
+            "source", "ingested_at",
+        )
 
-        return written_total
+        def row_values(row: dict) -> tuple:
+            return tuple(row.get(column) for column in value_columns)
+
+        deduped = {}
+        for row in rows:
+            key = tuple(
+                row.get(column) if column != "adjust_type" else row.get(column) or "none"
+                for column in key_columns
+            )
+            deduped[key] = row
+        candidate_rows = list(deduped.values())
+        con.execute("DROP TABLE IF EXISTS _tmp_bars")
+        con.execute("CREATE TEMP TABLE _tmp_bars AS SELECT * FROM daily_bars WHERE 1=0")
+        con.executemany(
+            "INSERT INTO _tmp_bars VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [row_values(row) for row in candidate_rows],
+        )
+        existing_rows = con.execute(
+            """
+            SELECT d.symbol, d.exchange, d.market, d.trade_date, d.adjust_type,
+                   d.open, d.high, d.low, d.close, d.pre_close, d.volume, d.amount,
+                   d.adjust_factor, d.source, d.ingested_at
+            FROM daily_bars d
+            JOIN _tmp_bars t
+              ON d.symbol = t.symbol AND d.exchange = t.exchange
+             AND d.market = t.market AND d.trade_date = t.trade_date
+             AND d.adjust_type = t.adjust_type
+            """
+        ).fetchall()
+        existing_by_key = {
+            tuple(row[:5]): tuple(row[:4]) + tuple(row[5:13]) + (row[4],) + tuple(row[13:])
+            for row in existing_rows
+        }
+        changed_rows = []
+        for row in candidate_rows:
+            key = tuple(
+                row.get(column) if column != "adjust_type" else row.get(column) or "none"
+                for column in key_columns
+            )
+            existing = existing_by_key.get(key)
+            if existing is None or existing[:-1] != row_values(row)[:-1]:
+                changed_rows.append(row)
+        con.execute("DROP TABLE IF EXISTS _tmp_bars")
+        if not changed_rows:
+            return 0
+        con.execute("CREATE TEMP TABLE _tmp_bars AS SELECT * FROM daily_bars WHERE 1=0")
+        con.executemany(
+            "INSERT INTO _tmp_bars VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [row_values(row) for row in changed_rows],
+        )
+        try:
+            con.execute("BEGIN TRANSACTION")
+            con.execute(
+                """
+                DELETE FROM daily_bars d USING _tmp_bars t
+                WHERE d.symbol = t.symbol AND d.exchange = t.exchange
+                  AND d.market = t.market AND d.trade_date = t.trade_date
+                  AND d.adjust_type = t.adjust_type
+                """
+            )
+            con.execute("INSERT INTO daily_bars SELECT * FROM _tmp_bars")
+            con.execute("COMMIT")
+        except Exception:
+            try:
+                con.execute("ROLLBACK")
+            finally:
+                con.execute("DROP TABLE IF EXISTS _tmp_bars")
+            raise
+        con.execute("DROP TABLE IF EXISTS _tmp_bars")
+        return len(changed_rows)
 
 
 def close_duckdb() -> None:
     """优雅关闭。"""
-    global _CONN, _DB_PATH
-    if _CONN is not None:
+    with _WRITE_LOCK:
+        connections = list(_CONNECTIONS.values())
+        _CONNECTIONS.clear()
+    for connection in connections:
         try:
-            _CONN.close()
+            connection.close()
         except Exception:
             pass
-        _CONN = None
-        _DB_PATH = ""

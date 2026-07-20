@@ -16,6 +16,7 @@ def _published_version(
     version_seq: int = 1,
     dataset: Dataset | None = None,
     adjust_type: str = "none",
+    bundle_key: str = "bundle-a",
 ) -> tuple[Dataset, DatasetVersion]:
     if dataset is None:
         dataset = Dataset(name=dataset_name, layer="silver", storage_type="parquet", source="fixture")
@@ -30,6 +31,7 @@ def _published_version(
         normalize_version="v1",
         schema_sha256="a" * 64,
         adjust_type=adjust_type,
+        bundle_key=bundle_key,
         quality_status="good",
         row_count=1,
         min_trade_date=date(2026, 7, 18),
@@ -52,21 +54,52 @@ def _published_version(
     return dataset, version
 
 
+def _published_bundle(db, *, bundle_key: str = "bundle-a"):
+    dataset, none_version = _published_version(
+        db, dataset_name="daily_bars", version_seq=1, adjust_type="none", bundle_key=bundle_key
+    )
+    _, qfq_version = _published_version(
+        db,
+        dataset_name="daily_bars",
+        version_seq=2,
+        dataset=dataset,
+        adjust_type="qfq",
+        bundle_key=bundle_key,
+    )
+    _, hfq_version = _published_version(
+        db,
+        dataset_name="daily_bars",
+        version_seq=3,
+        dataset=dataset,
+        adjust_type="hfq",
+        bundle_key=bundle_key,
+    )
+    return dataset, {
+        "bars-none": none_version,
+        "bars-qfq": qfq_version,
+        "bars-hfq": hfq_version,
+    }
+
+
+def _add_bundle(repository, snapshot, dataset, versions) -> None:
+    for role, version in versions.items():
+        repository.add_member(snapshot, dataset=dataset, version=version, role=role)
+
+
 def test_snapshot_can_activate_only_published_version(client):
     db = SessionLocal()
     try:
-        dataset, version = _published_version(db, dataset_name="daily_bars")
+        dataset, versions = _published_bundle(db)
         repository = SnapshotRepository(db)
         snapshot = repository.create_draft(name="research-2026-07-18")
-        repository.add_member(snapshot, dataset=dataset, version=version, role="bars")
+        _add_bundle(repository, snapshot, dataset, versions)
 
         activated = repository.activate(snapshot)
         db.commit()
 
         assert activated.status == "active"
         assert activated.activated_at is not None
-        assert len(activated.members) == 1
-        assert activated.members[0].role == "bars"
+        assert len(activated.members) == 3
     finally:
         db.close()
 
@@ -107,15 +140,15 @@ def test_snapshot_rejects_unpublished_version_and_empty_activation(client):
 def test_activating_new_snapshot_retires_previous_active_snapshot(client):
     db = SessionLocal()
     try:
-        dataset, version = _published_version(db, dataset_name="daily_bars")
+        dataset, versions = _published_bundle(db)
         repository = SnapshotRepository(db)
         first = repository.create_draft(name="first")
-        repository.add_member(first, dataset=dataset, version=version, role="bars")
+        _add_bundle(repository, first, dataset, versions)
         repository.activate(first)
         db.commit()
 
         second = repository.create_draft(name="second")
-        repository.add_member(second, dataset=dataset, version=version, role="bars")
+        _add_bundle(repository, second, dataset, versions)
         repository.activate(second)
         db.commit()
 
@@ -203,13 +236,18 @@ def test_snapshot_rejects_duplicate_role(client):
 def test_active_snapshot_cannot_be_modified(client):
     db = SessionLocal()
     try:
-        dataset, version = _published_version(db, dataset_name="daily_bars")
+        dataset, versions = _published_bundle(db)
         repository = SnapshotRepository(db)
         snapshot = repository.create_draft(name="immutable")
-        repository.add_member(snapshot, dataset=dataset, version=version, role="bars")
+        _add_bundle(repository, snapshot, dataset, versions)
         repository.activate(snapshot)
 
         with pytest.raises(ValueError, match="active"):
-            repository.add_member(snapshot, dataset=dataset, version=version, role="calendar")
+            repository.add_member(
+                snapshot,
+                dataset=dataset,
+                version=versions["bars-none"],
+                role="calendar",
+            )
     finally:
         db.close()

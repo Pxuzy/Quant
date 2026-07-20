@@ -234,14 +234,21 @@ class DataQualityService:
         # missing_trade_dates
         trade_dates_by_market: dict[str, set[date]] = defaultdict(set)
         trade_dates_by_symbol: dict[tuple[str, str], set[date]] = defaultdict(set)
+        trade_dates_by_market_adjustment: dict[tuple[str, str], set[date]] = defaultdict(set)
+        trade_dates_by_symbol_adjustment: dict[tuple[str, str, str], set[date]] = defaultdict(set)
         for row in rows:
             market = row.get("market")
             symbol = row.get("symbol")
             trade_date = row.get("trade_date")
             if market and isinstance(trade_date, date):
-                trade_dates_by_market[str(market)].add(trade_date)
+                market_code = str(market)
+                adjust_type = str(row.get("adjust_type") or "none")
+                trade_dates_by_market[market_code].add(trade_date)
+                trade_dates_by_market_adjustment[(market_code, adjust_type)].add(trade_date)
                 if symbol:
-                    trade_dates_by_symbol[(str(market), str(symbol))].add(trade_date)
+                    symbol_code = str(symbol)
+                    trade_dates_by_symbol[(market_code, symbol_code)].add(trade_date)
+                    trade_dates_by_symbol_adjustment[(market_code, symbol_code, adjust_type)].add(trade_date)
 
         for market, actual_dates in sorted(trade_dates_by_market.items()):
             if not actual_dates:
@@ -256,6 +263,31 @@ class DataQualityService:
             reports.append(self._report(dataset, "missing_trade_date", "warning", "warning",
                 f"{market}_missing_open_days", str(len(missing_dates)), "0",
                 f"{market} 日线数据缺少 {len(missing_dates)} 个开市日行情，示例：{sample}。", checked_at))
+
+        for (market, adjust_type), actual_dates in sorted(trade_dates_by_market_adjustment.items()):
+            market_dates = trade_dates_by_market.get(market, set())
+            if not actual_dates or not market_dates:
+                continue
+            open_dates = self._open_calendar_dates(
+                market=market,
+                start_date=min(market_dates),
+                end_date=max(market_dates),
+            )
+            missing_dates = [td for td in open_dates if td not in actual_dates]
+            if not missing_dates:
+                continue
+            sample = "、".join(td.isoformat() for td in missing_dates[:5])
+            reports.append(self._report(
+                dataset,
+                "missing_trade_date_by_adjustment",
+                "warning",
+                "warning",
+                f"{market}_{adjust_type}_missing_open_days",
+                str(len(missing_dates)),
+                "0",
+                f"{market} {adjust_type} 日线数据缺少 {len(missing_dates)} 个开市日行情，示例：{sample}。",
+                checked_at,
+            ))
 
         missing_symbol_count = 0
         missing_day_count = 0
@@ -286,6 +318,40 @@ class DataQualityService:
                 f"{missing_symbol_count} symbols / {missing_day_count} days", "0",
                 f"有 {missing_symbol_count} 只股票缺少开市日行情，共缺 {missing_day_count} 个股票-交易日，示例：{'、'.join(samples)}。",
                 checked_at))
+
+        missing_adjustment_symbol_count = 0
+        missing_adjustment_day_count = 0
+        adjustment_samples: list[str] = []
+        for (market, symbol, adjust_type), actual_dates in sorted(trade_dates_by_symbol_adjustment.items()):
+            market_dates = trade_dates_by_market.get(market, set())
+            if not actual_dates or not market_dates:
+                continue
+            start_date, end_date = min(market_dates), max(market_dates)
+            cache_key = (market, start_date, end_date)
+            if cache_key not in calendar_cache:
+                calendar_cache[cache_key] = self._open_calendar_dates(
+                    market=market, start_date=start_date, end_date=end_date)
+            missing_dates = [td for td in calendar_cache[cache_key] if td not in actual_dates]
+            if not missing_dates:
+                continue
+            missing_adjustment_symbol_count += 1
+            missing_adjustment_day_count += len(missing_dates)
+            if len(adjustment_samples) < 5:
+                adjustment_samples.append(f"{symbol}/{adjust_type}:{missing_dates[0].isoformat()}")
+        if missing_adjustment_symbol_count > 0:
+            reports.append(self._report(
+                dataset,
+                "missing_trade_date_by_symbol_adjustment",
+                "warning",
+                "warning",
+                "symbol_adjustments_missing_open_days",
+                f"{missing_adjustment_symbol_count} symbol-adjustments / {missing_adjustment_day_count} days",
+                "0",
+                "有 "
+                f"{missing_adjustment_symbol_count} 个股票-复权口径缺少开市日行情，"
+                f"共缺 {missing_adjustment_day_count} 个股票-复权-交易日，示例：{'、'.join(adjustment_samples)}。",
+                checked_at,
+            ))
 
         # stock_pool_coverage
         covered_symbols_by_market: dict[str, set[str]] = defaultdict(set)

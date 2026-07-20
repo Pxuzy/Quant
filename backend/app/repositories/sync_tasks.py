@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import socket
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 
@@ -117,12 +119,31 @@ class SyncTaskRepository:
             .limit(1)
         )
 
-    def mark_running(self, task: SyncTask) -> None:
+    def mark_running(
+        self,
+        task: SyncTask,
+        *,
+        owner: str | None = None,
+        lease_seconds: int = 1800,
+    ) -> None:
+        if lease_seconds < 1:
+            raise ValueError("lease_seconds must be greater than 0")
+        lease_owner = owner or f"{socket.gethostname()}:{os.getpid()}"
         started_at = datetime.now(timezone.utc)
+        lease_expires_at = started_at + timedelta(seconds=lease_seconds)
         result = self.db.execute(
             update(SyncTask)
             .where(SyncTask.id == task.id, SyncTask.status == "pending")
-            .values(status="running", progress=5, started_at=started_at)
+            .values(
+                status="running",
+                progress=5,
+                started_at=started_at,
+                heartbeat_at=started_at,
+                lease_owner=lease_owner,
+                lease_expires_at=lease_expires_at,
+                attempt=SyncTask.attempt + 1,
+                failure_reason=None,
+            )
         )
         if result.rowcount != 1:
             self.db.rollback()
@@ -134,39 +155,172 @@ class SyncTaskRepository:
             task,
             level="info",
             message="Sync task claimed by lightweight worker.",
-            payload={"task_type": task.task_type, "source": task.source, "market": task.market, "symbol": task.symbol},
+            payload={
+                "task_type": task.task_type,
+                "source": task.source,
+                "market": task.market,
+                "symbol": task.symbol,
+                "lease_owner": task.lease_owner,
+                "lease_expires_at": task.lease_expires_at.isoformat() if task.lease_expires_at else None,
+                "attempt": task.attempt,
+            },
         )
         self.db.commit()
         self.db.refresh(task)
+        task._lease_fence_owner = task.lease_owner
+        task._lease_fence_attempt = task.attempt
 
-    def complete(self, task: SyncTask, *, records_read: int, records_written: int) -> None:
-        task.status = "success"
-        task.progress = 100
-        task.records_read = records_read
-        task.records_written = records_written
-        task.finished_at = datetime.now(timezone.utc)
-        task.error_message = None
+    def heartbeat(
+        self,
+        task: SyncTask,
+        *,
+        owner: str,
+        attempt: int | None = None,
+        lease_seconds: int = 1800,
+    ) -> bool:
+        if lease_seconds < 1:
+            raise ValueError("lease_seconds must be greater than 0")
+        now = datetime.now(timezone.utc)
+        conditions = [
+            SyncTask.id == task.id,
+            SyncTask.status == "running",
+            SyncTask.lease_owner == owner,
+        ]
+        if attempt is not None:
+            conditions.append(SyncTask.attempt == attempt)
+        result = self.db.execute(
+            update(SyncTask)
+            .where(*conditions)
+            .values(
+                heartbeat_at=now,
+                lease_expires_at=now + timedelta(seconds=lease_seconds),
+            )
+        )
         self.db.flush()
+        if result.rowcount != 1:
+            return False
+        self.db.refresh(task)
+        return True
+
+    def require_heartbeat(self, task: SyncTask, *, lease_seconds: int = 1800) -> None:
+        owner = getattr(task, "_lease_fence_owner", task.lease_owner)
+        attempt = getattr(task, "_lease_fence_attempt", task.attempt)
+        if not owner or not self.heartbeat(
+            task,
+            owner=owner,
+            attempt=attempt,
+            lease_seconds=lease_seconds,
+        ):
+            self.db.rollback()
+            raise RuntimeError(f"Sync task {task.id} lost its worker lease.")
+
+    def complete(
+        self,
+        task: SyncTask,
+        *,
+        records_read: int,
+        records_written: int,
+        failed_symbols: list[str] | None = None,
+        failed_chunks: list[str] | None = None,
+        failure_reason: str | None = None,
+    ) -> None:
+        failed_symbols = list(dict.fromkeys(failed_symbols or []))
+        failed_chunks = list(dict.fromkeys(failed_chunks or []))
+        has_failures = bool(failed_symbols or failed_chunks or failure_reason)
+        status = (
+            "partial_success"
+            if has_failures and records_written > 0
+            else "failed"
+            if has_failures
+            else "success"
+        )
+        owner = getattr(task, "_lease_fence_owner", task.lease_owner)
+        attempt = getattr(task, "_lease_fence_attempt", task.attempt)
+        result = self.db.execute(
+            update(SyncTask)
+            .where(
+                SyncTask.id == task.id,
+                SyncTask.status == "running",
+                SyncTask.lease_owner == owner,
+                SyncTask.attempt == attempt,
+            )
+            .values(
+                status=status,
+                progress=100,
+                records_read=records_read,
+                records_written=records_written,
+                failed_symbols=failed_symbols,
+                failed_chunks=failed_chunks,
+                failure_reason=failure_reason,
+                finished_at=datetime.now(timezone.utc),
+                error_message=failure_reason if status == "failed" else None,
+                heartbeat_at=None,
+                lease_owner=None,
+                lease_expires_at=None,
+            )
+        )
+        if result.rowcount != 1:
+            self.db.rollback()
+            raise RuntimeError(f"Sync task {task.id} lost its worker lease before completion.")
+        self.db.flush()
+        self.db.refresh(task)
 
     def fail(self, task: SyncTask, *, message: str, records_read: int = 0, records_written: int = 0) -> None:
-        task.status = "failed"
-        task.progress = 100
-        task.records_read = records_read
-        task.records_written = records_written
-        task.error_message = message
-        task.finished_at = datetime.now(timezone.utc)
-        self.db.flush()
+        conditions = [SyncTask.id == task.id]
+        owner = getattr(task, "_lease_fence_owner", None)
+        attempt = getattr(task, "_lease_fence_attempt", None)
+        if owner is not None and attempt is not None:
+            conditions.extend(
+                [
+                    SyncTask.status == "running",
+                    SyncTask.lease_owner == owner,
+                    SyncTask.attempt == attempt,
+                ]
+            )
+        else:
+            conditions.append(SyncTask.status.in_(["pending", "running"]))
+        result = self.db.execute(
+            update(SyncTask)
+            .where(*conditions)
+            .values(
+                status="failed",
+                progress=100,
+                records_read=records_read,
+                records_written=records_written,
+                failed_symbols=list(task.failed_symbols or []),
+                failed_chunks=list(task.failed_chunks or []),
+                failure_reason=message,
+                error_message=message,
+                finished_at=datetime.now(timezone.utc),
+                heartbeat_at=None,
+                lease_owner=None,
+                lease_expires_at=None,
+            )
+        )
+        if result.rowcount == 1:
+            self.db.flush()
+            self.db.refresh(task)
 
     def recover_stale_tasks(self, timeout_minutes: int = 30) -> int:
         """将运行超过 timeout_minutes 且仍为 running 状态的任务重置为 pending。
 
         用于 worker 崩溃恢复。返回恢复的任务数。
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(minutes=timeout_minutes)
         stale = list(
             self.db.scalars(
                 select(SyncTask)
-                .where(SyncTask.status == "running", SyncTask.started_at < cutoff)
+                .where(
+                    SyncTask.status == "running",
+                    (
+                        (SyncTask.lease_expires_at.is_not(None) & (SyncTask.lease_expires_at < now))
+                        | (
+                            SyncTask.lease_expires_at.is_(None)
+                            & (SyncTask.started_at < cutoff)
+                        )
+                    ),
+                )
                 .limit(50)
             ).all()
         )
@@ -175,6 +329,9 @@ class SyncTaskRepository:
         for task in stale:
             task.status = "pending"
             task.progress = 0
+            task.lease_owner = None
+            task.heartbeat_at = None
+            task.lease_expires_at = None
             task.error_message = f"Auto-recovered from stale running state (started at {task.started_at})"
         self.db.flush()
         self.db.commit()
@@ -242,7 +399,7 @@ class SyncTaskRepository:
         created_after: datetime,
     ) -> SyncTask | None:
         """Find a recent task matching the given criteria.
-        
+
         Used for idempotency checks — returns the most recent task that:
         - matches task_type, source, market
         - has one of the given statuses

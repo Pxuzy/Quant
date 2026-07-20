@@ -63,6 +63,7 @@ class RawDailyBarsReplayService:
                     f"Raw artifact row count mismatch: expected {artifact.row_count}, got {len(records)}"
                 )
             records_read = len(records)
+            self.task_repo.require_heartbeat(task)
             artifact_adjust_type = artifact.adjust_type or envelope.get("adjust_type")
             if not artifact_adjust_type:
                 raise RuntimeError(f"Raw artifact {artifact.id} has no recorded adjust_type.")
@@ -83,7 +84,11 @@ class RawDailyBarsReplayService:
                 for record in adapter.normalize_daily_bars(records)
             ]
 
-            service = MarketDataSyncService(self.db, registry=self.registry)
+            service = MarketDataSyncService(
+                self.db,
+                registry=self.registry,
+                lake_root=raw_store.lake_root,
+            )
             records_written = service.ingest_pipeline.write_normalized(
                 normalized=normalized,
                 raw_records_count=records_read,
@@ -96,6 +101,8 @@ class RawDailyBarsReplayService:
                 requested_source="replay",
                 raw_artifact_id=artifact.id,
             )
+            self.task_repo.require_heartbeat(task)
+            service._publish_daily_bars_version(task=task, source="replay")
             self.task_repo.complete(task, records_read=records_read, records_written=records_written)
             self.task_repo.add_log(
                 task,

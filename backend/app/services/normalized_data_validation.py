@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from math import isfinite
 from typing import Iterable
 
 from backend.app.adapters.base import NormalizedDailyBar, NormalizedStock, NormalizedTradingCalendar
@@ -33,28 +34,59 @@ def validate_stock_records(records: Iterable[NormalizedStock], *, source: str, m
     return errors
 
 
-def validate_daily_bar_records(records: Iterable[NormalizedDailyBar], *, source: str, market: str) -> list[str]:
+def validate_daily_bar_records(
+    records: Iterable[NormalizedDailyBar],
+    *,
+    source: str,
+    market: str,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[str]:
+    records = list(records)
+    if not records:
+        return ["no daily bar records returned by provider."]
+
     errors: list[str] = []
     seen: set[tuple[str, str, str, date, str]] = set()
     for index, record in enumerate(records):
-        row = _row_label(index, f"{record.symbol}/{record.trade_date.isoformat()}")
+        trade_date_label = record.trade_date.isoformat() if isinstance(record.trade_date, date) else record.trade_date
+        row = _row_label(index, f"{record.symbol}/{trade_date_label}")
         _validate_source(errors, row=row, actual=record.source, expected=source)
         _validate_market(errors, row=row, actual=record.market, expected=market)
         _validate_exchange(errors, row=row, exchange=record.exchange)
         if not record.symbol:
             errors.append(f"{row}: symbol is required.")
+        if not isinstance(record.trade_date, date):
+            errors.append(f"{row}: trade_date must be a date.")
+        else:
+            if start_date is not None and record.trade_date < start_date:
+                errors.append(f"{row}: trade_date must be within requested range.")
+            if end_date is not None and record.trade_date > end_date:
+                errors.append(f"{row}: trade_date must be within requested range.")
+            if record.trade_date > date.today():
+                errors.append(f"{row}: trade_date cannot be in the future.")
         for field_name in ("open", "high", "low", "close", "volume", "amount"):
             value = getattr(record, field_name)
             if not isinstance(value, int | float):
                 errors.append(f"{row}: {field_name} must be numeric.")
+            elif not isfinite(value):
+                errors.append(f"{row}: {field_name} must be finite.")
             elif value < 0:
                 errors.append(f"{row}: {field_name} cannot be negative.")
-        if record.high < record.low:
-            errors.append(f"{row}: high cannot be lower than low.")
-        if record.high < max(record.open, record.close):
-            errors.append(f"{row}: high must be >= open and close.")
-        if record.low > min(record.open, record.close):
-            errors.append(f"{row}: low must be <= open and close.")
+        for field_name in ("pre_close", "adjust_factor"):
+            value = getattr(record, field_name)
+            if value is not None and (
+                not isinstance(value, int | float) or not isfinite(value)
+            ):
+                errors.append(f"{row}: {field_name} must be finite when provided.")
+        ohlc_values = (record.open, record.high, record.low, record.close)
+        if all(isinstance(value, int | float) and isfinite(value) for value in ohlc_values):
+            if record.high < record.low:
+                errors.append(f"{row}: high cannot be lower than low.")
+            if record.high < max(record.open, record.close):
+                errors.append(f"{row}: high must be >= open and close.")
+            if record.low > min(record.open, record.close):
+                errors.append(f"{row}: low must be <= open and close.")
         if record.adjust_type not in ADJUST_TYPES:
             errors.append(f"{row}: adjust_type '{record.adjust_type}' is not supported.")
         if record.ingested_at is None:

@@ -66,9 +66,16 @@ class SyncTaskRead(BaseModel):
     progress: int
     records_read: int
     records_written: int
+    failed_symbols: list[str] = Field(default_factory=list)
+    failed_chunks: list[str] = Field(default_factory=list)
+    failure_reason: str | None = None
     error_message: str | None
     started_at: datetime | None
     finished_at: datetime | None
+    heartbeat_at: datetime | None = None
+    lease_owner: str | None = None
+    lease_expires_at: datetime | None = None
+    attempt: int = 0
     created_at: datetime
     candidate_sources: list[str] | None = None
     selected_source: str | None = None
@@ -96,9 +103,16 @@ class SyncTaskRead(BaseModel):
             "progress": _task_field_value(value, "progress"),
             "records_read": _task_field_value(value, "records_read"),
             "records_written": _task_field_value(value, "records_written"),
+            "failed_symbols": _task_field_value(value, "failed_symbols"),
+            "failed_chunks": _task_field_value(value, "failed_chunks"),
+            "failure_reason": _task_field_value(value, "failure_reason"),
             "error_message": _task_field_value(value, "error_message"),
             "started_at": _task_field_value(value, "started_at"),
             "finished_at": _task_field_value(value, "finished_at"),
+            "heartbeat_at": _task_field_value(value, "heartbeat_at"),
+            "lease_owner": _task_field_value(value, "lease_owner"),
+            "lease_expires_at": _task_field_value(value, "lease_expires_at"),
+            "attempt": _task_field_value(value, "attempt"),
             "created_at": _task_field_value(value, "created_at"),
             "candidate_sources": candidate_sources,
             "selected_source": selected_source,
@@ -204,6 +218,7 @@ class SyncRunnerStatusRead(BaseModel):
     pending_count: int
     running_count: int
     failed_count: int
+    partial_success_count: int = 0
     success_count: int
     enabled_schedules: int
     total_schedules: int

@@ -26,6 +26,7 @@ from backend.app.repositories.stocks import StockRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.repositories.trading_calendars import TradingCalendarRepository
 from backend.app.services.daily_bar_ingest_pipeline import DailyBarIngestPipeline
+from backend.app.services.dataset_version_publisher import DatasetVersionPublisher
 from backend.app.services.market_repair_planner import MarketRepairPlanner
 from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE
 
@@ -54,6 +55,11 @@ class MarketDataSyncService(_MarketRepairMixin):
         self.dataset_repo = DatasetRepository(db)
         self.ingest_batch_repo = IngestBatchRepository(db)
         self.daily_bar_repo = DailyBarRepository(lake_root=lake_root)
+        self.dataset_version_publisher = DatasetVersionPublisher(
+            db,
+            lake_root=self.daily_bar_repo.lake_root,
+            source_repo=self.daily_bar_repo,
+        )
         self.stock_repo = StockRepository(db)
         self.task_repo = SyncTaskRepository(db)
         self.trading_calendar_repo = TradingCalendarRepository(db)
@@ -74,6 +80,7 @@ class MarketDataSyncService(_MarketRepairMixin):
     def _refresh_deep_modules(self) -> None:
         self.ingest_pipeline.daily_bar_repo = self.daily_bar_repo
         self.market_repair_planner.daily_bar_repo = self.daily_bar_repo
+        self.dataset_version_publisher.source_repo = self.daily_bar_repo
 
     def create_daily_bars_sync_task(
         self,
@@ -169,7 +176,10 @@ class MarketDataSyncService(_MarketRepairMixin):
             if not data_source.enabled:
                 raise RuntimeError(f"Data source '{task.source}' is disabled.")
 
+            self.task_repo.require_heartbeat(task)
             records_read, records_written = self._sync_with_adapter(task=task, adapter=adapter)
+            self.task_repo.require_heartbeat(task)
+            self._publish_daily_bars_version(task=task, source=adapter.code)
             self.task_repo.complete(task, records_read=records_read, records_written=records_written)
             self.task_repo.add_log(
                 task,
@@ -310,7 +320,10 @@ class MarketDataSyncService(_MarketRepairMixin):
                     },
                 )
                 try:
+                    self.task_repo.require_heartbeat(task)
                     records_read, records_written = self._sync_with_adapter(task=task, adapter=adapter)
+                    self.task_repo.require_heartbeat(task)
+                    self._publish_daily_bars_version(task=task, source=adapter.code)
                 except Exception as exc:
                     error_message = str(exc)
                     errors.append(f"{adapter.code}: {error_message}")
@@ -412,6 +425,14 @@ class MarketDataSyncService(_MarketRepairMixin):
             requested_source=requested_source,
         )
 
+    def _publish_daily_bars_version(self, *, task: SyncTask, source: str | None = None):
+        self._refresh_deep_modules()
+        self.task_repo.require_heartbeat(task)
+        return self.dataset_version_publisher.publish_daily_bars(
+            adjust_type=self._task_adjust_type(task),
+            source=source or task.source,
+        )
+
     def _has_daily_bar_batch(
         self,
         *,
@@ -434,6 +455,8 @@ class MarketDataSyncService(_MarketRepairMixin):
     def _validate_date_range(*, start_date: date, end_date: date) -> None:
         if start_date > end_date:
             raise ValueError("start_date must be before or equal to end_date.")
+        if end_date > date.today():
+            raise ValueError("date range cannot be in the future.")
 
     @staticmethod
     def _task_adjust_type(task: SyncTask) -> str:

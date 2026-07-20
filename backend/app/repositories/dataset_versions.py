@@ -52,6 +52,7 @@ class DatasetVersionRepository:
             normalize_version=str(manifest["normalize_version"]),
             schema_sha256=str(manifest["schema_sha256"]),
             adjust_type=str(manifest["adjust_type"]),
+            bundle_key=str(manifest["bundle_key"]) if manifest.get("bundle_key") else None,
             quality_policy_version=str(quality.get("policy")) if quality.get("policy") else None,
             quality_status=str(quality.get("status") or "unknown"),
             row_count=int(manifest["row_count"]),
@@ -80,7 +81,7 @@ class DatasetVersionRepository:
     def mark_ready(self, version: DatasetVersion) -> DatasetVersion:
         if version.status != "candidate":
             raise ValueError(f"only candidate versions can become ready; current status={version.status}")
-        if version.quality_status not in {"good", "warning"}:
+        if version.quality_status != "good":
             raise ValueError("quality gate must pass before version becomes ready")
         if not version.partitions:
             raise ValueError("version must contain at least one partition before becoming ready")

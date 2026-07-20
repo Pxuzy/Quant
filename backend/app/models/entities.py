@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from typing import ClassVar
 
 from sqlalchemy import (
     JSON,
@@ -136,6 +137,8 @@ class StockBoardMember(Base):
 
 class SyncTask(Base):
     __tablename__ = "sync_tasks"
+    _lease_fence_owner: ClassVar[str | None] = None
+    _lease_fence_attempt: ClassVar[int | None] = None
     __table_args__ = (
         Index(
             "uq_sync_tasks_active_raw_replay",
@@ -166,8 +169,15 @@ class SyncTask(Base):
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_read: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_written: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_symbols: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    failed_chunks: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
@@ -331,6 +341,7 @@ class DatasetVersion(Base):
     normalize_version: Mapped[str] = mapped_column(String(32), nullable=False)
     schema_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     adjust_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    bundle_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     quality_policy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

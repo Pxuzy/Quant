@@ -19,6 +19,8 @@ class Settings:
 
 @lru_cache
 def get_settings() -> Settings:
+    data_lake_dir = os.getenv("DATA_LAKE_DIR", "./storage/lake")
+    default_duckdb_path = Path(data_lake_dir).expanduser().resolve() / "quant.duckdb"
     return Settings(
         app_name=os.getenv("APP_NAME", "Quant API"),
         environment=os.getenv("APP_ENV", "local"),
@@ -27,8 +29,8 @@ def get_settings() -> Settings:
             "CORS_ORIGINS",
             ("http://127.0.0.1:5173", "http://localhost:5173"),
         ),
-        data_lake_dir=os.getenv("DATA_LAKE_DIR", "./storage/lake"),
-        duckdb_path=os.getenv("DUCKDB_PATH", "./storage/quant.duckdb"),
+        data_lake_dir=data_lake_dir,
+        duckdb_path=os.getenv("DUCKDB_PATH", str(default_duckdb_path)),
         repair_parallelism=int(os.getenv("QUANT_REPAIR_PARALLELISM", "5")),
     )
 

@@ -417,6 +417,78 @@ def test_daily_bars_quality_check_detects_symbol_level_missing_trade_dates(clien
     assert "000001:2026-06-01" in symbol_report.message
 
 
+def test_daily_bars_quality_check_does_not_hide_missing_qfq_days_with_none_rows(client, tmp_path):
+    repo = DailyBarRepository(lake_root=tmp_path / "lake")
+    base_row = {
+        "symbol": "600519",
+        "exchange": "SSE",
+        "market": "A_SHARE",
+        "open": 10.0,
+        "high": 10.8,
+        "low": 9.8,
+        "close": 10.5,
+        "pre_close": 10.0,
+        "volume": 1000.0,
+        "amount": 10500.0,
+        "adjust_factor": 1.0,
+        "source": "fixture",
+        "ingested_at": datetime(2026, 6, 3, tzinfo=timezone.utc),
+    }
+    write_daily_bar_partition(
+        repo,
+        date(2026, 6, 1),
+        [
+            {**base_row, "trade_date": date(2026, 6, 1), "adjust_type": "none"},
+            {**base_row, "trade_date": date(2026, 6, 1), "adjust_type": "qfq"},
+        ],
+    )
+    write_daily_bar_partition(
+        repo,
+        date(2026, 6, 2),
+        [{**base_row, "trade_date": date(2026, 6, 2), "adjust_type": "none"}],
+    )
+
+    db = SessionLocal()
+    try:
+        db.add(
+            Dataset(
+                name="daily_bars",
+                layer="silver",
+                storage_type="parquet",
+                path=str(repo.dataset_dir),
+                schema_json={"symbol": "string", "trade_date": "date", "adjust_type": "string"},
+                primary_keys_json=["symbol", "exchange", "market", "trade_date", "adjust_type"],
+                partition_keys_json=["market", "trade_date"],
+                source="fixture",
+                row_count=3,
+                latest_data_date=date(2026, 6, 2),
+                quality_status="unknown",
+            )
+        )
+        db.add_all(
+            [
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
+                TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 2), is_open=True, source="fixture"),
+            ]
+        )
+        db.commit()
+
+        DataQualityService(db, lake_root=tmp_path / "lake").run_check()
+        qfq_report = db.scalar(
+            select(DataQualityReport).where(
+                DataQualityReport.check_type == "missing_trade_date_by_adjustment",
+                DataQualityReport.metric_name == "A_SHARE_qfq_missing_open_days",
+            )
+        )
+    finally:
+        db.close()
+
+    assert qfq_report is not None
+    assert qfq_report.metric_value == "1"
+    assert "qfq" in qfq_report.message
+    assert "2026-06-02" in qfq_report.message
+
+
 def test_daily_bars_quality_check_detects_stock_pool_symbols_without_daily_bars(client, tmp_path):
     repo = DailyBarRepository(lake_root=tmp_path / "lake")
     row_600519 = {

@@ -113,6 +113,7 @@ class SyncTaskService:
         pending_count = counts.get("pending", 0)
         running_count = counts.get("running", 0)
         failed_count = counts.get("failed", 0)
+        partial_success_count = counts.get("partial_success", 0)
         enabled_schedules = sum(1 for schedule in schedules if schedule.enabled)
 
         if running_count:
@@ -121,9 +122,9 @@ class SyncTaskService:
         elif pending_count:
             status = "pending"
             message = "有任务等待 worker 执行；请确认本地 worker 进程已启动。"
-        elif failed_count:
+        elif failed_count or partial_success_count:
             status = "warning"
-            message = "最近存在失败任务，请打开同步记录查看日志和批次错误。"
+            message = "最近存在失败或部分成功任务，请打开同步记录查看失败项和批次错误。"
         else:
             status = "idle"
             message = "当前没有等待或运行中的任务。"
@@ -141,6 +142,7 @@ class SyncTaskService:
             "pending_count": pending_count,
             "running_count": running_count,
             "failed_count": failed_count,
+            "partial_success_count": partial_success_count,
             "success_count": counts.get("success", 0),
             "enabled_schedules": enabled_schedules,
             "total_schedules": len(schedules),

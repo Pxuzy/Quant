@@ -696,7 +696,7 @@ def test_stock_detail_prefers_common_a_share_row_when_symbol_is_duplicated(clien
     assert payload["name"] == "平安银行"
 
 
-def test_sync_tasks_api_returns_created_sync(client):
+def test_sync_tasks_api_returns_created_sync(client, fake_akshare):
     client.post("/api/stocks/sync", json={"source": "auto", "market": "A_SHARE"})
 
     response = client.get("/api/sync-tasks", params={"status": "pending"})

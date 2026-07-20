@@ -18,6 +18,8 @@ def read_bars(
     market: str = Query(default="A_SHARE", min_length=1),
     start_date: date = Query(),
     end_date: date = Query(),
+    adjust_type: str = Query(default="none", pattern="^(none|qfq|hfq)$"),
+    snapshot_id: int | None = Query(default=None, ge=1),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=5000, ge=1, le=10000),
     db: Session = Depends(get_db),
@@ -28,6 +30,8 @@ def read_bars(
             market=market,
             start_date=start_date,
             end_date=end_date,
+            adjust_type=adjust_type,
+            snapshot_id=snapshot_id,
             page=page,
             page_size=page_size,
         )

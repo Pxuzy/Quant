@@ -33,6 +33,10 @@ class ResearchDataManifestRead(BaseModel):
     quality_status: str
     updated_at: datetime | None
     latest_ingest_batch: ResearchIngestBatchRead | None
+    dataset_version_id: int | None = None
+    manifest_uri: str | None = None
+    manifest_sha256: str | None = None
+    bundle_key: str | None = None
 
 
 class ResearchDataContractRead(BaseModel):
@@ -41,6 +45,9 @@ class ResearchDataContractRead(BaseModel):
     layer: str
     adjust_type: str
     source_policy: str
+    snapshot_id: int | None = None
+    dataset_version_id: int | None = None
+    manifest_sha256: str | None = None
     manifest: ResearchDataManifestRead
 
 

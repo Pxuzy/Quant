@@ -31,7 +31,7 @@ def test_sync_schedules_api_returns_default_rules(client):
     assert "收盘" in daily_bars["schedule_note"]
 
 
-def test_sync_runner_status_reports_queue_and_schedule_state(client):
+def test_sync_runner_status_reports_queue_and_schedule_state(client, fake_akshare):
     idle_response = client.get("/api/sync-tasks/runner-status")
 
     assert idle_response.status_code == 200
@@ -45,7 +45,6 @@ def test_sync_runner_status_reports_queue_and_schedule_state(client):
     assert "--run-next-pending" in idle_payload["worker_command"]
     assert "待执行" in idle_payload["worker_note"]
     assert "daily_bars_market_repair" in idle_payload["supported_task_types"]
-    assert "daily_bars_raw_replay" in idle_payload["supported_task_types"]
     assert idle_payload["current_task"]["id"] is None
     assert idle_payload["next_pending_task"]["id"] is None
     assert idle_payload["latest_success_task"]["id"] is None
@@ -243,7 +242,7 @@ def test_sync_schedule_update_changes_source_and_symbol_scope(client):
     assert clear_response.json()["symbol"] is None
 
 
-def test_sync_schedule_trigger_creates_task_and_updates_last_triggered_at(client):
+def test_sync_schedule_trigger_creates_task_and_updates_last_triggered_at(client, fake_akshare):
     response = client.post("/api/sync-tasks/schedules/weekly_stock_pool/trigger")
 
     assert response.status_code == 201
