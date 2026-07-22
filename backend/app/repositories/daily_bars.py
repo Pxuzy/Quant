@@ -67,14 +67,11 @@ class DailyBarRepository:
         *,
         lake_root: str | Path | None = None,
         dataset_dir: str | Path | None = None,
-        duckdb_path: str | Path | None = None,
         partition_paths: Sequence[str | Path] | None = None,
     ) -> None:
         settings = get_settings()
         self.lake_root = Path(lake_root or settings.data_lake_dir).expanduser().resolve()
         self.dataset_dir = Path(dataset_dir) if dataset_dir is not None else self.lake_root / "silver" / "daily_bars"
-        default_duckdb_path = settings.duckdb_path if lake_root is None else self.lake_root / "quant.duckdb"
-        self.duckdb_path = Path(duckdb_path or default_duckdb_path)
         self.partition_paths = (
             tuple(Path(path).expanduser().resolve() for path in partition_paths)
             if partition_paths is not None
@@ -303,9 +300,6 @@ class DailyBarRepository:
         }
 
     def read_all(self) -> list[dict]:
-        return self._read_all()
-
-    def _read_all(self) -> list[dict]:
         return self._read_partition_rows()
 
     def _read_partition_rows(
@@ -493,13 +487,6 @@ class DailyBarRepository:
         }
 
     def _market_trade_dates_duckdb(self, *, market: str) -> set[date]:
-        if duckdb is None:
-            return {
-                row["trade_date"]
-                for row in self._read_partition_rows(market=market)
-                if isinstance(row.get("trade_date"), date)
-            }
-
         con = _duckdb_connect_with_timeout()
         try:
             rows = con.execute(
@@ -516,13 +503,6 @@ class DailyBarRepository:
         return {_coerce_date(row[0]) for row in rows}
 
     def _symbol_trade_dates_duckdb(self, *, symbol: str, market: str) -> set[date]:
-        if duckdb is None:
-            return {
-                row["trade_date"]
-                for row in self._read_partition_rows(symbol=symbol, market=market)
-                if isinstance(row.get("trade_date"), date)
-            }
-
         con = _duckdb_connect_with_timeout()
         try:
             rows = con.execute(
@@ -545,18 +525,6 @@ class DailyBarRepository:
         market: str,
         adjust_type: str | None = None,
     ) -> list[dict]:
-        if duckdb is None:
-            rows = self._read_partition_rows(symbol=symbol, market=market)
-            if adjust_type is not None:
-                rows = [
-                    row for row in rows
-                    if (row.get("adjust_type") or "none") == adjust_type
-                ]
-            return sorted(
-                rows,
-                key=lambda row: (row["trade_date"], row.get("adjust_type") or "none"),
-            )
-
         conditions = ["market = ?", "symbol = ?"]
         params: list[object] = [
             self._duckdb_source(),
@@ -588,14 +556,6 @@ class DailyBarRepository:
         market: str,
         adjust_type: str | None = None,
     ) -> set[tuple[str, date]]:
-        if duckdb is None:
-            return {
-                (str(row["symbol"]), row["trade_date"])
-                for row in self._read_partition_rows(market=market)
-                if row.get("symbol") and isinstance(row.get("trade_date"), date)
-                if adjust_type is None or (row.get("adjust_type") or "none") == adjust_type
-            }
-
         conditions = ["market = ?"]
         params: list[object] = [self._duckdb_source(), market]
         if adjust_type is not None:
@@ -618,9 +578,6 @@ class DailyBarRepository:
         return {(str(row[0]), _coerce_date(row[1])) for row in rows}
 
     def _count_duckdb(self, *, market: str | None) -> int:
-        if duckdb is None:
-            return len(self._read_partition_rows(market=market))
-
         where_clause, params = self._duckdb_filters(
             symbol=None,
             market=market,
@@ -639,10 +596,6 @@ class DailyBarRepository:
             con.close()
 
     def _latest_trade_date_duckdb(self, *, market: str | None) -> date | None:
-        if duckdb is None:
-            rows = self._read_partition_rows(market=market)
-            return max((row["trade_date"] for row in rows), default=None)
-
         where_clause, params = self._duckdb_filters(
             symbol=None,
             market=market,

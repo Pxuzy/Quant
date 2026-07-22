@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from backend.app.adapters.base import HealthCheckResult, NormalizedStock, StockDataSourceAdapter
+from backend.app.adapters.base import NormalizedStock, StockDataSourceAdapter
 from backend.app.adapters.registry import AdapterRegistry, default_adapter_registry
 from backend.app.core.market_symbols import is_common_stock_symbol
 from backend.app.db.cache import invalidate_data_cache
@@ -18,6 +18,8 @@ from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.services.database_integration_service import invalidate_coverage_cache
 from backend.app.services.normalized_data_validation import validate_stock_records
 from backend.app.services.raw_artifact_store import RawArtifactStore
+from backend.app.services._provider import ProviderSelector
+from backend.app.services._task_runner import SyncTaskRunner
 
 AUTO_SOURCE_CODE = "auto"
 # Idempotency window: skip creating duplicate tasks within this window
@@ -35,6 +37,12 @@ class StockSyncService:
         self.raw_artifact_store = RawArtifactStore()
         self.stock_repo = StockRepository(db)
         self.task_repo = SyncTaskRepository(db)
+        self.provider_selector = ProviderSelector(
+            db,
+            registry=self.registry,
+            data_source_repo=self.data_source_repo,
+        )
+        self.task_runner = SyncTaskRunner(db, task_repo=self.task_repo)
 
     def create_stock_sync_task(self, *, source: str = AUTO_SOURCE_CODE, market: str = "A_SHARE") -> SyncTask:
         source_code = source.strip().lower()
@@ -145,10 +153,7 @@ class StockSyncService:
             invalidate_coverage_cache(market)
             return task
         except Exception as exc:
-            self.data_source_repo.update_health(
-                source,
-                HealthCheckResult(healthy=False, status="unhealthy", message=str(exc)),
-            )
+            self.provider_selector.mark_unhealthy(source, str(exc))
             self.task_repo.fail(
                 task,
                 message=str(exc),
@@ -170,35 +175,7 @@ class StockSyncService:
         *,
         require_healthy: bool = True,
     ) -> list[StockDataSourceAdapter]:
-        self.data_source_repo.sync_registered_adapters(self.registry)
-        candidates: list[StockDataSourceAdapter] = []
-        for source in self.data_source_repo.list_enabled():
-            try:
-                adapter = self.registry.get(source.code)
-            except ValueError:
-                continue
-            if require_healthy:
-                health = adapter.health_check()
-                self.data_source_repo.update_health(adapter.code, health)
-                if not health.healthy:
-                    continue
-            if bool(getattr(adapter.capabilities(), capability, False)):
-                candidates.append(adapter)
-
-        # 智能排序：按历史成功率降序，成功率相同按静态 priority
-        scored = []
-        for adp in candidates:
-            ds = self.data_source_repo.get_by_code(adp.code)
-            rate = -1.0
-            if ds is not None:
-                cfg = ds.config_json if isinstance(ds.config_json, dict) else {}
-                cap_stats = cfg.get("usage_stats", {}).get(capability, {})
-                total = cap_stats.get("total", 0) or 0
-                if total > 0:
-                    rate = (cap_stats.get("success", 0) or 0) / total
-            scored.append((rate, adp.priority, adp))
-        scored.sort(key=lambda x: (-x[0], x[1]))
-        return [item[2] for item in scored]
+        return self.provider_selector.select(capability, require_healthy=require_healthy)
 
     def _run_auto_stock_sync_task(self, task: SyncTask, *, market: str) -> SyncTask:
         records_read = 0
@@ -234,10 +211,7 @@ class StockSyncService:
                 except Exception as exc:
                     error_message = str(exc)
                     errors.append(f"{adapter.code}: {error_message}")
-                    self.data_source_repo.update_health(
-                        adapter.code,
-                        HealthCheckResult(healthy=False, status="unhealthy", message=error_message),
-                    )
+                    self.provider_selector.mark_unhealthy(adapter.code, error_message)
                     self.task_repo.add_log(
                         task,
                         level="warning",
@@ -276,22 +250,7 @@ class StockSyncService:
             return task
 
     def _record_adapter_result(self, code: str, *, success: bool, capability: str) -> None:
-        """记录一次数据源调用结果到 config_json.usage_stats，用于动态排序。"""
-        source = self.data_source_repo.get_by_code(code)
-        if source is None:
-            return
-        config = source.config_json if isinstance(source.config_json, dict) else {}
-        stats = config.get("usage_stats", {})
-        cap_stats = stats.get(capability, {"total": 0, "success": 0})
-        cap_stats["total"] = cap_stats.get("total", 0) + 1
-        if success:
-            cap_stats["success"] = cap_stats.get("success", 0) + 1
-            cap_stats["last_success"] = datetime.now().isoformat()
-        else:
-            cap_stats["last_failure"] = datetime.now().isoformat()
-        stats[capability] = cap_stats
-        source.config_json = {**config, "usage_stats": stats}
-        self.db.flush()
+        self.provider_selector.record_result(code, success=success, capability=capability)
 
     def _sync_with_adapter(self, *, task: SyncTask, adapter: StockDataSourceAdapter, market: str) -> tuple[int, int]:
         health = adapter.health_check()

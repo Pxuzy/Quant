@@ -5,7 +5,7 @@ from math import ceil
 
 from sqlalchemy.orm import Session
 
-from backend.app.adapters.base import HealthCheckResult, StockDataSourceAdapter
+from backend.app.adapters.base import StockDataSourceAdapter
 from backend.app.adapters.registry import AdapterRegistry, default_adapter_registry
 from backend.app.models import SyncTask
 from backend.app.repositories.data_sources import DataSourceRepository
@@ -18,6 +18,8 @@ from backend.app.services.database_integration_service import invalidate_coverag
 from backend.app.services.normalized_data_validation import validate_calendar_records
 from backend.app.services.raw_artifact_store import RawArtifactStore
 from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE
+from backend.app.services._provider import ProviderSelector
+from backend.app.services._task_runner import SyncTaskRunner
 
 
 class TradingCalendarService:
@@ -31,6 +33,12 @@ class TradingCalendarService:
         self.raw_artifact_repo = RawArtifactRepository(db)
         self.raw_artifact_store = RawArtifactStore()
         self.task_repo = SyncTaskRepository(db)
+        self.provider_selector = ProviderSelector(
+            db,
+            registry=self.registry,
+            data_source_repo=self.data_source_repo,
+        )
+        self.task_runner = SyncTaskRunner(db, task_repo=self.task_repo)
 
     def list_days(
         self,
@@ -144,10 +152,7 @@ class TradingCalendarService:
             self.db.refresh(task)
             return task
         except Exception as exc:
-            self.data_source_repo.update_health(
-                task.source,
-                HealthCheckResult(healthy=False, status="unhealthy", message=str(exc)),
-            )
+            self.provider_selector.mark_unhealthy(task.source, str(exc))
             self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
             self.task_repo.add_log(
                 task,
@@ -209,16 +214,7 @@ class TradingCalendarService:
         return task
 
     def _enabled_adapters_for_capability(self, capability: str) -> list[StockDataSourceAdapter]:
-        self.data_source_repo.sync_registered_adapters(self.registry)
-        candidates: list[StockDataSourceAdapter] = []
-        for source in self.data_source_repo.list_enabled():
-            try:
-                adapter = self.registry.get(source.code)
-            except ValueError:
-                continue
-            if bool(getattr(adapter.capabilities(), capability, False)):
-                candidates.append(adapter)
-        return candidates
+        return self.provider_selector.select(capability, require_healthy=False)
 
     def _run_auto_calendar_sync_task(self, task: SyncTask) -> SyncTask:
         records_read = 0
@@ -255,10 +251,7 @@ class TradingCalendarService:
                 except Exception as exc:
                     error_message = str(exc)
                     errors.append(f"{adapter.code}: {error_message}")
-                    self.data_source_repo.update_health(
-                        adapter.code,
-                        HealthCheckResult(healthy=False, status="unhealthy", message=error_message),
-                    )
+                    self.provider_selector.mark_unhealthy(adapter.code, error_message)
                     self.task_repo.add_log(
                         task,
                         level="warning",

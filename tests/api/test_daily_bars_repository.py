@@ -61,7 +61,7 @@ def test_daily_bars_repository_uses_duckdb_for_filtered_queries(tmp_path, monkey
     def fail_pyarrow_fallback():
         raise AssertionError("DuckDB query should not fall back to full PyArrow scan.")
 
-    monkeypatch.setattr(repo, "_read_all", fail_pyarrow_fallback)
+    monkeypatch.setattr(repo, "_read_partition_rows", fail_pyarrow_fallback)
 
     rows, total = repo.list_daily_bars(
         symbol="600519",
@@ -138,7 +138,7 @@ def test_daily_bars_repository_reads_symbol_rows_with_adjust_types_via_duckdb(tm
     def fail_pyarrow_fallback():
         raise AssertionError("DuckDB symbol query should not fall back to full PyArrow scan.")
 
-    monkeypatch.setattr(repo, "_read_all", fail_pyarrow_fallback)
+    monkeypatch.setattr(repo, "_read_partition_rows", fail_pyarrow_fallback)
 
     rows = repo.symbol_daily_bars(symbol="600519", market="A_SHARE")
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
-from backend.app.adapters.base import HealthCheckResult, StockDataSourceAdapter, normalize_daily_bar_adjust_type
+from backend.app.adapters.base import StockDataSourceAdapter, normalize_daily_bar_adjust_type
 from backend.app.models import SyncTask
 from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.services.market_repair_planner import (
@@ -263,10 +263,7 @@ class _MarketRepairMixin:
             self.db.refresh(task)
             return task
         except Exception as exc:
-            self.data_source_repo.update_health(
-                task.source,
-                HealthCheckResult(healthy=False, status="unhealthy", message=str(exc)),
-            )
+            self.provider_selector.mark_unhealthy(task.source, str(exc))
             self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
             self.task_repo.add_log(task, level="error", message="Market daily bars repair failed.", payload={"error": str(exc)})
             self.db.commit()
@@ -353,10 +350,7 @@ class _MarketRepairMixin:
                 except Exception as exc:
                     error_message = str(exc)
                     errors.append(f"{adapter.code}: {error_message}")
-                    self.data_source_repo.update_health(
-                        adapter.code,
-                        HealthCheckResult(healthy=False, status="unhealthy", message=error_message),
-                    )
+                    self.provider_selector.mark_unhealthy(adapter.code, error_message)
                     self.task_repo.add_log(
                         task,
                         level="warning",
