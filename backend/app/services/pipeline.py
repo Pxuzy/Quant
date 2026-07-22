@@ -20,7 +20,7 @@ from backend.app.services.daily_bar_ingest_pipeline import DailyBarIngestPipelin
 
 MARKET_REPAIR_TASK_TYPE = "daily_bars_market_repair"
 DEFAULT_MARKET_REPAIR_MAX_SYMBOLS = 20
-MAX_MARKET_REPAIR_SYMBOLS = 200
+MAX_MARKET_REPAIR_SYMBOLS = 5000
 DEFAULT_ADJUST_TYPE = "none"
 
 __all__ = [

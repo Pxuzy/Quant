@@ -471,6 +471,11 @@ class AkShareAdapter(StockDataSourceAdapter):
             )
             name = _clean_text(record.get("name") or record.get("名称") or record.get("证券简称"))
 
+            industry = _clean_text(
+                record.get("行业")          # stock_zh_a_spot_em
+                or record.get("industry")   # English key
+            )
+
             # 没有代码或名称的记录直接跳过（可能是脏数据）
             if symbol is None or name is None:
                 continue
@@ -483,7 +488,7 @@ class AkShareAdapter(StockDataSourceAdapter):
                     market="A_SHARE",  # AKShare 目前只支持 A 股
                     name=name,
                     status="LISTED",  # 默认"上市中"
-                    industry=None,  # AKShare 不提供行业信息
+                    industry=industry,
                     listing_date=self._parse_listing_date(record),
                     delisting_date=None,  # AKShare 不提供退市日期
                     source=self.code,  # 标记数据来源 = "akshare"

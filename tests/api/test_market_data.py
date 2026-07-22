@@ -592,7 +592,7 @@ def test_market_daily_bars_repair_rejects_service_limit_above_api_cap(client, tm
                 market="A_SHARE",
                 start_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 2),
-                max_symbols=201,
+                max_symbols=99999,
             )
         tasks = db.scalars(select(SyncTask).where(SyncTask.task_type == "daily_bars_market_repair")).all()
     finally:
