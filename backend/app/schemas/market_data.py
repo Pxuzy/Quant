@@ -4,6 +4,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
+from backend.app.schemas import PaginatedResponse
+
 
 class DailyBarsSyncRequest(BaseModel):
     source: str = Field(default="auto", min_length=1)
@@ -70,9 +72,4 @@ class DailyBarRead(BaseModel):
     ingested_at: datetime
 
 
-class PaginatedDailyBars(BaseModel):
-    items: list[DailyBarRead]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
+PaginatedDailyBars = PaginatedResponse[DailyBarRead]

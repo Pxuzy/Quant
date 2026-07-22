@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.app.schemas import PaginatedResponse
 from backend.app.schemas.sync_tasks import IngestBatchRead
 
 
@@ -26,12 +27,7 @@ class StockRead(BaseModel):
     updated_at: datetime
 
 
-class PaginatedStocks(BaseModel):
-    items: list[StockRead]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
+PaginatedStocks = PaginatedResponse[StockRead]
 
 
 class StockDailyCoverageRead(BaseModel):

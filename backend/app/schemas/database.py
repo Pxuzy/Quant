@@ -4,6 +4,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from backend.app.schemas import PaginatedResponse
+
 
 class DatabaseStatusRead(BaseModel):
     database_kind: str
@@ -115,12 +117,7 @@ class DatabaseLineageItemRead(BaseModel):
     created_at: datetime
 
 
-class DatabaseLineageRead(BaseModel):
-    items: list[DatabaseLineageItemRead]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
+DatabaseLineageRead = PaginatedResponse[DatabaseLineageItemRead]
 
 
 class DatabaseCoverageSummaryRead(BaseModel):

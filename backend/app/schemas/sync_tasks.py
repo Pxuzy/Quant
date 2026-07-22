@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from backend.app.schemas import PaginatedResponse
+
 
 def _extract_task_source_selection(value: Any) -> tuple[list[str] | None, str | None]:
     logs = None
@@ -160,12 +162,7 @@ class IngestBatchRead(BaseModel):
     created_at: datetime
 
 
-class PaginatedSyncTasks(BaseModel):
-    items: list[SyncTaskRead]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
+PaginatedSyncTasks = PaginatedResponse[SyncTaskRead]
 
 
 class SyncScheduleRead(BaseModel):

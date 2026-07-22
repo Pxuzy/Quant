@@ -4,6 +4,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.app.schemas import PaginatedResponse
+
 
 class TradingCalendarSyncRequest(BaseModel):
     source: str = Field(default="auto", min_length=1)
@@ -23,9 +25,4 @@ class TradingCalendarRead(BaseModel):
     updated_at: datetime
 
 
-class PaginatedTradingCalendars(BaseModel):
-    items: list[TradingCalendarRead]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
+PaginatedTradingCalendars = PaginatedResponse[TradingCalendarRead]
