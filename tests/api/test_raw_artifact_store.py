@@ -39,7 +39,15 @@ def test_raw_artifact_store_persists_deterministic_envelope_and_reads_it(tmp_pat
     )
 
     assert first == second
-    path = tmp_path / "lake" / "raw" / "daily_bars" / "source=baostock" / "task=7" / f"symbol=600519-{first.sha256[:16]}.json"
+    path = (
+        tmp_path
+        / "lake"
+        / "raw"
+        / "daily_bars"
+        / "source=baostock"
+        / "task=7"
+        / f"symbol=600519-{first.sha256[:16]}.json"
+    )
     assert path.exists()
     content = path.read_bytes()
     assert hashlib.sha256(content).hexdigest() == first.sha256

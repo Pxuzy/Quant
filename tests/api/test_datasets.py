@@ -93,11 +93,46 @@ def test_datasets_api_projects_stale_full_security_stock_count_to_common_stock_p
     try:
         db.add_all(
             [
-                Stock(symbol="600519", exchange="SSE", market="A_SHARE", name="贵州茅台", status="LISTED", source="fixture"),
-                Stock(symbol="000001", exchange="SZSE", market="A_SHARE", name="平安银行", status="LISTED", source="fixture"),
-                Stock(symbol="430047", exchange="BSE", market="A_SHARE", name="北交所样本", status="LISTED", source="fixture"),
-                Stock(symbol="000016", exchange="SSE", market="A_SHARE", name="上证50指数", status="LISTED", source="fixture"),
-                Stock(symbol="159001", exchange="SZSE", market="A_SHARE", name="货币ETF", status="LISTED", source="fixture"),
+                Stock(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="贵州茅台",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="000001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="平安银行",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="430047",
+                    exchange="BSE",
+                    market="A_SHARE",
+                    name="北交所样本",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="000016",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="上证50指数",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="159001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="货币ETF",
+                    status="LISTED",
+                    source="fixture",
+                ),
             ]
         )
         db.add(

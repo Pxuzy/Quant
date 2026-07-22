@@ -106,8 +106,30 @@ class FakeBaoStockDailyResultSet:
 
     def __init__(self) -> None:
         self._rows = [
-            ["2026-06-01", "sh.600519", "1660.00", "1680.00", "1650.00", "1675.00", "1662.00", "123456", "206789000", "3"],
-            ["2026-06-02", "sh.600519", "1675.00", "1691.00", "1668.00", "1688.00", "1675.00", "234567", "395678000", "3"],
+            [
+                "2026-06-01",
+                "sh.600519",
+                "1660.00",
+                "1680.00",
+                "1650.00",
+                "1675.00",
+                "1662.00",
+                "123456",
+                "206789000",
+                "3",
+            ],
+            [
+                "2026-06-02",
+                "sh.600519",
+                "1675.00",
+                "1691.00",
+                "1668.00",
+                "1688.00",
+                "1675.00",
+                "234567",
+                "395678000",
+                "3",
+            ],
         ]
         self._index = -1
         self.error_code = "0"
@@ -209,11 +231,28 @@ class FlakyBaoStockClient(FakeBaoStockClient):
 class FakeTushareClient:
     def stock_basic(self, **kwargs):
         return [
-            {"ts_code": "600519.SH", "symbol": "600519", "name": "贵州茅台", "industry": "白酒", "list_date": "20010827"},
-            {"ts_code": "000001.SZ", "symbol": "000001", "name": "平安银行", "industry": "银行", "list_date": "19910403"},
-            {"ts_code": "430047.BJ", "symbol": "430047", "name": "北交所样本", "industry": "软件", "list_date": "20140124"},
+            {
+                "ts_code": "600519.SH",
+                "symbol": "600519",
+                "name": "贵州茅台",
+                "industry": "白酒",
+                "list_date": "20010827",
+            },
+            {
+                "ts_code": "000001.SZ",
+                "symbol": "000001",
+                "name": "平安银行",
+                "industry": "银行",
+                "list_date": "19910403",
+            },
+            {
+                "ts_code": "430047.BJ",
+                "symbol": "430047",
+                "name": "北交所样本",
+                "industry": "软件",
+                "list_date": "20140124",
+            },
         ]
-
 
     def daily(self, **kwargs):
         return [
@@ -495,4 +534,3 @@ def test_baostock_adapter_retries_transient_stock_list_fetch_failure():
     assert client.stock_basic_attempts == 2
     assert client.logout_count == 2
     assert normalized[0].symbol == "600519"
-

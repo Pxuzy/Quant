@@ -24,6 +24,7 @@ url = config.get_main_option("sqlalchemy.url")
 if not url or url.startswith("driver://"):
     try:
         from backend.app.db.session import get_database_url
+
         url = get_database_url()
     except Exception:
         url = None

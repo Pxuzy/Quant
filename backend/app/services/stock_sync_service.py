@@ -310,8 +310,12 @@ class StockSyncService:
         try:
             records_written = self.stock_repo.upsert_many(normalized)
             total_rows = self.stock_repo.count(market=market, common_only=True)
-            dataset = self.dataset_repo.upsert_stock_dataset(source=adapter.code, row_count=total_rows, latest_data_date=date.today())
-            self.ingest_batch_repo.complete_batch(batch, records_written=records_written, quality_status=dataset.quality_status)
+            dataset = self.dataset_repo.upsert_stock_dataset(
+                source=adapter.code, row_count=total_rows, latest_data_date=date.today()
+            )
+            self.ingest_batch_repo.complete_batch(
+                batch, records_written=records_written, quality_status=dataset.quality_status
+            )
         except Exception as exc:
             self.ingest_batch_repo.fail_batch(batch, message=str(exc))
             raise

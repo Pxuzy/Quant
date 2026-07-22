@@ -60,8 +60,7 @@ def _publish_bundle(db, lake_root):
     )
     publisher = DatasetVersionPublisher(db, lake_root=lake_root, source_repo=repository)
     versions = {
-        adjust_type: publisher.publish_daily_bars(adjust_type=adjust_type)
-        for adjust_type in ("none", "qfq", "hfq")
+        adjust_type: publisher.publish_daily_bars(adjust_type=adjust_type) for adjust_type in ("none", "qfq", "hfq")
     }
     return repository, versions
 

@@ -39,7 +39,6 @@ class EmptyNormalizeAdapter(StockDataSourceAdapter):
         return []
 
 
-
 def test_stock_sync_records_normalization_loss_in_ingest_batch(client):
     registry = AdapterRegistry()
     registry.register(EmptyNormalizeAdapter())
@@ -97,8 +96,7 @@ class LeakyFetchAdapter(StockDataSourceAdapter):
 
     def fetch_stock_list(self, *, market: str):
         raise RuntimeError(
-            "upstream failed at https://secret.example.test/path?a=1 through hidden.example.test "
-            + ("x" * 800)
+            "upstream failed at https://secret.example.test/path?a=1 through hidden.example.test " + ("x" * 800)
         )
 
     def normalize_stock_list(self, raw_records):
@@ -327,7 +325,9 @@ def test_data_sources_api_lists_known_open_provider_adapters(client, monkeypatch
     assert akshare["adapter_class"] == "AkShareAdapter"
     assert akshare["config_json"]["capabilities"]["stock_list"] is True
     assert akshare["config_json"]["auth_status"] == "not_required"
-    assert akshare["config_json"]["provider_metadata"]["docs_url"] == "https://akshare.akfamily.xyz/data/stock/stock.html"
+    assert (
+        akshare["config_json"]["provider_metadata"]["docs_url"] == "https://akshare.akfamily.xyz/data/stock/stock.html"
+    )
 
     baostock = next(source for source in sources if source["code"] == "baostock")
     assert baostock["enabled"] is True

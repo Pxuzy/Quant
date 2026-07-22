@@ -47,7 +47,6 @@ TRADING_CALENDAR_SCHEMA = {
 
 
 class DatasetRepository(BaseRepository):
-
     def upsert_stock_dataset(self, *, source: str, row_count: int, latest_data_date: date) -> Dataset:
         dataset = self.db.scalar(select(Dataset).where(Dataset.name == "stocks"))
         if dataset is None:

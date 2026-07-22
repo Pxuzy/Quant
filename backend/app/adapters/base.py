@@ -18,6 +18,7 @@ def normalize_daily_bar_adjust_type(adjust_type: str | None = None) -> str:
 @dataclass(frozen=True)
 class AdapterCapability:
     """Adapter capability: what data this source can provide."""
+
     stock_list: bool
     daily_bars: bool = False
     calendars: bool = False
@@ -30,6 +31,7 @@ class AdapterCapability:
 @dataclass(frozen=True)
 class ProviderMetadata:
     """Provider metadata: name, type, URLs, auth requirements."""
+
     provider_type: str
     homepage_url: str | None = None
     docs_url: str | None = None
@@ -48,6 +50,7 @@ class ProviderMetadata:
 @dataclass(frozen=True)
 class HealthCheckResult:
     """Health check result with status and message."""
+
     healthy: bool
     status: str
     message: str
@@ -56,6 +59,7 @@ class HealthCheckResult:
 @dataclass(frozen=True)
 class NormalizedStock:
     """Unified stock record. All adapters normalize to this format."""
+
     symbol: str
     exchange: str
     market: str
@@ -70,6 +74,7 @@ class NormalizedStock:
 @dataclass(frozen=True)
 class NormalizedDailyBar:
     """Unified daily bar (OHLCV) record."""
+
     symbol: str
     exchange: str
     market: str
@@ -90,6 +95,7 @@ class NormalizedDailyBar:
 @dataclass(frozen=True)
 class NormalizedTradingCalendar:
     """Unified trading calendar record."""
+
     market: str
     trade_date: date
     is_open: bool
@@ -119,18 +125,18 @@ class StockDataSourceAdapter(ABC):
 
     # ===== 类级别属性（子类必须覆盖） =====
 
-    code: str               # 适配器唯一标识符，如 "akshare"、"baostock"
-    name: str               # 人类可读的名称，如 "AKShare"、"BaoStock"
-    priority: int = 100     # 优先级（数字越小越优先）
-                            #  10 = AKShare（免费优先）
-                            #  20 = BaoStock
-                            #  25 = AData
-                            #  30 = Tushare（需要 Token）
-                            #  45 = Stock SDK（实验性）
-                            # 框架按 priority 排序返回，
-                            # 上层代码优先尝试 priority 小的适配器
-    requires_token: bool = False   # 是否需要 API Token（Tushare 需要，AKShare 不要）
-    default_enabled: bool = True   # 默认是否启用（Tushare/StockSDK 默认关闭）
+    code: str  # 适配器唯一标识符，如 "akshare"、"baostock"
+    name: str  # 人类可读的名称，如 "AKShare"、"BaoStock"
+    priority: int = 100  # 优先级（数字越小越优先）
+    #  10 = AKShare（免费优先）
+    #  20 = BaoStock
+    #  25 = AData
+    #  30 = Tushare（需要 Token）
+    #  45 = Stock SDK（实验性）
+    # 框架按 priority 排序返回，
+    # 上层代码优先尝试 priority 小的适配器
+    requires_token: bool = False  # 是否需要 API Token（Tushare 需要，AKShare 不要）
+    default_enabled: bool = True  # 默认是否启用（Tushare/StockSDK 默认关闭）
 
     # ===== 元信息（子类通常需要覆盖） =====
 
@@ -207,9 +213,7 @@ class StockDataSourceAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def normalize_stock_list(
-        self, raw_records: list[dict[str, Any]]
-    ) -> list[NormalizedStock]:
+    def normalize_stock_list(self, raw_records: list[dict[str, Any]]) -> list[NormalizedStock]:
         """
         把原始股票列表转成统一格式。
 
@@ -264,9 +268,7 @@ class StockDataSourceAdapter(ABC):
         """
         raise NotImplementedError
 
-    def normalize_daily_bars(
-        self, raw_records: list[dict[str, Any]]
-    ) -> list[NormalizedDailyBar]:
+    def normalize_daily_bars(self, raw_records: list[dict[str, Any]]) -> list[NormalizedDailyBar]:
         """把原始日K线数据转成统一格式。"""
         raise NotImplementedError
 

@@ -13,6 +13,7 @@ and hosts the shared constants used by both :mod:`sync_service` and
       |
   sync_service  (depends on pipeline + repair_service)
 """
+
 from __future__ import annotations
 
 from backend.app.services.daily_bar_ingest_pipeline import DailyBarIngestPipeline

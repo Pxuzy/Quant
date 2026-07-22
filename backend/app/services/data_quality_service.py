@@ -13,8 +13,17 @@ from backend.app.repositories.daily_bars import DailyBarRepository
 from backend.app.services.dataset_service import project_dataset_row_count, sync_projected_dataset_row_count
 
 DAILY_BAR_REQUIRED_FIELDS = (
-    "symbol", "exchange", "market", "trade_date",
-    "open", "high", "low", "close", "adjust_type", "source", "ingested_at",
+    "symbol",
+    "exchange",
+    "market",
+    "trade_date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "adjust_type",
+    "source",
+    "ingested_at",
 )
 DAILY_BAR_PRICE_FIELDS = ("open", "high", "low", "close")
 DAILY_BAR_TURNOVER_FIELDS = ("volume", "amount")
@@ -31,12 +40,12 @@ class DataQualityService:
             sync_projected_dataset_row_count(self.db, dataset)
         self.db.commit()
         reports_total = self.db.scalar(select(func.count(DataQualityReport.id))) or 0
-        reports_warning = self.db.scalar(
-            select(func.count(DataQualityReport.id)).where(DataQualityReport.severity == "warning")
-        ) or 0
-        reports_error = self.db.scalar(
-            select(func.count(DataQualityReport.id)).where(DataQualityReport.severity == "error")
-        ) or 0
+        reports_warning = (
+            self.db.scalar(select(func.count(DataQualityReport.id)).where(DataQualityReport.severity == "warning")) or 0
+        )
+        reports_error = (
+            self.db.scalar(select(func.count(DataQualityReport.id)).where(DataQualityReport.severity == "error")) or 0
+        )
         latest_checked_at = self.db.scalar(select(func.max(DataQualityReport.checked_at)))
         datasets_good = sum(1 for d in datasets if d.quality_status == "good")
         datasets_warning = sum(1 for d in datasets if d.quality_status == "warning")
@@ -75,7 +84,8 @@ class DataQualityService:
             conditions.append(DataQualityReport.severity == severity.strip())
         total_stmt = select(func.count(DataQualityReport.id))
         records_stmt = select(DataQualityReport).order_by(
-            DataQualityReport.checked_at.desc(), DataQualityReport.id.desc(),
+            DataQualityReport.checked_at.desc(),
+            DataQualityReport.id.desc(),
         )
         if conditions:
             total_stmt = total_stmt.where(*conditions)
@@ -92,31 +102,37 @@ class DataQualityService:
         }
 
     def list_check_runs(self, *, limit: int = 10) -> dict:
-        checked_times = list(self.db.scalars(
-            select(DataQualityReport.checked_at)
-            .group_by(DataQualityReport.checked_at)
-            .order_by(DataQualityReport.checked_at.desc())
-            .limit(limit)
-        ).all())
+        checked_times = list(
+            self.db.scalars(
+                select(DataQualityReport.checked_at)
+                .group_by(DataQualityReport.checked_at)
+                .order_by(DataQualityReport.checked_at.desc())
+                .limit(limit)
+            ).all()
+        )
         if not checked_times:
             return {"items": []}
-        reports = list(self.db.scalars(
-            select(DataQualityReport)
-            .where(DataQualityReport.checked_at.in_(checked_times))
-            .order_by(DataQualityReport.checked_at.desc(), DataQualityReport.id.desc())
-        ).all())
+        reports = list(
+            self.db.scalars(
+                select(DataQualityReport)
+                .where(DataQualityReport.checked_at.in_(checked_times))
+                .order_by(DataQualityReport.checked_at.desc(), DataQualityReport.id.desc())
+            ).all()
+        )
         reports_by_checked_at: dict[datetime, list[DataQualityReport]] = defaultdict(list)
         for report in reports:
             reports_by_checked_at[report.checked_at].append(report)
-        return {"items": [
-            {
-                "checked_at": ca,
-                "reports_total": len(rr),
-                "reports_warning": sum(1 for r in rr if r.severity == "warning"),
-                "reports_error": sum(1 for r in rr if r.severity == "error"),
-            }
-            for ca, rr in [(ct, reports_by_checked_at.get(ct, [])) for ct in checked_times]
-        ]}
+        return {
+            "items": [
+                {
+                    "checked_at": ca,
+                    "reports_total": len(rr),
+                    "reports_warning": sum(1 for r in rr if r.severity == "warning"),
+                    "reports_error": sum(1 for r in rr if r.severity == "error"),
+                }
+                for ca, rr in [(ct, reports_by_checked_at.get(ct, [])) for ct in checked_times]
+            ]
+        }
 
     def run_check(self) -> dict:
         datasets = list(self.db.scalars(select(Dataset).order_by(Dataset.name.asc())).all())
@@ -139,19 +155,49 @@ class DataQualityService:
     def _check_dataset(self, *, dataset: Dataset, checked_at: datetime) -> list[DataQualityReport]:
         reports: list[DataQualityReport] = []
         if dataset.row_count <= 0:
-            reports.append(self._report(dataset, "row_count", "warning", "warning",
-                "row_count", str(dataset.row_count), "> 0",
-                f"数据集 {dataset.name} 暂无记录。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "row_count",
+                    "warning",
+                    "warning",
+                    "row_count",
+                    str(dataset.row_count),
+                    "> 0",
+                    f"数据集 {dataset.name} 暂无记录。",
+                    checked_at,
+                )
+            )
         if dataset.latest_data_date is None:
-            reports.append(self._report(dataset, "freshness", "warning", "warning",
-                "latest_data_date", None, "not null",
-                f"数据集 {dataset.name} 缺少最新数据日期。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "freshness",
+                    "warning",
+                    "warning",
+                    "latest_data_date",
+                    None,
+                    "not null",
+                    f"数据集 {dataset.name} 缺少最新数据日期。",
+                    checked_at,
+                )
+            )
         if dataset.name == "daily_bars":
             reports.extend(self._check_daily_bars(dataset=dataset, checked_at=checked_at))
         if not reports:
-            reports.append(self._report(dataset, "basic", "good", "info",
-                "basic_integrity", "passed", "passed",
-                f"数据集 {dataset.name} 通过基础目录和数据质量检查。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "basic",
+                    "good",
+                    "info",
+                    "basic_integrity",
+                    "passed",
+                    "passed",
+                    f"数据集 {dataset.name} 通过基础目录和数据质量检查。",
+                    checked_at,
+                )
+            )
         return reports
 
     def _check_daily_bars(self, *, dataset: Dataset, checked_at: datetime) -> list[DataQualityReport]:
@@ -160,34 +206,61 @@ class DataQualityService:
         rows = DailyBarRepository(lake_root=self.lake_root, dataset_dir=dataset_dir).read_all()
         if not rows:
             if dataset.row_count > 0:
-                reports.append(self._report(dataset, "storage_availability", "error", "error",
-                    "daily_bars_rows_on_disk", "0", f">= {dataset.row_count}",
-                    "数据目录显示日线数据存在，但 Parquet 存储中没有读到记录。", checked_at))
+                reports.append(
+                    self._report(
+                        dataset,
+                        "storage_availability",
+                        "error",
+                        "error",
+                        "daily_bars_rows_on_disk",
+                        "0",
+                        f">= {dataset.row_count}",
+                        "数据目录显示日线数据存在，但 Parquet 存储中没有读到记录。",
+                        checked_at,
+                    )
+                )
             return reports
 
         # field_completeness
-        missing_count = sum(
-            1 for row in rows for field in DAILY_BAR_REQUIRED_FIELDS if _is_missing(row.get(field))
-        )
+        missing_count = sum(1 for row in rows for field in DAILY_BAR_REQUIRED_FIELDS if _is_missing(row.get(field)))
         if missing_count > 0:
             total_required = len(rows) * len(DAILY_BAR_REQUIRED_FIELDS)
             completeness = 1 - missing_count / total_required if total_required else 0
-            reports.append(self._report(dataset, "field_completeness", "warning", "warning",
-                "required_field_completeness", f"{completeness:.2%}", "100%",
-                f"日线数据有 {missing_count} 个必填字段为空。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "field_completeness",
+                    "warning",
+                    "warning",
+                    "required_field_completeness",
+                    f"{completeness:.2%}",
+                    "100%",
+                    f"日线数据有 {missing_count} 个必填字段为空。",
+                    checked_at,
+                )
+            )
 
         # duplicate
         keys = [
-            (row.get("symbol"), row.get("exchange"), row.get("market"),
-             row.get("trade_date"), row.get("adjust_type"))
+            (row.get("symbol"), row.get("exchange"), row.get("market"), row.get("trade_date"), row.get("adjust_type"))
             for row in rows
             if not any(_is_missing(row.get(f)) for f in ("symbol", "exchange", "market", "trade_date", "adjust_type"))
         ]
         duplicate_count = sum(c - 1 for c in Counter(keys).values() if c > 1)
         if duplicate_count > 0:
-            reports.append(self._report(dataset, "duplicate_record", "error", "error",
-                "duplicate_primary_keys", str(duplicate_count), "0",
-                f"日线数据存在 {duplicate_count} 条重复主键记录。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "duplicate_record",
+                    "error",
+                    "error",
+                    "duplicate_primary_keys",
+                    str(duplicate_count),
+                    "0",
+                    f"日线数据存在 {duplicate_count} 条重复主键记录。",
+                    checked_at,
+                )
+            )
 
         # prices
         negative_price_count = 0
@@ -206,29 +279,78 @@ class DataQualityService:
             if lo is not None and any(v is not None and lo > v for v in (op, cl)):
                 low_bound_errors += 1
             negative_turnover_count += sum(
-                1 for f in DAILY_BAR_TURNOVER_FIELDS
-                if (v := _as_float(row.get(f))) is not None and v < 0
+                1 for f in DAILY_BAR_TURNOVER_FIELDS if (v := _as_float(row.get(f))) is not None and v < 0
             )
         if negative_price_count:
-            reports.append(self._report(dataset, "negative_price", "error", "error",
-                "negative_ohlc_fields", str(negative_price_count), "0",
-                f"OHLC 价格字段中有 {negative_price_count} 个负值。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "negative_price",
+                    "error",
+                    "error",
+                    "negative_ohlc_fields",
+                    str(negative_price_count),
+                    "0",
+                    f"OHLC 价格字段中有 {negative_price_count} 个负值。",
+                    checked_at,
+                )
+            )
         if high_low_errors:
-            reports.append(self._report(dataset, "ohlc_range", "error", "error",
-                "high_lower_than_low", str(high_low_errors), "0",
-                f"有 {high_low_errors} 条日线记录不满足 high >= low。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "ohlc_range",
+                    "error",
+                    "error",
+                    "high_lower_than_low",
+                    str(high_low_errors),
+                    "0",
+                    f"有 {high_low_errors} 条日线记录不满足 high >= low。",
+                    checked_at,
+                )
+            )
         if high_bound_errors:
-            reports.append(self._report(dataset, "ohlc_high_bound", "error", "error",
-                "high_lower_than_open_or_close", str(high_bound_errors), "0",
-                f"有 {high_bound_errors} 条日线记录不满足 high >= open/close。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "ohlc_high_bound",
+                    "error",
+                    "error",
+                    "high_lower_than_open_or_close",
+                    str(high_bound_errors),
+                    "0",
+                    f"有 {high_bound_errors} 条日线记录不满足 high >= open/close。",
+                    checked_at,
+                )
+            )
         if low_bound_errors:
-            reports.append(self._report(dataset, "ohlc_low_bound", "error", "error",
-                "low_higher_than_open_or_close", str(low_bound_errors), "0",
-                f"有 {low_bound_errors} 条日线记录不满足 low <= open/close。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "ohlc_low_bound",
+                    "error",
+                    "error",
+                    "low_higher_than_open_or_close",
+                    str(low_bound_errors),
+                    "0",
+                    f"有 {low_bound_errors} 条日线记录不满足 low <= open/close。",
+                    checked_at,
+                )
+            )
         if negative_turnover_count:
-            reports.append(self._report(dataset, "negative_turnover", "error", "error",
-                "negative_volume_or_amount", str(negative_turnover_count), "0",
-                f"成交量或成交额字段中有 {negative_turnover_count} 个负值。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "negative_turnover",
+                    "error",
+                    "error",
+                    "negative_volume_or_amount",
+                    str(negative_turnover_count),
+                    "0",
+                    f"成交量或成交额字段中有 {negative_turnover_count} 个负值。",
+                    checked_at,
+                )
+            )
 
         # missing_trade_dates
         trade_dates_by_market: dict[str, set[date]] = defaultdict(set)
@@ -252,16 +374,28 @@ class DataQualityService:
         for market, actual_dates in sorted(trade_dates_by_market.items()):
             if not actual_dates:
                 continue
-            open_dates = self._open_calendar_dates(market=market, start_date=min(actual_dates), end_date=max(actual_dates))
+            open_dates = self._open_calendar_dates(
+                market=market, start_date=min(actual_dates), end_date=max(actual_dates)
+            )
             if not open_dates:
                 continue
             missing_dates = [td for td in open_dates if td not in actual_dates]
             if not missing_dates:
                 continue
             sample = "、".join(td.isoformat() for td in missing_dates[:5])
-            reports.append(self._report(dataset, "missing_trade_date", "warning", "warning",
-                f"{market}_missing_open_days", str(len(missing_dates)), "0",
-                f"{market} 日线数据缺少 {len(missing_dates)} 个开市日行情，示例：{sample}。", checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "missing_trade_date",
+                    "warning",
+                    "warning",
+                    f"{market}_missing_open_days",
+                    str(len(missing_dates)),
+                    "0",
+                    f"{market} 日线数据缺少 {len(missing_dates)} 个开市日行情，示例：{sample}。",
+                    checked_at,
+                )
+            )
 
         for (market, adjust_type), actual_dates in sorted(trade_dates_by_market_adjustment.items()):
             market_dates = trade_dates_by_market.get(market, set())
@@ -276,17 +410,19 @@ class DataQualityService:
             if not missing_dates:
                 continue
             sample = "、".join(td.isoformat() for td in missing_dates[:5])
-            reports.append(self._report(
-                dataset,
-                "missing_trade_date_by_adjustment",
-                "warning",
-                "warning",
-                f"{market}_{adjust_type}_missing_open_days",
-                str(len(missing_dates)),
-                "0",
-                f"{market} {adjust_type} 日线数据缺少 {len(missing_dates)} 个开市日行情，示例：{sample}。",
-                checked_at,
-            ))
+            reports.append(
+                self._report(
+                    dataset,
+                    "missing_trade_date_by_adjustment",
+                    "warning",
+                    "warning",
+                    f"{market}_{adjust_type}_missing_open_days",
+                    str(len(missing_dates)),
+                    "0",
+                    f"{market} {adjust_type} 日线数据缺少 {len(missing_dates)} 个开市日行情，示例：{sample}。",
+                    checked_at,
+                )
+            )
 
         missing_symbol_count = 0
         missing_day_count = 0
@@ -300,7 +436,8 @@ class DataQualityService:
             cache_key = (market, start_date, end_date)
             if cache_key not in calendar_cache:
                 calendar_cache[cache_key] = self._open_calendar_dates(
-                    market=market, start_date=start_date, end_date=end_date)
+                    market=market, start_date=start_date, end_date=end_date
+                )
             open_dates = calendar_cache[cache_key]
             if not open_dates:
                 continue
@@ -312,11 +449,19 @@ class DataQualityService:
             if len(samples) < 5:
                 samples.append(f"{symbol}:{missing_dates[0].isoformat()}")
         if missing_symbol_count > 0:
-            reports.append(self._report(dataset, "missing_trade_date_by_symbol", "warning", "warning",
-                "symbols_missing_open_days",
-                f"{missing_symbol_count} symbols / {missing_day_count} days", "0",
-                f"有 {missing_symbol_count} 只股票缺少开市日行情，共缺 {missing_day_count} 个股票-交易日，示例：{'、'.join(samples)}。",
-                checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "missing_trade_date_by_symbol",
+                    "warning",
+                    "warning",
+                    "symbols_missing_open_days",
+                    f"{missing_symbol_count} symbols / {missing_day_count} days",
+                    "0",
+                    f"有 {missing_symbol_count} 只股票缺少开市日行情，共缺 {missing_day_count} 个股票-交易日，示例：{'、'.join(samples)}。",
+                    checked_at,
+                )
+            )
 
         missing_adjustment_symbol_count = 0
         missing_adjustment_day_count = 0
@@ -329,7 +474,8 @@ class DataQualityService:
             cache_key = (market, start_date, end_date)
             if cache_key not in calendar_cache:
                 calendar_cache[cache_key] = self._open_calendar_dates(
-                    market=market, start_date=start_date, end_date=end_date)
+                    market=market, start_date=start_date, end_date=end_date
+                )
             missing_dates = [td for td in calendar_cache[cache_key] if td not in actual_dates]
             if not missing_dates:
                 continue
@@ -338,19 +484,21 @@ class DataQualityService:
             if len(adjustment_samples) < 5:
                 adjustment_samples.append(f"{symbol}/{adjust_type}:{missing_dates[0].isoformat()}")
         if missing_adjustment_symbol_count > 0:
-            reports.append(self._report(
-                dataset,
-                "missing_trade_date_by_symbol_adjustment",
-                "warning",
-                "warning",
-                "symbol_adjustments_missing_open_days",
-                f"{missing_adjustment_symbol_count} symbol-adjustments / {missing_adjustment_day_count} days",
-                "0",
-                "有 "
-                f"{missing_adjustment_symbol_count} 个股票-复权口径缺少开市日行情，"
-                f"共缺 {missing_adjustment_day_count} 个股票-复权-交易日，示例：{'、'.join(adjustment_samples)}。",
-                checked_at,
-            ))
+            reports.append(
+                self._report(
+                    dataset,
+                    "missing_trade_date_by_symbol_adjustment",
+                    "warning",
+                    "warning",
+                    "symbol_adjustments_missing_open_days",
+                    f"{missing_adjustment_symbol_count} symbol-adjustments / {missing_adjustment_day_count} days",
+                    "0",
+                    "有 "
+                    f"{missing_adjustment_symbol_count} 个股票-复权口径缺少开市日行情，"
+                    f"共缺 {missing_adjustment_day_count} 个股票-复权-交易日，示例：{'、'.join(adjustment_samples)}。",
+                    checked_at,
+                )
+            )
 
         # stock_pool_coverage
         covered_symbols_by_market: dict[str, set[str]] = defaultdict(set)
@@ -364,12 +512,14 @@ class DataQualityService:
         for market, actual_dates in sorted(trade_dates_by_market.items()):
             if not actual_dates:
                 continue
-            open_dates = self._open_calendar_dates(market=market, start_date=min(actual_dates), end_date=max(actual_dates))
+            open_dates = self._open_calendar_dates(
+                market=market, start_date=min(actual_dates), end_date=max(actual_dates)
+            )
             if not open_dates:
                 continue
-            stock_symbols = set(self.db.scalars(
-                select(Stock.symbol).where(Stock.market == market, Stock.status == "LISTED")
-            ).all())
+            stock_symbols = set(
+                self.db.scalars(select(Stock.symbol).where(Stock.market == market, Stock.status == "LISTED")).all()
+            )
             if not stock_symbols:
                 continue
             missing_symbols = sorted(stock_symbols - covered_symbols_by_market.get(market, set()))
@@ -377,25 +527,35 @@ class DataQualityService:
                 continue
             missing_symbol_days = len(missing_symbols) * len(open_dates)
             sample = "、".join(missing_symbols[:5])
-            reports.append(self._report(dataset, "stock_pool_missing_daily_bars", "warning", "warning",
-                f"{market}_listed_symbols_without_daily_bars",
-                f"{len(missing_symbols)} symbols / {missing_symbol_days} symbol-days", "0",
-                f"{market} 股票池中有 {len(missing_symbols)} 只已上市股票在当前日线窗口完全没有行情，"
-                f"共缺 {missing_symbol_days} 个股票-交易日，示例：{sample}。",
-                checked_at))
+            reports.append(
+                self._report(
+                    dataset,
+                    "stock_pool_missing_daily_bars",
+                    "warning",
+                    "warning",
+                    f"{market}_listed_symbols_without_daily_bars",
+                    f"{len(missing_symbols)} symbols / {missing_symbol_days} symbol-days",
+                    "0",
+                    f"{market} 股票池中有 {len(missing_symbols)} 只已上市股票在当前日线窗口完全没有行情，"
+                    f"共缺 {missing_symbol_days} 个股票-交易日，示例：{sample}。",
+                    checked_at,
+                )
+            )
         return reports
 
     def _open_calendar_dates(self, *, market: str, start_date: date, end_date: date) -> list[date]:
-        return list(self.db.scalars(
-            select(TradingCalendar.trade_date)
-            .where(
-                TradingCalendar.market == market,
-                TradingCalendar.trade_date >= start_date,
-                TradingCalendar.trade_date <= end_date,
-                TradingCalendar.is_open.is_(True),
-            )
-            .order_by(TradingCalendar.trade_date.asc())
-        ).all())
+        return list(
+            self.db.scalars(
+                select(TradingCalendar.trade_date)
+                .where(
+                    TradingCalendar.market == market,
+                    TradingCalendar.trade_date >= start_date,
+                    TradingCalendar.trade_date <= end_date,
+                    TradingCalendar.is_open.is_(True),
+                )
+                .order_by(TradingCalendar.trade_date.asc())
+            ).all()
+        )
 
     @staticmethod
     def _dataset_quality_status(reports: list[DataQualityReport]) -> str:
@@ -407,24 +567,33 @@ class DataQualityService:
 
     @staticmethod
     def _report(
-        dataset: Dataset, check_type: str, status: str, severity: str,
-        metric_name: str, metric_value: str | None, expected_value: str | None,
-        message: str, checked_at: datetime,
+        dataset: Dataset,
+        check_type: str,
+        status: str,
+        severity: str,
+        metric_name: str,
+        metric_value: str | None,
+        expected_value: str | None,
+        message: str,
+        checked_at: datetime,
     ) -> DataQualityReport:
         return DataQualityReport(
-            dataset_name=dataset.name, check_type=check_type, status=status,
-            severity=severity, metric_name=metric_name, metric_value=metric_value,
-            expected_value=expected_value, message=message, checked_at=checked_at,
+            dataset_name=dataset.name,
+            check_type=check_type,
+            status=status,
+            severity=severity,
+            metric_name=metric_name,
+            metric_value=metric_value,
+            expected_value=expected_value,
+            message=message,
+            checked_at=checked_at,
         )
 
     def _serialize_reports(self, reports: list[DataQualityReport]) -> list[dict]:
         if not reports:
             return []
         dataset_names = sorted({r.dataset_name for r in reports})
-        datasets = {
-            d.name: d
-            for d in self.db.scalars(select(Dataset).where(Dataset.name.in_(dataset_names))).all()
-        }
+        datasets = {d.name: d for d in self.db.scalars(select(Dataset).where(Dataset.name.in_(dataset_names))).all()}
         latest_batches: dict[str, IngestBatch] = {}
         batches = self.db.scalars(
             select(IngestBatch)

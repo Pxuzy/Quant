@@ -8,6 +8,7 @@ DataLoader — Qlib 式 DataBundle，双引擎版。
   daily_bars / fundamentals / factors   → DuckDB 持久表
   search_knowledge                      → PG+pgvector (cosine)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -35,11 +36,14 @@ class DataAccessLayer:
     _duck: Any = field(default=None, repr=False)
 
     # 查询缓存：低频变化数据使用 TTL 缓存
-    _cache: dict[str, TTLCache] = field(default_factory=lambda: {
-        "stocks": TTLCache(maxsize=4, ttl=300),       # 5 分钟
-        "calendar": TTLCache(maxsize=4, ttl=300),      # 5 分钟
-        "search": TTLCache(maxsize=128, ttl=60),       # 1 分钟
-    }, repr=False)
+    _cache: dict[str, TTLCache] = field(
+        default_factory=lambda: {
+            "stocks": TTLCache(maxsize=4, ttl=300),  # 5 分钟
+            "calendar": TTLCache(maxsize=4, ttl=300),  # 5 分钟
+            "search": TTLCache(maxsize=128, ttl=60),  # 1 分钟
+        },
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         self.database_url = self.database_url or get_settings().database_url
@@ -184,9 +188,7 @@ class DataAccessLayer:
         session = self._get_session()
         try:
             rows = session.execute(
-                text(
-                    "SELECT trade_date, is_open FROM trading_calendars WHERE market = :market"
-                ),
+                text("SELECT trade_date, is_open FROM trading_calendars WHERE market = :market"),
                 {"market": market},
             ).fetchall()
             result = {str(r.trade_date): bool(r.is_open) for r in rows}
@@ -217,8 +219,7 @@ class DataAccessLayer:
         sql = (
             "SELECT trade_date, open, high, low, close, volume, amount "
             "FROM daily_bars "
-            "WHERE " + " AND ".join(conditions) +
-            " ORDER BY trade_date"
+            "WHERE " + " AND ".join(conditions) + " ORDER BY trade_date"
         )
 
         if limit:
@@ -229,7 +230,7 @@ class DataAccessLayer:
             rows = con.execute(sql, params).fetchall()
 
         cols = ["trade_date", "open", "high", "low", "close", "volume", "amount"]
-        return [dict(zip(cols, [str(r[0]) if hasattr(r[0], 'isoformat') else r[0], *r[1:]])) for r in rows]
+        return [dict(zip(cols, [str(r[0]) if hasattr(r[0], "isoformat") else r[0], *r[1:]])) for r in rows]
 
     def fundamentals(
         self,
@@ -294,7 +295,9 @@ class DataAccessLayer:
         session = self._get_session()
         try:
             repo = NewsRepository(session)
-            articles, total = repo.list_news(keyword=keyword, source=source, category=category, page=page, page_size=page_size)
+            articles, total = repo.list_news(
+                keyword=keyword, source=source, category=category, page=page, page_size=page_size
+            )
             records = [
                 {
                     "id": a.id,
@@ -440,6 +443,7 @@ def stock_detail(symbol: str, market: str = "A_SHARE") -> dict | None:
 
 
 # ─── 新增 3 个函数 ─────────────────────────────────────
+
 
 def news(
     keyword: str | None = None,

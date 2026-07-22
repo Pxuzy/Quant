@@ -10,7 +10,6 @@ from backend.app.services.raw_artifact_store import RawArtifactMetadata
 
 
 class RawArtifactRepository(BaseRepository):
-
     def create_artifact(
         self,
         *,

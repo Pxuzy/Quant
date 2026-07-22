@@ -1,2 +1,1 @@
 """Core API configuration helpers."""
-

@@ -46,7 +46,6 @@ DEFAULT_SCHEDULE_ORDER = {str(item["code"]): index for index, item in enumerate(
 
 
 class SyncScheduleRepository(BaseRepository):
-
     def ensure_defaults(self) -> list[SyncSchedule]:
         schedules: list[SyncSchedule] = []
         for payload in DEFAULT_SYNC_SCHEDULES:

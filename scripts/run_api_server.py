@@ -317,8 +317,7 @@ def main() -> None:
                 else "exited before health check"
             )
             detail = (
-                f"API server started with pid {pid}, but health check did not pass "
-                f"({process_state}). {status_text()}"
+                f"API server started with pid {pid}, but health check did not pass ({process_state}). {status_text()}"
             )
             if log_tail:
                 detail = f"{detail}\n\nRecent log:\n{log_tail}"

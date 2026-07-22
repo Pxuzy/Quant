@@ -98,7 +98,8 @@ class StockQueryService:
         expected_dates = sorted(
             trade_date
             for trade_date in (
-                self._open_trade_dates(market=stock.market) or self.daily_bar_repo.market_trade_dates(market=stock.market)
+                self._open_trade_dates(market=stock.market)
+                or self.daily_bar_repo.market_trade_dates(market=stock.market)
             )
             if first_data_date <= trade_date <= latest_data_date
         )
@@ -142,7 +143,8 @@ class StockQueryService:
         expected_dates = sorted(
             trade_date
             for trade_date in (
-                self._open_trade_dates(market=stock.market) or self.daily_bar_repo.market_trade_dates(market=stock.market)
+                self._open_trade_dates(market=stock.market)
+                or self.daily_bar_repo.market_trade_dates(market=stock.market)
             )
             if first_data_date <= trade_date <= latest_data_date
         )
@@ -284,7 +286,8 @@ class StockQueryService:
                 if summary and latest_data_date:
                     market_dates = market_dates_cache.setdefault(
                         stock.market,
-                        self._open_trade_dates(market=stock.market) or self.daily_bar_repo.market_trade_dates(market=stock.market),
+                        self._open_trade_dates(market=stock.market)
+                        or self.daily_bar_repo.market_trade_dates(market=stock.market),
                     )
                     data_completeness = _coverage_ratio(
                         actual_count=int(summary["trade_dates_count"]),
@@ -441,13 +444,9 @@ def _has_ohlc_error(
 ) -> bool:
     if high_price is not None and low_price is not None and high_price < low_price:
         return True
-    if high_price is not None and any(
-        value is not None and high_price < value for value in (open_price, close_price)
-    ):
+    if high_price is not None and any(value is not None and high_price < value for value in (open_price, close_price)):
         return True
-    if low_price is not None and any(
-        value is not None and low_price > value for value in (open_price, close_price)
-    ):
+    if low_price is not None and any(value is not None and low_price > value for value in (open_price, close_price)):
         return True
     return False
 

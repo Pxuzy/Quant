@@ -60,6 +60,7 @@ def _list_daily_bars(
         sort_order=sort_order,
     )
     from math import ceil
+
     return {
         "items": items,
         "total": total,

@@ -159,11 +159,7 @@ class MultiSymbolDailyBarAdapter(SuccessDailyBarAdapter):
                 "close": 11.0 if symbol == "000001" else 21.0,
             },
         ]
-        return [
-            record
-            for record in records
-            if kwargs["start_date"] <= record["trade_date"] <= kwargs["end_date"]
-        ]
+        return [record for record in records if kwargs["start_date"] <= record["trade_date"] <= kwargs["end_date"]]
 
     def normalize_daily_bars(self, raw_records: list[dict]) -> list[NormalizedDailyBar]:
         return [
@@ -1077,9 +1073,7 @@ def test_auto_daily_bars_sync_falls_back_and_writes_parquet(client, tmp_path):
     assert items[0]["adjust_type"] == "hfq"
     assert items[0]["ingested_at"] is not None
     assert any(
-        log.message == "Provider attempt failed."
-        and log.payload_json["source"] == "failing_daily"
-        for log in logs
+        log.message == "Provider attempt failed." and log.payload_json["source"] == "failing_daily" for log in logs
     )
     assert any(
         log.message == "Daily bars sync completed." and log.payload_json["selected_source"] == "success_daily"

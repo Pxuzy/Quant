@@ -16,10 +16,11 @@ LEGACY_DEFAULT_SETTINGS: dict[str, dict[str, object]] = {
 
 
 class DataSourceRepository(BaseRepository):
-
     def upsert_adapter(self, adapter: StockDataSourceAdapter) -> DataSource:
         data_source = self.db.scalar(select(DataSource).where(DataSource.code == adapter.code))
-        current_config = data_source.config_json if data_source is not None and isinstance(data_source.config_json, dict) else {}
+        current_config = (
+            data_source.config_json if data_source is not None and isinstance(data_source.config_json, dict) else {}
+        )
         config_json = {
             **current_config,
             "capabilities": adapter.capabilities().to_dict(),
@@ -56,9 +57,7 @@ class DataSourceRepository(BaseRepository):
         registered_codes = {adapter.code for adapter in registry.list()}
         if registered_codes:
             retired_sources = list(
-                self.db.scalars(
-                    select(DataSource).where(DataSource.code.not_in(registered_codes))
-                ).all()
+                self.db.scalars(select(DataSource).where(DataSource.code.not_in(registered_codes))).all()
             )
             retired_at = datetime.now(timezone.utc).isoformat()
             for source in retired_sources:
@@ -76,14 +75,13 @@ class DataSourceRepository(BaseRepository):
         return self.db.scalar(select(DataSource).where(DataSource.code == code))
 
     def list_all(self) -> list[DataSource]:
-        sources = list(self.db.scalars(select(DataSource).order_by(DataSource.priority.asc(), DataSource.code.asc())).all())
+        sources = list(
+            self.db.scalars(select(DataSource).order_by(DataSource.priority.asc(), DataSource.code.asc())).all()
+        )
         return [
             source
             for source in sources
-            if not (
-                isinstance(source.config_json, dict)
-                and source.config_json.get("retired") is True
-            )
+            if not (isinstance(source.config_json, dict) and source.config_json.get("retired") is True)
         ]
 
     def list_enabled(self) -> list[DataSource]:
@@ -95,7 +93,9 @@ class DataSourceRepository(BaseRepository):
             ).all()
         )
 
-    def update_source(self, code: str, *, enabled: bool | None = None, priority: int | None = None) -> DataSource | None:
+    def update_source(
+        self, code: str, *, enabled: bool | None = None, priority: int | None = None
+    ) -> DataSource | None:
         data_source = self.get_by_code(code)
         if data_source is None:
             return None

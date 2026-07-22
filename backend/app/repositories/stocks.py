@@ -11,7 +11,6 @@ from backend.app.repositories._query import paginated_query
 
 
 class StockRepository(BaseRepository):
-
     def list_stocks(
         self,
         *,
@@ -86,8 +85,7 @@ class StockRepository(BaseRepository):
                 (
                     stock
                     for stock in stocks
-                    if is_common_stock_symbol(stock.symbol, stock.exchange, stock.market)
-                    and stock.status == "LISTED"
+                    if is_common_stock_symbol(stock.symbol, stock.exchange, stock.market) and stock.status == "LISTED"
                 ),
                 None,
             )

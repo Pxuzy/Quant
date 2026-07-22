@@ -85,6 +85,7 @@ def _records_from_payload(payload: Any) -> list[dict[str, Any]]:
 
     这个函数把所有这些情况都兜住，输出统一的字典列表。
     """
+
     def record_from_item(item: Any) -> dict[str, Any] | None:
         """把单个元素转成字典。"""
         if isinstance(item, dict):
@@ -103,22 +104,14 @@ def _records_from_payload(payload: Any) -> list[dict[str, Any]]:
 
     # 情况二：直接就是数组（最常见）
     if isinstance(payload, list):
-        return [
-            record
-            for item in payload
-            if (record := record_from_item(item)) is not None
-        ]
+        return [record for item in payload if (record := record_from_item(item)) is not None]
 
     # 情况三：带包装的对象 {"data": [...], "total": 100}
     if isinstance(payload, dict):
         for key in ("data", "items", "records", "list", "result"):
             value = payload.get(key)
             if isinstance(value, list):
-                return [
-                    record
-                    for item in value
-                    if (record := record_from_item(item)) is not None
-                ]
+                return [record for item in value if (record := record_from_item(item)) is not None]
         # 如果就是一个普通的单条记录，直接包成列表
         return [payload]
 
@@ -152,9 +145,17 @@ def _normalize_exchange(value: Any, *, symbol: str) -> str:
     """统一交易所代码（和 adata.py 里逻辑一致）。"""
     text = (_clean_text(value) or "").upper()
     exchange_map = {
-        "SH": "SSE", "SSE": "SSE", "XSHG": "SSE", "上海": "SSE",
-        "SZ": "SZSE", "SZSE": "SZSE", "XSHE": "SZSE", "深圳": "SZSE",
-        "BJ": "BSE", "BSE": "BSE", "北京": "BSE",
+        "SH": "SSE",
+        "SSE": "SSE",
+        "XSHG": "SSE",
+        "上海": "SSE",
+        "SZ": "SZSE",
+        "SZSE": "SZSE",
+        "XSHE": "SZSE",
+        "深圳": "SZSE",
+        "BJ": "BSE",
+        "BSE": "BSE",
+        "北京": "BSE",
     }
     if text in exchange_map:
         return exchange_map[text]
@@ -165,9 +166,7 @@ def _normalize_exchange(value: Any, *, symbol: str) -> str:
     return "SZSE"
 
 
-def _split_symbol_and_exchange(
-    raw_symbol: Any, raw_exchange: Any = None
-) -> tuple[str | None, str | None]:
+def _split_symbol_and_exchange(raw_symbol: Any, raw_exchange: Any = None) -> tuple[str | None, str | None]:
     """从各种代码格式中提取 (纯代码, 交易所)，和 adata.py 逻辑一致。"""
     text = _clean_text(raw_symbol)
     if text is None:
@@ -192,9 +191,7 @@ def _split_symbol_and_exchange(
                 exchange_hint = exchange_hint or prefix
                 break
 
-    symbol = "".join(
-        character for character in normalized if character.isdigit()
-    )
+    symbol = "".join(character for character in normalized if character.isdigit())
     if not symbol:
         return None, None
     return symbol, _normalize_exchange(exchange_hint, symbol=symbol)
@@ -203,21 +200,9 @@ def _split_symbol_and_exchange(
 def _status_from_record(record: dict[str, Any]) -> str:
     """判断股票状态，和 adata.py 逻辑一致。"""
     raw_status = (
-        _clean_text(
-            record.get("status")
-            or record.get("listStatus")
-            or record.get("list_status")
-        )
-        or ""
+        _clean_text(record.get("status") or record.get("listStatus") or record.get("list_status")) or ""
     ).lower()
-    raw_name = (
-        _clean_text(
-            record.get("name")
-            or record.get("shortName")
-            or record.get("short_name")
-        )
-        or ""
-    ).lower()
+    raw_name = (_clean_text(record.get("name") or record.get("shortName") or record.get("short_name")) or "").lower()
 
     if raw_status in {"0", "delisted", "d", "退市"} or "退" in raw_name:
         return "DELISTED"
@@ -244,9 +229,9 @@ class StockSdkAdapter(StockDataSourceAdapter):
 
     code = "stock_sdk"
     name = "Stock SDK"
-    priority = 45           # ★ 最低优先级，实验性质
+    priority = 45  # ★ 最低优先级，实验性质
     requires_token = False
-    default_enabled = False # ★ 默认关闭，需要用户手动配置 Node 环境
+    default_enabled = False  # ★ 默认关闭，需要用户手动配置 Node 环境
 
     def __init__(self, *, client: Any | None = None) -> None:
         self._client = client
@@ -297,14 +282,10 @@ class StockSdkAdapter(StockDataSourceAdapter):
                     )
         except ModuleNotFoundError as exc:
             logger.warning("stock-sdk health check failed (unavailable): %s", exc)
-            return HealthCheckResult(
-                healthy=False, status="unavailable", message=str(exc)
-            )
+            return HealthCheckResult(healthy=False, status="unavailable", message=str(exc))
         except Exception as exc:
             logger.warning("stock-sdk health check failed: %s", exc)
-            return HealthCheckResult(
-                healthy=False, status="unhealthy", message=str(exc)
-            )
+            return HealthCheckResult(healthy=False, status="unhealthy", message=str(exc))
 
         return HealthCheckResult(
             healthy=True,
@@ -329,21 +310,15 @@ class StockSdkAdapter(StockDataSourceAdapter):
                         → stdout: JSON 数组
         """
         if market.upper() != "A_SHARE":
-            raise ValueError(
-                "stock-sdk stock list adapter currently supports A_SHARE only."
-            )
+            raise ValueError("stock-sdk stock list adapter currently supports A_SHARE only.")
 
         client = self._get_client()
         codes = getattr(client, "codes", None)
         if not hasattr(codes, "cn"):
-            raise RuntimeError(
-                "stock-sdk client does not expose codes.cn."
-            )
+            raise RuntimeError("stock-sdk client does not expose codes.cn.")
         return _records_from_payload(codes.cn(market="A_SHARE"))
 
-    def normalize_stock_list(
-        self, raw_records: list[dict[str, Any]]
-    ) -> list[NormalizedStock]:
+    def normalize_stock_list(self, raw_records: list[dict[str, Any]]) -> list[NormalizedStock]:
         """
         把 stock-sdk 原始数据转成统一格式。
 
@@ -356,17 +331,11 @@ class StockSdkAdapter(StockDataSourceAdapter):
 
         for record in raw_records:
             symbol, exchange = _split_symbol_and_exchange(
-                record.get("code")
-                or record.get("symbol")
-                or record.get("stockCode")
-                or record.get("stock_code"),
+                record.get("code") or record.get("symbol") or record.get("stockCode") or record.get("stock_code"),
                 record.get("exchange") or record.get("market"),
             )
             name = _clean_text(
-                record.get("name")
-                or record.get("shortName")
-                or record.get("short_name")
-                or record.get("stockName")
+                record.get("name") or record.get("shortName") or record.get("short_name") or record.get("stockName")
             )
 
             if symbol is None or exchange is None or name is None:
@@ -379,18 +348,12 @@ class StockSdkAdapter(StockDataSourceAdapter):
                     market="A_SHARE",
                     name=name,
                     status=_status_from_record(record),
-                    industry=_clean_text(
-                        record.get("industry") or record.get("sector")
-                    ),
+                    industry=_clean_text(record.get("industry") or record.get("sector")),
                     listing_date=_parse_date(
-                        record.get("listDate")
-                        or record.get("list_date")
-                        or record.get("listingDate")
+                        record.get("listDate") or record.get("list_date") or record.get("listingDate")
                     ),
                     delisting_date=_parse_date(
-                        record.get("delistDate")
-                        or record.get("delist_date")
-                        or record.get("delistingDate")
+                        record.get("delistDate") or record.get("delist_date") or record.get("delistingDate")
                     ),
                     source=self.code,
                 )
@@ -417,9 +380,7 @@ class StockSdkAdapter(StockDataSourceAdapter):
         同时传 snake_case 和 camelCase 的参数，兼容 stock-sdk 的不同版本。
         """
         if market.upper() != "A_SHARE":
-            raise ValueError(
-                "stock-sdk daily bars adapter currently supports A_SHARE only."
-            )
+            raise ValueError("stock-sdk daily bars adapter currently supports A_SHARE only.")
         adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
         if adjust_type_code != "none":
             raise ValueError("stock-sdk daily bars adapter currently supports unadjusted bars only.")
@@ -427,9 +388,7 @@ class StockSdkAdapter(StockDataSourceAdapter):
         client = self._get_client()
         kline = getattr(client, "kline", None)
         if not hasattr(kline, "cn"):
-            raise RuntimeError(
-                "stock-sdk client does not expose kline.cn."
-            )
+            raise RuntimeError("stock-sdk client does not expose kline.cn.")
         return _records_from_payload(
             kline.cn(
                 symbol=symbol,
@@ -445,9 +404,7 @@ class StockSdkAdapter(StockDataSourceAdapter):
             )
         )
 
-    def normalize_daily_bars(
-        self, raw_records: list[dict[str, Any]]
-    ) -> list[NormalizedDailyBar]:
+    def normalize_daily_bars(self, raw_records: list[dict[str, Any]]) -> list[NormalizedDailyBar]:
         """
         把 stock-sdk 原始日K线转成统一格式。
 
@@ -460,41 +417,22 @@ class StockSdkAdapter(StockDataSourceAdapter):
 
         for record in raw_records:
             symbol, exchange = _split_symbol_and_exchange(
-                record.get("code")
-                or record.get("symbol")
-                or record.get("stockCode")
-                or record.get("stock_code"),
+                record.get("code") or record.get("symbol") or record.get("stockCode") or record.get("stock_code"),
                 record.get("exchange") or record.get("market"),
             )
             trade_date = _parse_date(
-                record.get("date")
-                or record.get("tradeDate")
-                or record.get("trade_date")
-                or record.get("day")
+                record.get("date") or record.get("tradeDate") or record.get("trade_date") or record.get("day")
             )
 
             if symbol is None or exchange is None or trade_date is None:
                 continue
 
-            open_price = _to_float(
-                record.get("open") or record.get("openPrice")
-            )
-            high = _to_float(
-                record.get("high") or record.get("highPrice")
-            )
-            low = _to_float(
-                record.get("low") or record.get("lowPrice")
-            )
-            close = _to_float(
-                record.get("close") or record.get("closePrice")
-            )
+            open_price = _to_float(record.get("open") or record.get("openPrice"))
+            high = _to_float(record.get("high") or record.get("highPrice"))
+            low = _to_float(record.get("low") or record.get("lowPrice"))
+            close = _to_float(record.get("close") or record.get("closePrice"))
 
-            if (
-                open_price is None
-                or high is None
-                or low is None
-                or close is None
-            ):
+            if open_price is None or high is None or low is None or close is None:
                 continue
 
             normalized.append(
@@ -507,11 +445,7 @@ class StockSdkAdapter(StockDataSourceAdapter):
                     high=high,
                     low=low,
                     close=close,
-                    pre_close=_to_float(
-                        record.get("preClose")
-                        or record.get("pre_close")
-                        or record.get("preclose")
-                    ),
+                    pre_close=_to_float(record.get("preClose") or record.get("pre_close") or record.get("preclose")),
                     volume=_to_float(
                         record.get("volume") or record.get("vol"),
                         default=0.0,

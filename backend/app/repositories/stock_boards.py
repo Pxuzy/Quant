@@ -8,9 +8,10 @@ from backend.app.repositories._base import BaseRepository
 
 
 class StockBoardRepository(BaseRepository):
-
     def list_boards(self, *, category: str | None = None) -> list[StockBoard]:
-        stmt = select(StockBoard).order_by(StockBoard.category, StockBoard.change_pct.desc().nullslast(), StockBoard.name)
+        stmt = select(StockBoard).order_by(
+            StockBoard.category, StockBoard.change_pct.desc().nullslast(), StockBoard.name
+        )
         if category:
             stmt = stmt.where(StockBoard.category == category.strip())
         return list(self.db.scalars(stmt).all())

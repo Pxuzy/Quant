@@ -67,6 +67,7 @@ def create_app() -> FastAPI:
         async def serve_spa(full_path: str):
             if full_path.startswith("api/") or full_path.startswith("health"):
                 from fastapi.responses import JSONResponse
+
                 return JSONResponse({"detail": "Not Found"}, status_code=404)
             return FileResponse(str(INDEX_HTML))
 

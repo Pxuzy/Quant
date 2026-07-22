@@ -12,7 +12,6 @@ from backend.app.repositories._query import paginated_query
 
 
 class TradingCalendarRepository(BaseRepository):
-
     def list_days(
         self,
         *,
@@ -34,6 +33,7 @@ class TradingCalendarRepository(BaseRepository):
             conditions.append(TradingCalendar.is_open.is_(is_open))
 
         from backend.app.repositories._query import paginated_query
+
         return paginated_query(
             self.db,
             model=TradingCalendar,

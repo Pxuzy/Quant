@@ -117,9 +117,7 @@ def test_dataset_with_registered_version_cannot_be_deleted(client, tmp_path):
         db.refresh(dataset)
         manifest = _manifest()
         artifact = DatasetManifestStore(tmp_path / "lake").write(manifest)
-        DatasetVersionRepository(db).create_candidate(
-            dataset=dataset, manifest=manifest, manifest_artifact=artifact
-        )
+        DatasetVersionRepository(db).create_candidate(dataset=dataset, manifest=manifest, manifest_artifact=artifact)
         db.commit()
 
         db.delete(dataset)

@@ -35,11 +35,16 @@ def _parse_kline_response(text: str, code: str, period: str, count: int) -> List
             continue
         for k in klines[-safe_count:]:
             try:
-                results.append({
-                    "date": k[0], "open": float(k[1]), "high": float(k[3]),
-                    "close": float(k[2]), "low": float(k[4]),
-                    "volume": int(float(k[5])) if len(k) > 5 else 0,
-                })
+                results.append(
+                    {
+                        "date": k[0],
+                        "open": float(k[1]),
+                        "high": float(k[3]),
+                        "close": float(k[2]),
+                        "low": float(k[4]),
+                        "volume": int(float(k[5])) if len(k) > 5 else 0,
+                    }
+                )
             except (ValueError, IndexError):
                 continue
     return results
@@ -85,7 +90,7 @@ def _get_governed_daily_kline(code: str, count: int) -> List[Dict]:
     if not rows:
         return []
 
-    return [_daily_bar_to_kline(row) for row in rows[-max(1, count):]]
+    return [_daily_bar_to_kline(row) for row in rows[-max(1, count) :]]
 
 
 def get_history_kline(code: str, period: str = "day", count: int = 100, adjust: str = "qfq") -> List[Dict]:
@@ -123,4 +128,4 @@ def get_history_kline(code: str, period: str = "day", count: int = 100, adjust: 
         except ValueError:
             break
 
-    return sorted(by_date.values(), key=lambda item: item["date"])[-max(1, count):]
+    return sorted(by_date.values(), key=lambda item: item["date"])[-max(1, count) :]

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 def _import_akshare():
     import os
+
     os.environ.setdefault("TQDM_DISABLE", "1")
     stderr = io.StringIO()
     with contextlib.redirect_stderr(stderr):
@@ -24,15 +25,28 @@ def _import_akshare():
 
 
 _QUOTE_FIELD_MAP = {
-    1: "name", 3: "price", 31: "change", 32: "change_pct",
-    5: "open", 33: "high", 34: "low", 6: "volume", 37: "amount",
-    39: "pe", 46: "pb", 38: "turnover", 9: "bid1_price", 10: "bid1_vol",
-    19: "ask1_price", 20: "ask1_vol", 4: "prev_close",
+    1: "name",
+    3: "price",
+    31: "change",
+    32: "change_pct",
+    5: "open",
+    33: "high",
+    34: "low",
+    6: "volume",
+    37: "amount",
+    39: "pe",
+    46: "pb",
+    38: "turnover",
+    9: "bid1_price",
+    10: "bid1_vol",
+    19: "ask1_price",
+    20: "ask1_vol",
+    4: "prev_close",
 }
 
 
 def _parse_tencent_quote(line: str) -> dict | None:
-    code_match = re.search(r'v_([a-z]{2}\d{6})', line)
+    code_match = re.search(r"v_([a-z]{2}\d{6})", line)
     if not code_match:
         return None
     code = code_match.group(1)

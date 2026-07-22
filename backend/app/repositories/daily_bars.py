@@ -56,6 +56,7 @@ def parquet_data_lock(lake_root: str | Path):
             finally:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
+
 def _duckdb_connect_with_timeout() -> duckdb.DuckDBPyConnection:
     """Create a DuckDB connection."""
     return duckdb.connect()
@@ -104,19 +105,13 @@ class DailyBarRepository:
                     parquet_snapshots[file_path] = file_path.read_bytes() if file_path.exists() else None
 
                     existing_rows = (
-                        [_normalize_row(row) for row in _read_parquet_file(file_path)]
-                        if file_path.exists()
-                        else []
+                        [_normalize_row(row) for row in _read_parquet_file(file_path)] if file_path.exists() else []
                     )
-                    existing_by_key = {
-                        _daily_bar_identity(row): row
-                        for row in existing_rows
-                    }
+                    existing_by_key = {_daily_bar_identity(row): row for row in existing_rows}
                     changed_rows = [
                         row
                         for row in group
-                        if _daily_bar_content(existing_by_key.get(_daily_bar_identity(row)))
-                        != _daily_bar_content(row)
+                        if _daily_bar_content(existing_by_key.get(_daily_bar_identity(row))) != _daily_bar_content(row)
                     ]
                     if not changed_rows:
                         continue
@@ -171,15 +166,11 @@ class DailyBarRepository:
             rows = self.symbol_daily_bars(**symbol_query)
             if start_date:
                 rows = [
-                    row
-                    for row in rows
-                    if isinstance(row.get("trade_date"), date) and row["trade_date"] >= start_date
+                    row for row in rows if isinstance(row.get("trade_date"), date) and row["trade_date"] >= start_date
                 ]
             if end_date:
                 rows = [
-                    row
-                    for row in rows
-                    if isinstance(row.get("trade_date"), date) and row["trade_date"] <= end_date
+                    row for row in rows if isinstance(row.get("trade_date"), date) and row["trade_date"] <= end_date
                 ]
             rows = sorted(rows, key=lambda row: _daily_bar_sort_key(row, sort_order=sort_order))
             total = len(rows)
@@ -242,22 +233,14 @@ class DailyBarRepository:
         if result is not None:
             return result
         rows = self._read_partition_rows(market=market)
-        return {
-            row["trade_date"]
-            for row in rows
-            if isinstance(row.get("trade_date"), date)
-        }
+        return {row["trade_date"] for row in rows if isinstance(row.get("trade_date"), date)}
 
     def symbol_trade_dates(self, *, symbol: str, market: str) -> set[date]:
         result = self._try_duckdb("symbol_trade_dates", symbol=symbol, market=market)
         if result is not None:
             return result
         rows = self._read_partition_rows(symbol=symbol, market=market)
-        return {
-            row["trade_date"]
-            for row in rows
-            if isinstance(row.get("trade_date"), date)
-        }
+        return {row["trade_date"] for row in rows if isinstance(row.get("trade_date"), date)}
 
     def symbol_daily_bars(
         self,
@@ -277,10 +260,7 @@ class DailyBarRepository:
             return result
         rows = self._read_partition_rows(symbol=symbol, market=market)
         if adjust_type_code is not None:
-            rows = [
-                row for row in rows
-                if (row.get("adjust_type") or "none") == adjust_type_code
-            ]
+            rows = [row for row in rows if (row.get("adjust_type") or "none") == adjust_type_code]
         return sorted(
             [row for row in rows if isinstance(row.get("trade_date"), date)],
             key=lambda row: (row["trade_date"], row.get("adjust_type") or "none"),
@@ -374,11 +354,7 @@ class DailyBarRepository:
             end_date=end_date,
         )
         if adjust_type is not None:
-            rows = [
-                row
-                for row in rows
-                if (row.get("adjust_type") or "none") == adjust_type
-            ]
+            rows = [row for row in rows if (row.get("adjust_type") or "none") == adjust_type]
         if not rows:
             return [], 0
 
@@ -696,10 +672,7 @@ def _normalize_row(row: dict) -> dict:
 
 
 def _daily_bar_identity(row: dict) -> tuple:
-    return tuple(
-        row.get(column)
-        for column in ("symbol", "exchange", "market", "trade_date", "adjust_type")
-    )
+    return tuple(row.get(column) for column in ("symbol", "exchange", "market", "trade_date", "adjust_type"))
 
 
 def _daily_bar_content(row: dict | None) -> tuple | None:

@@ -104,7 +104,9 @@ class TradingCalendarService:
             self.db.rollback()
             raise ValueError(f"Data source '{source_code}' is disabled.")
 
-        task = self._create_calendar_task(source=source_code, market=market_code, start_date=start_date, end_date=end_date)
+        task = self._create_calendar_task(
+            source=source_code, market=market_code, start_date=start_date, end_date=end_date
+        )
         self.db.commit()
         self.db.refresh(task)
         invalidate_coverage_cache(market_code)
@@ -359,7 +361,9 @@ class TradingCalendarService:
                 row_count=total_rows,
                 latest_data_date=latest_trade_date,
             )
-            self.ingest_batch_repo.complete_batch(batch, records_written=records_written, quality_status=dataset.quality_status)
+            self.ingest_batch_repo.complete_batch(
+                batch, records_written=records_written, quality_status=dataset.quality_status
+            )
         except Exception as exc:
             self.ingest_batch_repo.fail_batch(batch, message=str(exc))
             raise

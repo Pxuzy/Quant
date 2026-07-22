@@ -91,13 +91,7 @@ def _validate_relative_uri(uri: Any) -> str:
         raise ManifestValidationError("partition relative URI must be a non-empty string")
     value = uri.strip()
     path = PurePosixPath(value)
-    if (
-        path.is_absolute()
-        or ntpath.isabs(value)
-        or "\\" in value
-        or ".." in path.parts
-        or "://" in value
-    ):
+    if path.is_absolute() or ntpath.isabs(value) or "\\" in value or ".." in path.parts or "://" in value:
         raise ManifestValidationError("partition URI must be a relative URI without path escape")
     return value
 
@@ -159,11 +153,7 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         if not isinstance(byte_size, int) or isinstance(byte_size, bool) or byte_size < 0:
             raise ManifestValidationError(f"partition '{uri}' byte_size must be a non-negative integer")
         partition_row_count = partition.get("row_count")
-        if (
-            not isinstance(partition_row_count, int)
-            or isinstance(partition_row_count, bool)
-            or partition_row_count < 0
-        ):
+        if not isinstance(partition_row_count, int) or isinstance(partition_row_count, bool) or partition_row_count < 0:
             raise ManifestValidationError(f"partition '{uri}' row_count must be a non-negative integer")
         partition_rows += partition_row_count
         _validate_date(partition.get("min_trade_date"), f"partition '{uri}' min_trade_date")

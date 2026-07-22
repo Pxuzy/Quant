@@ -13,6 +13,7 @@ from backend.app.core.config import reset_settings_cache  # noqa: E402
 from backend.app.db.session import configure_database, init_db  # noqa: E402
 from backend.app.main import create_app  # noqa: E402
 
+
 @pytest.fixture(autouse=True)
 def isolated_storage(tmp_path, monkeypatch):
     """Keep worker tests from sharing the process-wide DuckDB connection."""

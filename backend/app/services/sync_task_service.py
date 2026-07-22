@@ -15,7 +15,13 @@ from backend.app.services.trading_calendar_service import TradingCalendarService
 
 WORKER_COMMAND = "python -m backend.worker.sync_stocks --run-next-pending"
 WORKER_NOTE = "创建同步任务后，API 只负责入队；本地轻量 worker 会执行最早的待执行 V1 同步任务。"
-SUPPORTED_WORKER_TASK_TYPES = ("stock_list", "daily_bars", "daily_bars_market_repair", "calendars", "daily_bars_raw_replay")
+SUPPORTED_WORKER_TASK_TYPES = (
+    "stock_list",
+    "daily_bars",
+    "daily_bars_market_repair",
+    "calendars",
+    "daily_bars_raw_replay",
+)
 
 
 def _task_ref(task) -> dict[str, object | None]:
@@ -183,11 +189,22 @@ class SyncScheduleService:
         schedules = self.schedule_repo.list_all()
         return {"items": schedules, "total": len(schedules)}
 
-    def update_schedule(self, code: str, *, enabled: bool | None = None, cron_expression: str | None = None, source: str | None = None, market: str | None = None, symbol: str | None = None) -> SyncSchedule | None:
+    def update_schedule(
+        self,
+        code: str,
+        *,
+        enabled: bool | None = None,
+        cron_expression: str | None = None,
+        source: str | None = None,
+        market: str | None = None,
+        symbol: str | None = None,
+    ) -> SyncSchedule | None:
         if cron_expression is not None:
             _validate_cron_expression(cron_expression)
         self.schedule_repo.ensure_defaults()
-        schedule = self.schedule_repo.update_schedule(code, enabled=enabled, cron_expression=cron_expression, source=source, market=market, symbol=symbol)
+        schedule = self.schedule_repo.update_schedule(
+            code, enabled=enabled, cron_expression=cron_expression, source=source, market=market, symbol=symbol
+        )
         if schedule is None:
             self.db.rollback()
             return None
@@ -204,12 +221,22 @@ class SyncScheduleService:
         task = self._create_task_from_schedule(schedule)
         triggered_at = datetime.now(timezone.utc)
         schedule.last_triggered_at = triggered_at
-        self.task_repo.add_log(task, level="info", message="Sync schedule triggered.", payload={
-            "schedule_code": schedule.code, "schedule_name": schedule.name,
-            "cron_expression": schedule.cron_expression, "task_type": schedule.task_type,
-            "source": schedule.source, "market": schedule.market, "symbol": schedule.symbol,
-            "task_id": task.id, "triggered_at": triggered_at.isoformat(),
-        })
+        self.task_repo.add_log(
+            task,
+            level="info",
+            message="Sync schedule triggered.",
+            payload={
+                "schedule_code": schedule.code,
+                "schedule_name": schedule.name,
+                "cron_expression": schedule.cron_expression,
+                "task_type": schedule.task_type,
+                "source": schedule.source,
+                "market": schedule.market,
+                "symbol": schedule.symbol,
+                "task_id": task.id,
+                "triggered_at": triggered_at.isoformat(),
+            },
+        )
         self.db.commit()
         self.db.refresh(task)
         return task
@@ -223,10 +250,14 @@ class SyncScheduleService:
                 self.db.rollback()
                 raise ValueError("请先为日线定时规则配置股票代码，第一阶段暂不支持全市场日线批量触发。")
             start_date, end_date = self._default_daily_bars_window()
-            return MarketDataSyncService(self.db).create_daily_bars_sync_task(source=schedule.source, market=market, symbol=schedule.symbol, start_date=start_date, end_date=end_date)
+            return MarketDataSyncService(self.db).create_daily_bars_sync_task(
+                source=schedule.source, market=market, symbol=schedule.symbol, start_date=start_date, end_date=end_date
+            )
         if schedule.task_type == "calendars":
             start_date, end_date = self._default_calendar_window()
-            return TradingCalendarService(self.db).create_calendar_sync_task(source=schedule.source, market=market, start_date=start_date, end_date=end_date)
+            return TradingCalendarService(self.db).create_calendar_sync_task(
+                source=schedule.source, market=market, start_date=start_date, end_date=end_date
+            )
         self.db.rollback()
         raise ValueError(f"Unsupported sync schedule task_type '{schedule.task_type}'.")
 

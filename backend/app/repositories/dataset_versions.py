@@ -14,7 +14,6 @@ from backend.app.services.dataset_manifest import ManifestArtifact, validate_man
 
 
 class DatasetVersionRepository(BaseRepository):
-
     def create_candidate(
         self,
         *,

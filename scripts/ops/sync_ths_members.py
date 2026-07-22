@@ -2,6 +2,7 @@
 同步同花顺板块成分股 — 超稳健版
 从 DB 取 provider_code，直接爬 THS 网站，不依赖 akshare THS API
 """
+
 import logging
 import os
 import re
@@ -71,10 +72,13 @@ class _THSMemberTableParser(HTMLParser):
 
 
 def _request(url: str, timeout: int = 15) -> str:
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "http://q.10jqka.com.cn/thshy/",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "http://q.10jqka.com.cn/thshy/",
+        },
+    )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         raw = resp.read()
         try:
@@ -90,7 +94,7 @@ def _fetch_members_for_board(provider_code: str) -> list[dict]:
 
     # Get page count
     page_count = 1
-    m = re.search(r'class=[\"\']page_info[\"\'][^>]*>\s*(\d+)\s*/\s*(\d+)', first_html)
+    m = re.search(r"class=[\"\']page_info[\"\'][^>]*>\s*(\d+)\s*/\s*(\d+)", first_html)
     if m:
         page_count = int(m.group(2))
 
@@ -98,10 +102,12 @@ def _fetch_members_for_board(provider_code: str) -> list[dict]:
     html_pages = [first_html]
     for page in range(2, page_count + 1):
         try:
-            html_pages.append(_request(
-                f"http://q.10jqka.com.cn/thshy/detail/code/{provider_code}/page/{page}/",
-                timeout=15,
-            ))
+            html_pages.append(
+                _request(
+                    f"http://q.10jqka.com.cn/thshy/detail/code/{provider_code}/page/{page}/",
+                    timeout=15,
+                )
+            )
         except Exception as e:
             logger.warning(f"    第{page}页失败: {e}")
             break
@@ -124,7 +130,11 @@ def _fetch_members_for_board(provider_code: str) -> list[dict]:
                 name = row_dict.get("名称", "").strip()
                 if code and name:
                     sym = code.group(0)
-                    exchange = "SSE" if sym.startswith(("5", "6", "9")) else ("BSE" if sym.startswith(("43", "83", "87", "88", "92")) else "SZSE")
+                    exchange = (
+                        "SSE"
+                        if sym.startswith(("5", "6", "9"))
+                        else ("BSE" if sym.startswith(("43", "83", "87", "88", "92")) else "SZSE")
+                    )
                     key = (sym, exchange)
                     if key not in seen:
                         seen.add(key)
@@ -151,17 +161,17 @@ def main():
             existing = repo.list_members(board=board)
 
             if existing:
-                logger.info(f"  [{i+1}/{len(boards)}] ✅ {name}: 已有 {len(existing)} 只，跳过")
+                logger.info(f"  [{i + 1}/{len(boards)}] ✅ {name}: 已有 {len(existing)} 只，跳过")
                 total_members += len(existing)
                 skipped += 1
                 continue
 
             if not provider_code:
-                logger.warning(f"  [{i+1}/{len(boards)}] ❌ {name}: 无 provider_code")
+                logger.warning(f"  [{i + 1}/{len(boards)}] ❌ {name}: 无 provider_code")
                 failed.append(name)
                 continue
 
-            logger.info(f"  [{i+1}/{len(boards)}] {name} (code={provider_code})...")
+            logger.info(f"  [{i + 1}/{len(boards)}] {name} (code={provider_code})...")
             try:
                 with ThreadPoolExecutor(max_workers=1) as executor:
                     future = executor.submit(_fetch_members_for_board, provider_code)

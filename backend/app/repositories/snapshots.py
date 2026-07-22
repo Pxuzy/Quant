@@ -9,7 +9,6 @@ from backend.app.repositories._base import BaseRepository
 
 
 class SnapshotRepository(BaseRepository):
-
     def create_draft(self, *, name: str) -> Snapshot:
         normalized_name = name.strip()
         if not normalized_name:
@@ -42,9 +41,7 @@ class SnapshotRepository(BaseRepository):
             "bars-hfq": "hfq",
         }.get(normalized_role)
         if expected_adjust_type is not None and version.adjust_type != expected_adjust_type:
-            raise ValueError(
-                f"snapshot role {normalized_role} requires adjust_type={expected_adjust_type}"
-            )
+            raise ValueError(f"snapshot role {normalized_role} requires adjust_type={expected_adjust_type}")
         member = SnapshotMember(
             snapshot_id=snapshot.id,
             dataset_id=dataset.id,
@@ -64,9 +61,7 @@ class SnapshotRepository(BaseRepository):
             raise ValueError("snapshot members must reference published dataset versions")
         self._validate_daily_bars_bundle(snapshot)
 
-        active_snapshots = self.db.scalars(
-            select(Snapshot).where(Snapshot.status == "active").with_for_update()
-        ).all()
+        active_snapshots = self.db.scalars(select(Snapshot).where(Snapshot.status == "active").with_for_update()).all()
         now = utcnow()
         for active_snapshot in active_snapshots:
             active_snapshot.status = "retired"
@@ -107,6 +102,4 @@ class SnapshotRepository(BaseRepository):
             raise ValueError("snapshot daily-bars versions must all pass the good quality gate")
 
     def count_active(self) -> int:
-        return int(
-            self.db.scalar(select(func.count(Snapshot.id)).where(Snapshot.status == "active")) or 0
-        )
+        return int(self.db.scalar(select(func.count(Snapshot.id)).where(Snapshot.status == "active")) or 0)

@@ -6,6 +6,7 @@ concerns isolated while remaining a true part of the service class —
 ``MarketDataSyncService`` subclasses ``_MarketRepairMixin`` so all method
 signatures and behaviors are preserved verbatim.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -488,12 +489,21 @@ class _MarketRepairMixin:
                     failed_chunks.append(
                         f"{symbol_item.symbol}:{symbol_item.start_date.isoformat()}:{symbol_item.end_date.isoformat()}"
                     )
-                    self.task_repo.add_log(task, level="warning", message="Market repair symbol failed.",
-                                           payload={"symbol": symbol_item.symbol, "error": "Timeout"})
+                    self.task_repo.add_log(
+                        task,
+                        level="warning",
+                        message="Market repair symbol failed.",
+                        payload={"symbol": symbol_item.symbol, "error": "Timeout"},
+                    )
                     self._record_failed_market_repair_batch(
-                        task=task, adapter=adapter, market=market_name,
-                        symbol=symbol_item.symbol, start_date=symbol_item.start_date,
-                        end_date=symbol_item.end_date, message="Timeout")
+                        task=task,
+                        adapter=adapter,
+                        market=market_name,
+                        symbol=symbol_item.symbol,
+                        start_date=symbol_item.start_date,
+                        end_date=symbol_item.end_date,
+                        message="Timeout",
+                    )
                     continue
                 except Exception as exc:
                     err = str(exc)
@@ -502,12 +512,21 @@ class _MarketRepairMixin:
                     failed_chunks.append(
                         f"{symbol_item.symbol}:{symbol_item.start_date.isoformat()}:{symbol_item.end_date.isoformat()}"
                     )
-                    self.task_repo.add_log(task, level="warning", message="Market repair symbol failed.",
-                                           payload={"symbol": symbol_item.symbol, "error": err[:200]})
+                    self.task_repo.add_log(
+                        task,
+                        level="warning",
+                        message="Market repair symbol failed.",
+                        payload={"symbol": symbol_item.symbol, "error": err[:200]},
+                    )
                     self._record_failed_market_repair_batch(
-                        task=task, adapter=adapter, market=market_name,
-                        symbol=symbol_item.symbol, start_date=symbol_item.start_date,
-                        end_date=symbol_item.end_date, message=err[:200])
+                        task=task,
+                        adapter=adapter,
+                        market=market_name,
+                        symbol=symbol_item.symbol,
+                        start_date=symbol_item.start_date,
+                        end_date=symbol_item.end_date,
+                        message=err[:200],
+                    )
                     continue
 
                 # 串行写入（主线程，共享 self.db）
@@ -538,8 +557,9 @@ class _MarketRepairMixin:
                         adjust_type=adjust_type,
                         metadata=raw_metadata,
                     )
-                    normalized = [replace(record, adjust_type=adjust_type)
-                                  for record in adapter.normalize_daily_bars(raw_records)]
+                    normalized = [
+                        replace(record, adjust_type=adjust_type) for record in adapter.normalize_daily_bars(raw_records)
+                    ]
                     written = self.ingest_pipeline.write_normalized(
                         normalized=normalized,
                         raw_records_count=len(raw_records),
@@ -559,7 +579,8 @@ class _MarketRepairMixin:
                         latest = self.daily_bar_repo.latest_trade_date(market=market_name)
                         if latest is not None:
                             self.stock_repo.update_data_freshness(
-                                symbol=symbol_item.symbol, market=market_name, latest_data_date=latest)
+                                symbol=symbol_item.symbol, market=market_name, latest_data_date=latest
+                            )
                     except Exception:
                         pass
                 except Exception as exc:
@@ -568,19 +589,26 @@ class _MarketRepairMixin:
                     failed_chunks.append(
                         f"{symbol_item.symbol}:{symbol_item.start_date.isoformat()}:{symbol_item.end_date.isoformat()}"
                     )
-                    self.task_repo.add_log(task, level="warning", message="Market repair symbol failed.",
-                                           payload={"symbol": symbol_item.symbol, "error": str(exc)[:200]})
+                    self.task_repo.add_log(
+                        task,
+                        level="warning",
+                        message="Market repair symbol failed.",
+                        payload={"symbol": symbol_item.symbol, "error": str(exc)[:200]},
+                    )
 
         finally:
             executor.shutdown(wait=False)
 
         self.task_repo.add_log(
-            task, level="info",
+            task,
+            level="info",
             message="Market repair batch summary.",
-            payload={"symbols_planned": len(plan.items),
-                     "symbols_failed": len(symbol_errors),
-                     "records_read": records_read,
-                     "records_written": records_written},
+            payload={
+                "symbols_planned": len(plan.items),
+                "symbols_failed": len(symbol_errors),
+                "records_read": records_read,
+                "records_written": records_written,
+            },
         )
 
         if plan.items and records_written == 0 and symbol_errors:

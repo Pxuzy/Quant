@@ -38,29 +38,18 @@ def test_snapshot_migration_supports_three_adjustment_roles_and_round_trip(tmp_p
         )
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute(
-                "INSERT INTO snapshots(id, name, status, created_at) "
-                "VALUES (2, 'second', 'active', CURRENT_TIMESTAMP)"
+                "INSERT INTO snapshots(id, name, status, created_at) VALUES (2, 'second', 'active', CURRENT_TIMESTAMP)"
             )
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
     command.downgrade(config, "a6b4d8e2f130")
     with sqlite3.connect(database_path) as connection:
-        tables = {
-            row[0]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
-        }
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert "snapshots" not in tables
         assert "snapshot_members" not in tables
 
     command.upgrade(config, "head")
     with sqlite3.connect(database_path) as connection:
-        tables = {
-            row[0]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
-        }
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert {"snapshots", "snapshot_members"} <= tables
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []

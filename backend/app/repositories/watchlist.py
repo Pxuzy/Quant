@@ -34,9 +34,7 @@ def list_items(db: Session, watchlist_id: int) -> list[WatchlistItem]:
     return list(db.scalars(stmt).all())
 
 
-def add_item(
-    db: Session, watchlist_id: int, symbol: str, note: Optional[str] = None
-) -> tuple[WatchlistItem, bool]:
+def add_item(db: Session, watchlist_id: int, symbol: str, note: Optional[str] = None) -> tuple[WatchlistItem, bool]:
     """返回 (item, created)。已存在时返回已有的 + created=False（不抛异常）"""
     symbol = symbol.strip().lower()
     existing = db.scalar(
@@ -52,11 +50,14 @@ def add_item(
         db.refresh(existing)
         return existing, False
 
-    max_order = db.scalar(
-        select(func.coalesce(func.max(WatchlistItem.sort_order), 0)).where(
-            WatchlistItem.watchlist_id == watchlist_id
+    max_order = (
+        db.scalar(
+            select(func.coalesce(func.max(WatchlistItem.sort_order), 0)).where(
+                WatchlistItem.watchlist_id == watchlist_id
+            )
         )
-    ) or 0
+        or 0
+    )
     item = WatchlistItem(
         watchlist_id=watchlist_id,
         symbol=symbol,

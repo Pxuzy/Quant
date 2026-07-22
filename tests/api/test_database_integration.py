@@ -298,12 +298,18 @@ def test_database_integration_overview_refreshes_after_coverage_cache_invalidati
         db.close()
 
     second_cached = service.get_overview(market="A_SHARE", use_cache=True)
-    assert second_cached["coverage_summary"]["daily_expected_symbol_days"] == first["coverage_summary"]["daily_expected_symbol_days"]
+    assert (
+        second_cached["coverage_summary"]["daily_expected_symbol_days"]
+        == first["coverage_summary"]["daily_expected_symbol_days"]
+    )
     assert second_cached["coverage_summary"]["calendar_latest_date"] == date(2026, 6, 1)
 
     invalidate_coverage_cache("A_SHARE")
     refreshed = DatabaseIntegrationService(SessionLocal()).get_overview(market="A_SHARE", use_cache=True)
-    assert refreshed["coverage_summary"]["daily_expected_symbol_days"] == first["coverage_summary"]["daily_expected_symbol_days"] + 1
+    assert (
+        refreshed["coverage_summary"]["daily_expected_symbol_days"]
+        == first["coverage_summary"]["daily_expected_symbol_days"] + 1
+    )
     assert refreshed["coverage_summary"]["calendar_latest_date"] == date(2026, 6, 2)
     assert refreshed["coverage_summary"]["coverage_start_date"] == date(2025, 12, 4)
 
@@ -317,12 +323,54 @@ def test_database_integration_overview_counts_only_listed_common_a_share_stock_p
     try:
         db.add_all(
             [
-                Stock(symbol="600519", exchange="SSE", market="A_SHARE", name="贵州茅台", status="LISTED", source="fixture"),
-                Stock(symbol="000001", exchange="SZSE", market="A_SHARE", name="平安银行", status="LISTED", source="fixture"),
-                Stock(symbol="430047", exchange="BSE", market="A_SHARE", name="北交所样本", status="LISTED", source="fixture"),
-                Stock(symbol="000016", exchange="SSE", market="A_SHARE", name="上证50指数", status="LISTED", source="fixture"),
-                Stock(symbol="159001", exchange="SZSE", market="A_SHARE", name="货币ETF", status="LISTED", source="fixture"),
-                Stock(symbol="600001", exchange="SSE", market="A_SHARE", name="退市样本", status="DELISTED", source="fixture"),
+                Stock(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="贵州茅台",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="000001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="平安银行",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="430047",
+                    exchange="BSE",
+                    market="A_SHARE",
+                    name="北交所样本",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="000016",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="上证50指数",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="159001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="货币ETF",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="600001",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="退市样本",
+                    status="DELISTED",
+                    source="fixture",
+                ),
                 TradingCalendar(market="A_SHARE", trade_date=date(2026, 6, 1), is_open=True, source="fixture"),
             ]
         )
@@ -379,7 +427,9 @@ def test_database_integration_overview_counts_only_listed_common_a_share_stock_p
 def test_database_integration_overview_uses_half_year_daily_bar_target_window(client):
     db = SessionLocal()
     try:
-        db.add(Stock(symbol="600519", exchange="SSE", market="A_SHARE", name="贵州茅台", status="LISTED", source="fixture"))
+        db.add(
+            Stock(symbol="600519", exchange="SSE", market="A_SHARE", name="贵州茅台", status="LISTED", source="fixture")
+        )
         db.add_all(
             [
                 TradingCalendar(market="A_SHARE", trade_date=date(2025, 12, 1), is_open=True, source="fixture"),
@@ -411,11 +461,46 @@ def test_database_integration_overview_projects_stale_stock_dataset_count_to_com
     try:
         db.add_all(
             [
-                Stock(symbol="600519", exchange="SSE", market="A_SHARE", name="贵州茅台", status="LISTED", source="fixture"),
-                Stock(symbol="000001", exchange="SZSE", market="A_SHARE", name="平安银行", status="LISTED", source="fixture"),
-                Stock(symbol="430047", exchange="BSE", market="A_SHARE", name="北交所样本", status="LISTED", source="fixture"),
-                Stock(symbol="000016", exchange="SSE", market="A_SHARE", name="上证50指数", status="LISTED", source="fixture"),
-                Stock(symbol="159001", exchange="SZSE", market="A_SHARE", name="货币ETF", status="LISTED", source="fixture"),
+                Stock(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="贵州茅台",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="000001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="平安银行",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="430047",
+                    exchange="BSE",
+                    market="A_SHARE",
+                    name="北交所样本",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="000016",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="上证50指数",
+                    status="LISTED",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="159001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="货币ETF",
+                    status="LISTED",
+                    source="fixture",
+                ),
                 Dataset(
                     name="stocks",
                     layer="silver",

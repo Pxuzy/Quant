@@ -74,9 +74,7 @@ def validate_daily_bar_records(
                 errors.append(f"{row}: {field_name} cannot be negative.")
         for field_name in ("pre_close", "adjust_factor"):
             value = getattr(record, field_name)
-            if value is not None and (
-                not isinstance(value, int | float) or not isfinite(value)
-            ):
+            if value is not None and (not isinstance(value, int | float) or not isfinite(value)):
                 errors.append(f"{row}: {field_name} must be finite when provided.")
         ohlc_values = (record.open, record.high, record.low, record.close)
         if all(isinstance(value, int | float) and isfinite(value) for value in ohlc_values):

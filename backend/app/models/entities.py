@@ -26,6 +26,7 @@ def _vector_or_json(dim: int):
     """Return pgvector Vector type if available, else JSON for SQLite compat."""
     try:
         from pgvector.sqlalchemy import Vector
+
         return Vector(dim)
     except ImportError:
         return JSON
@@ -479,6 +480,7 @@ class Watchlist(Base):
 
     ponytail: 初期不分用户/多群组，一个 name 一个 pocket 就够；user_id 留 nullable 是为以后多终端切换做准备，不做 enforce。
     """
+
     __tablename__ = "watchlists"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -488,13 +490,15 @@ class Watchlist(Base):
 
 
 class WatchlistItem(Base):
-    """自选股明细。一只股票在同一个 group 下唯一。
-    """
+    """自选股明细。一只股票在同一个 group 下唯一。"""
+
     __tablename__ = "watchlist_items"
     __table_args__ = (UniqueConstraint("watchlist_id", "symbol", name="uq_watchlist_symbol"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    watchlist_id: Mapped[int] = mapped_column(ForeignKey("watchlists.id", ondelete="CASCADE"), nullable=False, index=True)
+    watchlist_id: Mapped[int] = mapped_column(
+        ForeignKey("watchlists.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     symbol: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     note: Mapped[str | None] = mapped_column(String(255), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -517,6 +521,4 @@ class NewsArticle(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     # embedding 向量列 — PG 上使用 pgvector 类型，SQLite 保持兼容
-    embedding: Mapped[list[float] | None] = mapped_column(
-        _vector_or_json(1536), nullable=True
-    )
+    embedding: Mapped[list[float] | None] = mapped_column(_vector_or_json(1536), nullable=True)

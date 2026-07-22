@@ -50,10 +50,25 @@ def _exchange_from_symbol(symbol: str) -> str:
 
 def _empty_quote(code: str, name: str, sectors: list[str] | None = None) -> Dict:
     return {
-        "code": code, "name": name, "price": 0, "change": 0, "change_pct": 0,
-        "open": 0, "high": 0, "low": 0, "volume": 0, "amount": 0,
-        "pe": 0, "pb": 0, "turnover": 0, "bid1_price": 0, "bid1_vol": 0,
-        "ask1_price": 0, "ask1_vol": 0, "prev_close": 0, "sectors": sectors or [],
+        "code": code,
+        "name": name,
+        "price": 0,
+        "change": 0,
+        "change_pct": 0,
+        "open": 0,
+        "high": 0,
+        "low": 0,
+        "volume": 0,
+        "amount": 0,
+        "pe": 0,
+        "pb": 0,
+        "turnover": 0,
+        "bid1_price": 0,
+        "bid1_vol": 0,
+        "ask1_price": 0,
+        "ask1_vol": 0,
+        "prev_close": 0,
+        "sectors": sectors or [],
     }
 
 

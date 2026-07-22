@@ -82,6 +82,7 @@ def get_news_list(
 def trigger_news_ingest():
     """手动触发新闻抓取"""
     from backend.app.services.news_ingest_service import run_news_ingest
+
     result = run_news_ingest()
     return result
 

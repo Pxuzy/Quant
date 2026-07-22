@@ -13,6 +13,7 @@ Data normalization helpers (``_clean_text``, ``_records_from_payload``,
 ``_parse_date``, …) are **not** here – they live alongside the adapter
 that consumes them in ``stock_sdk.py``.
 """
+
 from __future__ import annotations
 
 import json
@@ -275,6 +276,7 @@ class _NodeStockSdkNamespace:
       _NodeStockSdkNamespace("codes") → 记住自己属于 "codes" 命名空间
       调用 .cn(**kwargs) → 转发为 client.run("codes.cn", kwargs)
     """
+
     def __init__(self, client: "_NodeStockSdkClient", namespace: str) -> None:
         self._client = client
         self._namespace = namespace
@@ -338,37 +340,27 @@ class _NodeStockSdkClient:
                     ensure_ascii=False,
                 ),
                 capture_output=True,  # 捕获 stdout 和 stderr
-                text=True,            # 文本模式（不是 bytes）
+                text=True,  # 文本模式（不是 bytes）
                 encoding="utf-8",
-                cwd=str(self.cwd),    # 在 stock-sdk 所在目录执行
-                timeout=30,           # 30 秒超时
-                check=False,          # 不自动抛异常，我们自己处理
+                cwd=str(self.cwd),  # 在 stock-sdk 所在目录执行
+                timeout=30,  # 30 秒超时
+                check=False,  # 不自动抛异常，我们自己处理
             )
         except FileNotFoundError as exc:
             # Node.js 没装
             logger.warning("Node.js not found: %s", exc)
-            raise ModuleNotFoundError(
-                "Node.js is required to use stock-sdk."
-            ) from exc
+            raise ModuleNotFoundError("Node.js is required to use stock-sdk.") from exc
         except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(
-                "stock-sdk request timed out."
-            ) from exc
+            raise RuntimeError("stock-sdk request timed out.") from exc
 
         # Node 端执行失败（return_code != 0）
         if completed.returncode != 0:
             stderr = completed.stderr.strip()
-            if (
-                "Cannot find module 'stock-sdk'" in stderr
-                or "Cannot find package 'stock-sdk'" in stderr
-            ):
+            if "Cannot find module 'stock-sdk'" in stderr or "Cannot find package 'stock-sdk'" in stderr:
                 raise ModuleNotFoundError(
-                    "stock-sdk Node package is not installed. "
-                    "Install stock-sdk@beta to enable this source."
+                    "stock-sdk Node package is not installed. Install stock-sdk@beta to enable this source."
                 )
-            raise RuntimeError(
-                stderr or "stock-sdk request failed."
-            )
+            raise RuntimeError(stderr or "stock-sdk request failed.")
 
         # 解析 Node 端返回的 JSON
         stdout = completed.stdout.strip()

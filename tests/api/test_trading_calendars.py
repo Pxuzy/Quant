@@ -185,12 +185,10 @@ def test_auto_calendar_sync_falls_back_and_updates_catalog(client):
     assert artifact.row_count == 3
     assert [row.is_open for row in rows] == [True, True, False]
     assert any(
-        log.message == "Provider attempt failed." and log.payload_json["source"] == "failing_calendar"
-        for log in logs
+        log.message == "Provider attempt failed." and log.payload_json["source"] == "failing_calendar" for log in logs
     )
     assert any(
-        log.message == "Trading calendar sync completed."
-        and log.payload_json["selected_source"] == "success_calendar"
+        log.message == "Trading calendar sync completed." and log.payload_json["selected_source"] == "success_calendar"
         for log in logs
     )
 

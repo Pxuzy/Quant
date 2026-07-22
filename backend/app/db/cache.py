@@ -5,6 +5,7 @@
 
 模块级单例 `_DATA_LOADER_REF` 由首次调用时懒加载。
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

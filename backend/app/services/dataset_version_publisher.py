@@ -130,9 +130,7 @@ class DatasetVersionPublisher:
                 for item in descriptors
             ],
         }
-        return hashlib.sha256(
-            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
+        return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
     def _materialize_partitions(self, adjust_type: str) -> tuple[list[_PartitionDescriptor], str]:
         object_root = self.lake_root / "versions" / "_objects" / "daily_bars" / adjust_type

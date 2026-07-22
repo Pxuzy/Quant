@@ -146,8 +146,7 @@ class ResearchDataService:
             lake_root=self.daily_bar_repo.lake_root,
             dataset_dir=version_root,
             partition_paths=[
-                (self.daily_bar_repo.lake_root / partition.relative_uri).resolve()
-                for partition in version.partitions
+                (self.daily_bar_repo.lake_root / partition.relative_uri).resolve() for partition in version.partitions
             ],
         )
         return reader_repo, {

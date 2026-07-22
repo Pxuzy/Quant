@@ -92,10 +92,10 @@ def _infer_exchange(symbol: str) -> str:
     """
     # Python 的 str.startswith() 可以接收元组，一次检查多个前缀
     if symbol.startswith(("43", "83", "87", "88", "92")):
-        return "BSE"   # 北京证券交易所 (Beijing Stock Exchange)
+        return "BSE"  # 北京证券交易所 (Beijing Stock Exchange)
     if symbol.startswith(("5", "6", "9")):
-        return "SSE"   # 上海证券交易所 (Shanghai Stock Exchange)
-    return "SZSE"      # 深圳证券交易所 (Shenzhen Stock Exchange) — 默认
+        return "SSE"  # 上海证券交易所 (Shanghai Stock Exchange)
+    return "SZSE"  # 深圳证券交易所 (Shenzhen Stock Exchange) — 默认
 
 
 def _records_from_frame(frame: Any) -> list[dict[str, Any]]:
@@ -284,11 +284,11 @@ class AkShareAdapter(StockDataSourceAdapter):
 
     # ===== 类级别属性（元信息，框架用来识别和排序适配器） =====
 
-    code = "akshare"                         # 适配器的唯一标识符
-    name = "AKShare"                         # 人类可读的名称
-    priority = 10                            # 优先级（数字越小越优先，10 表示较高优先级）
-    requires_token = False                   # 不需要 API Token（免费数据源）
-    default_enabled = True                   # 默认启用
+    code = "akshare"  # 适配器的唯一标识符
+    name = "AKShare"  # 人类可读的名称
+    priority = 10  # 优先级（数字越小越优先，10 表示较高优先级）
+    requires_token = False  # 不需要 API Token（免费数据源）
+    default_enabled = True  # 默认启用
 
     # ===== 生命周期 =====
 
@@ -299,7 +299,7 @@ class AkShareAdapter(StockDataSourceAdapter):
         参数 client 是为测试预留的：测试时可以传入 mock 对象，
         避免真的去调 AKShare。生产环境不传，让 _get_client() 自动加载。
         """
-        self._client = client   # 以 _ 开头 = 私有属性，外面不要直接访问
+        self._client = client  # 以 _ 开头 = 私有属性，外面不要直接访问
 
     # ===== 能力宣告 =====
 
@@ -326,11 +326,11 @@ class AkShareAdapter(StockDataSourceAdapter):
         是否稳定、有没有频率限制、怎么安装。
         """
         return ProviderMetadata(
-            provider_type="python_package",   # 是 Python 包，不是外部 API
+            provider_type="python_package",  # 是 Python 包，不是外部 API
             homepage_url="https://github.com/akfamily/akshare",
             docs_url="https://akshare.akfamily.xyz/data/stock/stock.html",
-            auth_mode="none",                 # 无需认证（免费）
-            stability="community",            # 社区维护，非商业级稳定性
+            auth_mode="none",  # 无需认证（免费）
+            stability="community",  # 社区维护，非商业级稳定性
             rate_limit_note="Depends on upstream public data functions exposed by AKShare.",
             install_note="Install optional package: pip install akshare.",
         )
@@ -353,22 +353,16 @@ class AkShareAdapter(StockDataSourceAdapter):
             client = self._get_client()
 
             # 检查有没有股票列表函数（至少有一个就行）
-            stock_list_available = (
-                hasattr(client, "stock_info_a_code_name")
-                or hasattr(client, "stock_zh_a_spot_em")
-            )
+            stock_list_available = hasattr(client, "stock_info_a_code_name") or hasattr(client, "stock_zh_a_spot_em")
             # 检查有没有日K线函数（至少有一个就行）
-            daily_bars_available = (
-                hasattr(client, "stock_zh_a_hist")
-                or hasattr(client, "stock_zh_a_daily")
-            )
+            daily_bars_available = hasattr(client, "stock_zh_a_hist") or hasattr(client, "stock_zh_a_daily")
 
             if not stock_list_available and not daily_bars_available:
                 return HealthCheckResult(
                     healthy=False,
                     status="unhealthy",
                     message="AKShare is installed, but supported A-share stock-list"
-                            " or daily-bars functions were not found.",
+                    " or daily-bars functions were not found.",
                 )
         except ModuleNotFoundError as exc:
             # 最外层没装 akshare 包
@@ -381,14 +375,10 @@ class AkShareAdapter(StockDataSourceAdapter):
         except Exception as exc:
             # 其他未知错误（网络问题、版本不兼容等）
             logger.warning("AKShare health check failed: %s", exc)
-            return HealthCheckResult(
-                healthy=False, status="unhealthy", message=str(exc)
-            )
+            return HealthCheckResult(healthy=False, status="unhealthy", message=str(exc))
 
         # 一切正常
-        return HealthCheckResult(
-            healthy=True, status="healthy", message="AKShare package is available."
-        )
+        return HealthCheckResult(healthy=True, status="healthy", message="AKShare package is available.")
 
     # ===== 获取股票列表 =====
 
@@ -410,9 +400,7 @@ class AkShareAdapter(StockDataSourceAdapter):
         后面要经过 normalize_stock_list() 才会变成系统统一格式。
         """
         if market.upper() != "A_SHARE":
-            raise ValueError(
-                "AKShare stock list adapter currently supports A_SHARE only."
-            )
+            raise ValueError("AKShare stock list adapter currently supports A_SHARE only.")
 
         client = self._get_client()
 
@@ -421,22 +409,24 @@ class AkShareAdapter(StockDataSourceAdapter):
 
         # 方案一（较新的 AKShare 版本）
         if hasattr(client, "stock_info_a_code_name"):
-            candidates.append((
-                "stock_info_a_code_name",
-                lambda: _records_from_frame(client.stock_info_a_code_name()),
-            ))
+            candidates.append(
+                (
+                    "stock_info_a_code_name",
+                    lambda: _records_from_frame(client.stock_info_a_code_name()),
+                )
+            )
 
         # 方案二（较旧的 AKShare 版本兼容）
         if hasattr(client, "stock_zh_a_spot_em"):
-            candidates.append((
-                "stock_zh_a_spot_em",
-                lambda: _records_from_frame(client.stock_zh_a_spot_em()),
-            ))
+            candidates.append(
+                (
+                    "stock_zh_a_spot_em",
+                    lambda: _records_from_frame(client.stock_zh_a_spot_em()),
+                )
+            )
 
         if not candidates:
-            raise RuntimeError(
-                "AKShare client does not expose a supported A-share stock-list function."
-            )
+            raise RuntimeError("AKShare client does not expose a supported A-share stock-list function.")
 
         try:
             return _try_fetch(candidates)
@@ -445,9 +435,7 @@ class AkShareAdapter(StockDataSourceAdapter):
             logger.warning("AKShare stock-list fetch failed: %s", exc)
             raise RuntimeError(f"AKShare stock-list fetch failed: {exc}") from exc
 
-    def normalize_stock_list(
-        self, raw_records: list[dict[str, Any]]
-    ) -> list[NormalizedStock]:
+    def normalize_stock_list(self, raw_records: list[dict[str, Any]]) -> list[NormalizedStock]:
         """
         把 AKShare 的原始股票数据翻译成系统统一格式（NormalizedStock）。
 
@@ -477,15 +465,11 @@ class AkShareAdapter(StockDataSourceAdapter):
             # ---- 步骤 1：提取关键字段（兼容多种命名风格） ----
             # 用 or 链尝试多个可能的字段名，谁有值用谁
             symbol = _clean_text(
-                record.get("code")        # TX：英文名
-                or record.get("代码")       # 中文名
-                or record.get("证券代码")    # 另一种中文名
+                record.get("code")  # TX：英文名
+                or record.get("代码")  # 中文名
+                or record.get("证券代码")  # 另一种中文名
             )
-            name = _clean_text(
-                record.get("name")
-                or record.get("名称")
-                or record.get("证券简称")
-            )
+            name = _clean_text(record.get("name") or record.get("名称") or record.get("证券简称"))
 
             # 没有代码或名称的记录直接跳过（可能是脏数据）
             if symbol is None or name is None:
@@ -495,14 +479,14 @@ class AkShareAdapter(StockDataSourceAdapter):
             normalized.append(
                 NormalizedStock(
                     symbol=symbol,
-                    exchange=_infer_exchange(symbol),   # 靠代码前缀推断交易所
-                    market="A_SHARE",                    # AKShare 目前只支持 A 股
+                    exchange=_infer_exchange(symbol),  # 靠代码前缀推断交易所
+                    market="A_SHARE",  # AKShare 目前只支持 A 股
                     name=name,
-                    status="LISTED",                     # 默认"上市中"
-                    industry=None,                       # AKShare 不提供行业信息
+                    status="LISTED",  # 默认"上市中"
+                    industry=None,  # AKShare 不提供行业信息
                     listing_date=self._parse_listing_date(record),
-                    delisting_date=None,                 # AKShare 不提供退市日期
-                    source=self.code,                    # 标记数据来源 = "akshare"
+                    delisting_date=None,  # AKShare 不提供退市日期
+                    source=self.code,  # 标记数据来源 = "akshare"
                 )
             )
 
@@ -538,9 +522,7 @@ class AkShareAdapter(StockDataSourceAdapter):
           简称 OHLC，是量化分析最基本的数据单元。
         """
         if market.upper() != "A_SHARE":
-            raise ValueError(
-                "AKShare daily bars adapter currently supports A_SHARE only."
-            )
+            raise ValueError("AKShare daily bars adapter currently supports A_SHARE only.")
         adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
         adjust = "" if adjust_type_code == "none" else adjust_type_code
 
@@ -559,7 +541,7 @@ class AkShareAdapter(StockDataSourceAdapter):
             # 准备参数
             hist_kwargs: dict[str, Any] = {
                 "symbol": symbol,
-                "period": "daily",        # 日线数据（不是周线或月线）
+                "period": "daily",  # 日线数据（不是周线或月线）
                 "start_date": start_text,
                 "end_date": end_text,
                 "adjust": adjust,
@@ -567,42 +549,42 @@ class AkShareAdapter(StockDataSourceAdapter):
 
             # 如果这个版本的 AKShare 支持 timeout 参数，就加上（防网络超时）
             if _supports_parameter(hist_func, "timeout"):
-                hist_kwargs["timeout"] = 15   # 15 秒超时
+                hist_kwargs["timeout"] = 15  # 15 秒超时
 
-            candidates.append((
-                "stock_zh_a_hist",
-                lambda: _records_from_frame(hist_func(**hist_kwargs)),
-            ))
+            candidates.append(
+                (
+                    "stock_zh_a_hist",
+                    lambda: _records_from_frame(hist_func(**hist_kwargs)),
+                )
+            )
 
         # ---- 方案二：stock_zh_a_daily（备选，旧版/不同接口） ----
         # 这个函数需要新浪格式的代码（如 "sh600519"），所以要转换
         if hasattr(client, "stock_zh_a_daily"):
-            candidates.append((
-                "stock_zh_a_daily",
-                lambda: _records_with_symbol(
-                    client.stock_zh_a_daily(
-                        symbol=_to_sina_symbol(symbol, exchange),
-                        start_date=start_text,
-                        end_date=end_text,
-                        adjust=adjust,
+            candidates.append(
+                (
+                    "stock_zh_a_daily",
+                    lambda: _records_with_symbol(
+                        client.stock_zh_a_daily(
+                            symbol=_to_sina_symbol(symbol, exchange),
+                            start_date=start_text,
+                            end_date=end_text,
+                            adjust=adjust,
+                        ),
+                        symbol,  # 补上 symbol，因为这个函数返回的数据里可能没有
                     ),
-                    symbol,   # 补上 symbol，因为这个函数返回的数据里可能没有
-                ),
-            ))
+                )
+            )
 
         if not candidates:
-            raise RuntimeError(
-                "AKShare client does not expose a supported A-share daily-bars function."
-            )
+            raise RuntimeError("AKShare client does not expose a supported A-share daily-bars function.")
 
         try:
             return [{**record, "__adjust_type": adjust_type_code} for record in _try_fetch(candidates)]
         except RuntimeError as exc:
             raise RuntimeError(f"AKShare daily-bars fetch failed: {exc}") from exc
 
-    def normalize_daily_bars(
-        self, raw_records: list[dict[str, Any]]
-    ) -> list[NormalizedDailyBar]:
+    def normalize_daily_bars(self, raw_records: list[dict[str, Any]]) -> list[NormalizedDailyBar]:
         """
         把 AKShare 的原始日K线数据翻译成系统统一格式（NormalizedDailyBar）。
 
@@ -624,32 +606,20 @@ class AkShareAdapter(StockDataSourceAdapter):
         for record in raw_records:
             # ---- 步骤 1：提取关键字段 ----
             symbol = _clean_text(
-                record.get("股票代码")     # AKShare 某些函数用的中文名
-                or record.get("symbol")   # 英文名（可能是我们之前补上的）
-                or record.get("code")     # 另一种英文名
+                record.get("股票代码")  # AKShare 某些函数用的中文名
+                or record.get("symbol")  # 英文名（可能是我们之前补上的）
+                or record.get("code")  # 另一种英文名
             )
-            trade_date = _parse_date(
-                record.get("日期")
-                or record.get("date")
-                or record.get("trade_date")
-            )
+            trade_date = _parse_date(record.get("日期") or record.get("date") or record.get("trade_date"))
 
             if symbol is None or trade_date is None:
-                continue   # 缺少关键字段，跳过
+                continue  # 缺少关键字段，跳过
 
             # ---- 步骤 2：提取 OHLC 价格 ----
-            open_price = _to_float(
-                record.get("开盘") or record.get("open")
-            )
-            high = _to_float(
-                record.get("最高") or record.get("high")
-            )
-            low = _to_float(
-                record.get("最低") or record.get("low")
-            )
-            close = _to_float(
-                record.get("收盘") or record.get("close")
-            )
+            open_price = _to_float(record.get("开盘") or record.get("open"))
+            high = _to_float(record.get("最高") or record.get("high"))
+            low = _to_float(record.get("最低") or record.get("low"))
+            close = _to_float(record.get("收盘") or record.get("close"))
 
             # 四个价格缺一不可（缺了就没法做技术分析）
             if open_price is None or high is None or low is None or close is None:
@@ -683,10 +653,10 @@ class AkShareAdapter(StockDataSourceAdapter):
                     high=high,
                     low=low,
                     close=close,
-                    pre_close=None,              # AKShare 不提供前收盘价
+                    pre_close=None,  # AKShare 不提供前收盘价
                     volume=volume,
                     amount=amount,
-                    adjust_factor=1.0,           # 不复权数据，因子固定为 1
+                    adjust_factor=1.0,  # 不复权数据，因子固定为 1
                     adjust_type=normalize_daily_bar_adjust_type(
                         record.get("__adjust_type") or record.get("adjust_type")
                     ),
@@ -722,9 +692,7 @@ class AkShareAdapter(StockDataSourceAdapter):
         @staticmethod 表示这是一个静态方法——不需要访问 self，
         只是逻辑上属于这个类，放在类里比放在外面更清晰。
         """
-        raw_value = _clean_text(
-            record.get("上市日期") or record.get("listing_date")
-        )
+        raw_value = _clean_text(record.get("上市日期") or record.get("listing_date"))
         if raw_value is None:
             return None
         return _parse_date(raw_value)
@@ -757,7 +725,7 @@ def _parse_date(value: Any) -> date | None:
       _parse_date(None)            → None
     """
     if isinstance(value, date):
-        return value   # 已经是 date 对象，不用转了
+        return value  # 已经是 date 对象，不用转了
 
     text = _clean_text(value)
     if text is None:
@@ -770,9 +738,9 @@ def _parse_date(value: Any) -> date | None:
     # 8 位纯数字 → 用切片取年、月、日
     if len(digits) == 8 and digits.isdigit():
         return date(
-            int(digits[:4]),    # 前 4 位 = 年份
-            int(digits[4:6]),   # 中间 2 位 = 月份
-            int(digits[6:8]),   # 最后 2 位 = 日期
+            int(digits[:4]),  # 前 4 位 = 年份
+            int(digits[4:6]),  # 中间 2 位 = 月份
+            int(digits[6:8]),  # 最后 2 位 = 日期
         )
 
     # 其他格式（如 "2024-01-02"）交给 Python 标准库解析

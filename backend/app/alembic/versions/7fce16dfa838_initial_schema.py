@@ -37,6 +37,7 @@ def upgrade() -> None:
         try:
             from pgvector.sqlalchemy import Vector
             from sqlalchemy.dialects import postgresql
+
             postgresql.REGISTERED_TYPES.setdefault("vector", Vector)
         except ImportError:
             pass
@@ -344,6 +345,7 @@ def _get_recent_inspector(engine):
     """Get a fresh inspector — needed because op.get_bind().engine may cache old schema."""
     from sqlalchemy import create_engine
     from sqlalchemy import inspect as sa_inspect
+
     url = engine.url.render_as_string(hide_password=False)
     temp_engine = create_engine(url)
     try:

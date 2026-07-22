@@ -40,10 +40,15 @@ def _classify_news(title: str, summary: str) -> str:
 
 def get_news(keyword: str = "A股", limit: int = 20, page: int = 1) -> list[dict]:
     """获取新浪财经新闻。"""
-    params = urlencode({
-        "pageid": "153", "lid": "2516", "k": keyword,
-        "num": str(min(limit, 50)), "page": str(page),
-    })
+    params = urlencode(
+        {
+            "pageid": "153",
+            "lid": "2516",
+            "k": keyword,
+            "num": str(min(limit, 50)),
+            "page": str(page),
+        }
+    )
     url = f"https://feed.mix.sina.com.cn/api/roll/get?{params}"
     try:
         data = json.loads(_request(url))
@@ -54,21 +59,25 @@ def get_news(keyword: str = "A股", limit: int = 20, page: int = 1) -> list[dict
     for item in data.get("result", {}).get("data", [])[:limit]:
         try:
             created_ts = int(item.get("ctime", 0))
-            results.append({
-                "title": item.get("title", ""), "url": item.get("url", ""),
-                "summary": item.get("summary", "")[:200],
-                "source": item.get("media_name", "新浪"),
-                "created_at": (
-                    datetime.fromtimestamp(created_ts).strftime("%Y-%m-%d %H:%M:%S")
-                    if created_ts else ""
-                ),
-                "category": _classify_news(item.get("title", ""), item.get("summary", "")),
-            })
+            results.append(
+                {
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "summary": item.get("summary", "")[:200],
+                    "source": item.get("media_name", "新浪"),
+                    "created_at": (
+                        datetime.fromtimestamp(created_ts).strftime("%Y-%m-%d %H:%M:%S") if created_ts else ""
+                    ),
+                    "category": _classify_news(item.get("title", ""), item.get("summary", "")),
+                }
+            )
         except Exception as e:
             logger.warning(f"解析新闻失败: {e}")
     return results
 
+
 # ── 辅助函数 ──
+
 
 def _dedup_key(title: str, url: str) -> str:
     """生成去重 key（URL 优先，title hash 兜底）"""
@@ -77,10 +86,15 @@ def _dedup_key(title: str, url: str) -> str:
 
 def fetch_news_from_sina(keyword: str, limit: int = 20) -> list[dict]:
     """从新浪财经拉取新闻"""
-    params = urlencode({
-        "pageid": "153", "lid": "2516", "k": keyword,
-        "num": str(min(limit, 50)), "page": "1",
-    })
+    params = urlencode(
+        {
+            "pageid": "153",
+            "lid": "2516",
+            "k": keyword,
+            "num": str(min(limit, 50)),
+            "page": "1",
+        }
+    )
     url = f"https://feed.mix.sina.com.cn/api/roll/get?{params}"
 
     try:
@@ -95,28 +109,34 @@ def fetch_news_from_sina(keyword: str, limit: int = 20) -> list[dict]:
         if not title:
             continue
         created_ts = int(item.get("ctime", 0))
-        results.append({
-            "title": title,
-            "url": item.get("url", ""),
-            "summary": item.get("summary", "")[:200].strip(),
-            "source": "sina",
-            "category": _classify_news(title, item.get("summary", "")),
-            "external_id": str(item.get("oid", "")) or _dedup_key(title, item.get("url", "")),
-            "published_at": (
-                datetime.fromtimestamp(created_ts, tz=timezone.utc) if created_ts else None
-            ),
-        })
+        results.append(
+            {
+                "title": title,
+                "url": item.get("url", ""),
+                "summary": item.get("summary", "")[:200].strip(),
+                "source": "sina",
+                "category": _classify_news(title, item.get("summary", "")),
+                "external_id": str(item.get("oid", "")) or _dedup_key(title, item.get("url", "")),
+                "published_at": (datetime.fromtimestamp(created_ts, tz=timezone.utc) if created_ts else None),
+            }
+        )
     return results
 
 
 def fetch_news_from_cls(keyword: str = "", limit: int = 20) -> list[dict]:
     """从财联社拉取新闻（telegraph API，实时快讯流）"""
-    params = urlencode({
-        "app": "CailianpressWeb", "os": "web", "sv": "8.7.9",
-    })
+    params = urlencode(
+        {
+            "app": "CailianpressWeb",
+            "os": "web",
+            "sv": "8.7.9",
+        }
+    )
     url = f"https://www.cls.cn/api/cache?{params}&name=telegraph"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-               "Referer": "https://www.cls.cn/telegraph"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://www.cls.cn/telegraph",
+    }
     try:
         data = json.loads(_request(url, headers=headers, timeout=15))
     except Exception as e:
@@ -135,23 +155,24 @@ def fetch_news_from_cls(keyword: str = "", limit: int = 20) -> list[dict]:
         ctime = item.get("ctime", 0)
         if isinstance(ctime, (int, float)) and ctime > 1e12:
             ctime = ctime / 1000
-        results.append({
-            "title": title,
-            "url": f"https://www.cls.cn/telegraph/{item.get('id', '')}",
-            "summary": brief[:200].strip(),
-            "source": "cls",
-            "category": _classify_news(title, brief),
-            "external_id": str(item.get("id", "")) or _dedup_key(title, ""),
-            "published_at": (
-                datetime.fromtimestamp(ctime, tz=timezone.utc) if ctime else None
-            ),
-        })
+        results.append(
+            {
+                "title": title,
+                "url": f"https://www.cls.cn/telegraph/{item.get('id', '')}",
+                "summary": brief[:200].strip(),
+                "source": "cls",
+                "category": _classify_news(title, brief),
+                "external_id": str(item.get("id", "")) or _dedup_key(title, ""),
+                "published_at": (datetime.fromtimestamp(ctime, tz=timezone.utc) if ctime else None),
+            }
+        )
     return results
 
 
 def extract_related_symbols(title: str, summary: str) -> list[str]:
     """从新闻标题/摘要中提取相关股票代码"""
     import re
+
     text = title + " " + (summary or "")
     # 匹配 6位数字 股票代码
     codes = re.findall(r"\b(\d{6})\b", text)
@@ -160,8 +181,9 @@ def extract_related_symbols(title: str, summary: str) -> list[str]:
     return list(set(valid_codes))[:5]
 
 
-def run_news_ingest(*, keywords: list[str] | None = None, limit_per: int = MAX_PER_KEYWORD,
-                    sources: list[str] | None = None) -> dict:
+def run_news_ingest(
+    *, keywords: list[str] | None = None, limit_per: int = MAX_PER_KEYWORD, sources: list[str] | None = None
+) -> dict:
     """
     执行新闻抓取管线（多源）
 
@@ -194,9 +216,7 @@ def run_news_ingest(*, keywords: list[str] | None = None, limit_per: int = MAX_P
                 articles = fetcher(keyword, limit=limit_per)
                 src_fetched += len(articles)
                 for article in articles:
-                    article["related_symbols"] = extract_related_symbols(
-                        article["title"], article.get("summary", "")
-                    )
+                    article["related_symbols"] = extract_related_symbols(article["title"], article.get("summary", ""))
                 src_new += repo.upsert_many(articles)
                 logger.info(f"  [{source}/{keyword}] 获取 {len(articles)} 条, 新增 {src_new} 条")
 
@@ -250,6 +270,7 @@ _FETCHERS: dict[str, callable] = {
 
 if __name__ == "__main__":
     import json
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     result = run_news_ingest()
     print(json.dumps(result, ensure_ascii=False, indent=2))

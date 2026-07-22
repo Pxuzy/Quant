@@ -74,11 +74,51 @@ def test_data_quality_overview_projects_row_count_and_quality_status_before_aggr
         daily_dataset.quality_status = "warning"
         db.add_all(
             [
-                Stock(symbol="600519", exchange="SSE", market="A_SHARE", name="贵州茅台", status="LISTED", industry="酒", source="fixture"),
-                Stock(symbol="000001", exchange="SZSE", market="A_SHARE", name="平安银行", status="LISTED", industry="银行", source="fixture"),
-                Stock(symbol="430047", exchange="BSE", market="A_SHARE", name="北交所样本", status="LISTED", industry="样本", source="fixture"),
-                Stock(symbol="700001", exchange="SSE", market="A_SHARE", name="非共通样本1", status="LISTED", industry="样本", source="fixture"),
-                Stock(symbol="800001", exchange="SZSE", market="A_SHARE", name="非共通样本2", status="LISTED", industry="样本", source="fixture"),
+                Stock(
+                    symbol="600519",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="贵州茅台",
+                    status="LISTED",
+                    industry="酒",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="000001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="平安银行",
+                    status="LISTED",
+                    industry="银行",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="430047",
+                    exchange="BSE",
+                    market="A_SHARE",
+                    name="北交所样本",
+                    status="LISTED",
+                    industry="样本",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="700001",
+                    exchange="SSE",
+                    market="A_SHARE",
+                    name="非共通样本1",
+                    status="LISTED",
+                    industry="样本",
+                    source="fixture",
+                ),
+                Stock(
+                    symbol="800001",
+                    exchange="SZSE",
+                    market="A_SHARE",
+                    name="非共通样本2",
+                    status="LISTED",
+                    industry="样本",
+                    source="fixture",
+                ),
             ]
         )
         db.commit()

@@ -90,9 +90,7 @@ class AdapterRegistry:
             # 列出所有可用的名字，帮助用户知道正确的 code 是什么
             self.logger.debug("Unknown adapter code requested: %s", exc)
             available = ", ".join(sorted(self._adapters))
-            raise ValueError(
-                f"Unknown data source '{code}'. Available sources: {available}"
-            ) from exc
+            raise ValueError(f"Unknown data source '{code}'. Available sources: {available}") from exc
 
     def list(self) -> list[StockDataSourceAdapter]:
         """

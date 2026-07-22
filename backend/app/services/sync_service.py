@@ -8,6 +8,7 @@ and are mixed in via :class:`_MarketRepairMixin`.
 Pipeline orchestration types (``DailyBarIngestPipeline``) are re-exported
 from :mod:`pipeline` for callers that compose the sync stack.
 """
+
 from __future__ import annotations
 
 from datetime import date

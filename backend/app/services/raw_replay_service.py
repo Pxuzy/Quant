@@ -77,10 +77,7 @@ class RawDailyBarsReplayService:
             end_date = artifact.end_date or task.end_date
             if start_date is None or end_date is None:
                 raise RuntimeError(f"Raw artifact {artifact.id} is missing date range.")
-            normalized = [
-                replace(record, adjust_type=adjust_type)
-                for record in adapter.normalize_daily_bars(records)
-            ]
+            normalized = [replace(record, adjust_type=adjust_type) for record in adapter.normalize_daily_bars(records)]
 
             service = MarketDataSyncService(
                 self.db,

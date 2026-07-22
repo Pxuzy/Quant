@@ -227,13 +227,7 @@ class SyncTaskRepository:
         failed_symbols = list(dict.fromkeys(failed_symbols or []))
         failed_chunks = list(dict.fromkeys(failed_chunks or []))
         has_failures = bool(failed_symbols or failed_chunks or failure_reason)
-        status = (
-            "partial_success"
-            if has_failures and records_written > 0
-            else "failed"
-            if has_failures
-            else "success"
-        )
+        status = "partial_success" if has_failures and records_written > 0 else "failed" if has_failures else "success"
         owner = getattr(task, "_lease_fence_owner", task.lease_owner)
         attempt = getattr(task, "_lease_fence_attempt", task.attempt)
         result = self.db.execute(
@@ -315,10 +309,7 @@ class SyncTaskRepository:
                     SyncTask.status == "running",
                     (
                         (SyncTask.lease_expires_at.is_not(None) & (SyncTask.lease_expires_at < now))
-                        | (
-                            SyncTask.lease_expires_at.is_(None)
-                            & (SyncTask.started_at < cutoff)
-                        )
+                        | (SyncTask.lease_expires_at.is_(None) & (SyncTask.started_at < cutoff))
                     ),
                 )
                 .limit(50)

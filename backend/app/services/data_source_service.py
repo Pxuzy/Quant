@@ -78,7 +78,9 @@ class DataSourceService:
         scored.sort(key=lambda x: (-x[0], x[1]))
         return [item[2] for item in scored]
 
-    def update_source(self, code: str, *, enabled: bool | None = None, priority: int | None = None) -> DataSource | None:
+    def update_source(
+        self, code: str, *, enabled: bool | None = None, priority: int | None = None
+    ) -> DataSource | None:
         self.data_source_repo.sync_registered_adapters(self.registry)
         data_source = self.data_source_repo.update_source(code, enabled=enabled, priority=priority)
         if data_source is None:
@@ -111,10 +113,22 @@ class DataSourceService:
 
         def _fail(result: HealthCheckResult, cap: str) -> dict:
             self.data_source_repo.update_health(code, result)
-            payload = self._smoke_payload(source=source, result=result, capability=cap,
-                raw_records=[], normalized_records=[], validation_errors=[])
-            self._store_smoke_result(source=source, result=result, capability=cap,
-                raw_records=[], normalized_records=[], validation_errors=[])
+            payload = self._smoke_payload(
+                source=source,
+                result=result,
+                capability=cap,
+                raw_records=[],
+                normalized_records=[],
+                validation_errors=[],
+            )
+            self._store_smoke_result(
+                source=source,
+                result=result,
+                capability=cap,
+                raw_records=[],
+                normalized_records=[],
+                validation_errors=[],
+            )
             self.db.commit()
             self.db.refresh(source)
             return payload
@@ -122,22 +136,37 @@ class DataSourceService:
         if selected_capability is not None and selected_capability not in SMOKE_CAPABILITIES:
             raise ValueError(f"Unsupported smoke capability '{selected_capability}'.")
         if selected_capability is None:
-            return _fail(HealthCheckResult(healthy=False, status="unhealthy",
-                message=f"Data source '{code}' does not declare a smoke-testable capability."), "none")
+            return _fail(
+                HealthCheckResult(
+                    healthy=False,
+                    status="unhealthy",
+                    message=f"Data source '{code}' does not declare a smoke-testable capability.",
+                ),
+                "none",
+            )
         if not capabilities.get(selected_capability):
-            return _fail(HealthCheckResult(healthy=False, status="unhealthy",
-                message=f"{adapter.name} 不支持 {selected_capability} 真实取样。"), selected_capability)
+            return _fail(
+                HealthCheckResult(
+                    healthy=False, status="unhealthy", message=f"{adapter.name} 不支持 {selected_capability} 真实取样。"
+                ),
+                selected_capability,
+            )
 
         try:
             raw_records, normalized_records = self._run_smoke(adapter=adapter, capability=selected_capability)
             validation_errors = _validate_smoke_records(
-                capability=selected_capability, source=adapter.code, records=normalized_records)
+                capability=selected_capability, source=adapter.code, records=normalized_records
+            )
             healthy = bool(normalized_records) and not validation_errors
             message = (
                 f"{adapter.name} smoke test succeeded with {len(normalized_records)} normalized {selected_capability} records."
-                if healthy else _smoke_failure_message(
-                    adapter_name=adapter.name, capability=selected_capability,
-                    normalized_count=len(normalized_records), validation_errors=validation_errors)
+                if healthy
+                else _smoke_failure_message(
+                    adapter_name=adapter.name,
+                    capability=selected_capability,
+                    normalized_count=len(normalized_records),
+                    validation_errors=validation_errors,
+                )
             )
             result = HealthCheckResult(healthy=healthy, status="healthy" if healthy else "unhealthy", message=message)
         except ModuleNotFoundError as exc:
@@ -152,19 +181,28 @@ class DataSourceService:
         except Exception as exc:
             raw_message = str(exc)
             status = "unavailable" if _is_unavailable_smoke_error(raw_message) else "unhealthy"
-            result = HealthCheckResult(healthy=False, status=status,
-                message=_safe_smoke_error_message(raw_message))
+            result = HealthCheckResult(healthy=False, status=status, message=_safe_smoke_error_message(raw_message))
             raw_records, normalized_records, validation_errors = [], [], []
 
         self.data_source_repo.update_health(code, result)
-        self._store_smoke_result(source=source, result=result, capability=selected_capability,
-            raw_records=raw_records, normalized_records=normalized_records,
-            validation_errors=validation_errors)
+        self._store_smoke_result(
+            source=source,
+            result=result,
+            capability=selected_capability,
+            raw_records=raw_records,
+            normalized_records=normalized_records,
+            validation_errors=validation_errors,
+        )
         self.db.commit()
         self.db.refresh(source)
-        return self._smoke_payload(source=source, result=result, capability=selected_capability,
-            raw_records=raw_records, normalized_records=normalized_records,
-            validation_errors=validation_errors)
+        return self._smoke_payload(
+            source=source,
+            result=result,
+            capability=selected_capability,
+            raw_records=raw_records,
+            normalized_records=normalized_records,
+            validation_errors=validation_errors,
+        )
 
     def _run_smoke(self, *, adapter, capability: str) -> tuple[list[dict], list]:
         today = date.today()
@@ -176,8 +214,9 @@ class DataSourceService:
             raw = adapter.fetch_trading_calendar(market="A_SHARE", start_date=start_date, end_date=today)
             return raw, adapter.normalize_trading_calendar(raw, market="A_SHARE")
         if capability == "daily_bars":
-            raw = adapter.fetch_daily_bars(symbol="600519", exchange="SSE", market="A_SHARE",
-                start_date=start_date, end_date=today)
+            raw = adapter.fetch_daily_bars(
+                symbol="600519", exchange="SSE", market="A_SHARE", start_date=start_date, end_date=today
+            )
             return raw, adapter.normalize_daily_bars(raw)
         raise ValueError(f"Unsupported smoke capability '{capability}'.")
 
@@ -189,8 +228,13 @@ class DataSourceService:
         return None
 
     def _store_smoke_result(
-        self, *, source: DataSource, result: HealthCheckResult, capability: str,
-        raw_records: list[dict], normalized_records: list,
+        self,
+        *,
+        source: DataSource,
+        result: HealthCheckResult,
+        capability: str,
+        raw_records: list[dict],
+        normalized_records: list,
         validation_errors: list[str] | None = None,
     ) -> None:
         config_json = source.config_json if isinstance(source.config_json, dict) else {}
@@ -216,8 +260,12 @@ class DataSourceService:
 
     @staticmethod
     def _smoke_payload(
-        *, source: DataSource, result: HealthCheckResult, capability: str,
-        raw_records: list[dict], normalized_records: list,
+        *,
+        source: DataSource,
+        result: HealthCheckResult,
+        capability: str,
+        raw_records: list[dict],
+        normalized_records: list,
         validation_errors: list[str] | None = None,
     ) -> dict:
         return {
@@ -235,16 +283,34 @@ class DataSourceService:
 
 def _normalized_record_to_dict(record) -> dict:
     if isinstance(record, NormalizedStock):
-        return {"symbol": record.symbol, "exchange": record.exchange,
-                "market": record.market, "name": record.name, "source": record.source}
+        return {
+            "symbol": record.symbol,
+            "exchange": record.exchange,
+            "market": record.market,
+            "name": record.name,
+            "source": record.source,
+        }
     if isinstance(record, NormalizedTradingCalendar):
-        return {"market": record.market, "trade_date": record.trade_date.isoformat(),
-                "is_open": record.is_open, "source": record.source}
+        return {
+            "market": record.market,
+            "trade_date": record.trade_date.isoformat(),
+            "is_open": record.is_open,
+            "source": record.source,
+        }
     if isinstance(record, NormalizedDailyBar):
-        return {"symbol": record.symbol, "exchange": record.exchange, "market": record.market,
-                "trade_date": record.trade_date.isoformat(), "open": record.open, "high": record.high,
-                "low": record.low, "close": record.close, "volume": record.volume,
-                "amount": record.amount, "source": record.source}
+        return {
+            "symbol": record.symbol,
+            "exchange": record.exchange,
+            "market": record.market,
+            "trade_date": record.trade_date.isoformat(),
+            "open": record.open,
+            "high": record.high,
+            "low": record.low,
+            "close": record.close,
+            "volume": record.volume,
+            "amount": record.amount,
+            "source": record.source,
+        }
     return dict(record) if isinstance(record, dict) else {"value": str(record)}
 
 
@@ -258,8 +324,9 @@ def _validate_smoke_records(*, capability: str, source: str, records: list) -> l
     return []
 
 
-def _smoke_failure_message(*, adapter_name: str, capability: str,
-    normalized_count: int, validation_errors: list[str]) -> str:
+def _smoke_failure_message(
+    *, adapter_name: str, capability: str, normalized_count: int, validation_errors: list[str]
+) -> str:
     if normalized_count <= 0:
         return f"{adapter_name} smoke test returned no normalized {capability} records."
     first_error = validation_errors[0] if validation_errors else "unknown schema validation error"
@@ -268,10 +335,19 @@ def _smoke_failure_message(*, adapter_name: str, capability: str,
 
 def _is_unavailable_smoke_error(message: str) -> bool:
     normalized = message.lower()
-    return any(marker in normalized for marker in (
-        "not configured", "not installed", "network error", "network_error",
-        "remote end closed connection", "connection aborted", "timed out", "timeout",
-    ))
+    return any(
+        marker in normalized
+        for marker in (
+            "not configured",
+            "not installed",
+            "network error",
+            "network_error",
+            "remote end closed connection",
+            "connection aborted",
+            "timed out",
+            "timeout",
+        )
+    )
 
 
 def _safe_smoke_error_message(message: str) -> str:

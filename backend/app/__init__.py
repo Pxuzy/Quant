@@ -1,2 +1,1 @@
 """Quant API package."""
-

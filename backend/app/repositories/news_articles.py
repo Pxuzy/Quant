@@ -10,7 +10,6 @@ from backend.app.repositories._base import BaseRepository
 
 
 class NewsRepository(BaseRepository):
-
     def upsert_many(self, records: list[dict]) -> int:
         """批量写入新闻，按 (source, external_id) 去重。批量预取现有键消除 N+1。"""
         if not records:
@@ -18,8 +17,7 @@ class NewsRepository(BaseRepository):
 
         # Step 1: bulk-fetch all existing keys in one query
         key_pairs = [
-            (record.get("source", "sina"), record.get("external_id") or record.get("url", ""))
-            for record in records
+            (record.get("source", "sina"), record.get("external_id") or record.get("url", "")) for record in records
         ]
         seen_keys: set[tuple[str, str]] = set()
         deduped_pairs: list[tuple[str, str]] = []
@@ -32,12 +30,12 @@ class NewsRepository(BaseRepository):
         existing_map: dict[tuple[str, str | None], NewsArticle] = {}  # (source, external_id) -> obj
         if deduped_pairs:
             clauses = [
-                (NewsArticle.source == source) & (NewsArticle.external_id == eid)
-                for source, eid in deduped_pairs
+                (NewsArticle.source == source) & (NewsArticle.external_id == eid) for source, eid in deduped_pairs
             ]
             if clauses:
                 from functools import reduce
                 from operator import or_
+
                 for row in self.db.scalars(select(NewsArticle).where(reduce(or_, clauses))):
                     existing_map[(row.source, row.external_id)] = row
 
@@ -93,33 +91,26 @@ class NewsRepository(BaseRepository):
             conditions.append(NewsArticle.category == category.strip())
 
         total_stmt = select(func.count(NewsArticle.id))
-        records_stmt = select(NewsArticle).order_by(
-            desc(NewsArticle.published_at), desc(NewsArticle.created_at)
-        )
+        records_stmt = select(NewsArticle).order_by(desc(NewsArticle.published_at), desc(NewsArticle.created_at))
         if conditions:
             total_stmt = total_stmt.where(*conditions)
             records_stmt = records_stmt.where(*conditions)
 
         total = self.db.scalar(total_stmt) or 0
-        records = self.db.scalars(
-            records_stmt.offset((page - 1) * page_size).limit(page_size)
-        ).all()
+        records = self.db.scalars(records_stmt.offset((page - 1) * page_size).limit(page_size)).all()
         return list(records), total
 
     def count(self) -> int:
         return self.db.scalar(select(func.count(NewsArticle.id))) or 0
 
     def latest_published_at(self) -> datetime | None:
-        return self.db.scalar(
-            select(func.max(NewsArticle.published_at))
-        )
+        return self.db.scalar(select(func.max(NewsArticle.published_at)))
 
     def delete_old(self, *, keep_days: int = 30) -> int:
         """删除超过 keep_days 天的新闻"""
-        cutoff = datetime.now(timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         from datetime import timedelta
+
         cutoff = cutoff - timedelta(days=keep_days)
 
         result = self.db.execute(

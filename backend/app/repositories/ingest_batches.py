@@ -11,7 +11,6 @@ from backend.app.repositories._base import BaseRepository
 
 
 class IngestBatchRepository(BaseRepository):
-
     def create_batch(
         self,
         *,

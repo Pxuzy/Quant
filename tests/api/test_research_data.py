@@ -198,9 +198,7 @@ def test_bar_reader_snapshot_id_reads_the_published_version_partition(tmp_path):
         dataset_dir=lake_root / "versions" / "daily_bars" / "v1",
     )
     version_repo.write_many([make_bar("600519", date(2026, 6, 1), 1888.0)])
-    partition_path = next(
-        (lake_root / "versions" / "daily_bars" / "v1").glob("market=*/trade_date=*/part-*.parquet")
-    )
+    partition_path = next((lake_root / "versions" / "daily_bars" / "v1").glob("market=*/trade_date=*/part-*.parquet"))
     partition_bytes = partition_path.read_bytes()
     partition_uri = "versions/daily_bars/v1/market=A_SHARE/trade_date=2026-06-01/part-000.parquet"
     manifest = {

@@ -58,14 +58,14 @@ class DatabaseIntegrationService:
 
     def get_overview(self, *, market: str | None = None, use_cache: bool | None = None) -> dict:
         coverage_market = _normalize_market(market)
-        
+
         # Auto-disable cache during tests
         if use_cache is None:
             use_cache = os.environ.get("PYTEST_CURRENT_TEST") is None
-        
+
         # Try cache first for coverage_summary
         cached_coverage = _get_cached_coverage(coverage_market) if use_cache else None
-        
+
         datasets = self._list_datasets()
         recent_batches = self._list_recent_batches(market=coverage_market)
         all_batches = self._list_batches_for_summary(market=coverage_market)
@@ -75,7 +75,7 @@ class DatabaseIntegrationService:
             for dataset in datasets
         ]
         self.db.commit()
-        
+
         # Use cached coverage or compute fresh
         if cached_coverage is not None:
             coverage_summary = cached_coverage
@@ -83,7 +83,7 @@ class DatabaseIntegrationService:
             coverage_summary = self._coverage_summary(market=coverage_market)
             if use_cache:
                 _set_cached_coverage(coverage_market, coverage_summary)
-        
+
         sync_watermarks = _build_sync_watermarks(all_batches, coverage_summary=coverage_summary)
         provider_integrations = _build_provider_integrations(all_batches)
 
@@ -197,9 +197,7 @@ class DatabaseIntegrationService:
 
     def _coverage_summary(self, *, market: str) -> dict:
         stock_symbols = set(
-            self.db.scalars(
-                select(Stock.symbol).where(listed_common_stock_filter(market=market))
-            ).all()
+            self.db.scalars(select(Stock.symbol).where(listed_common_stock_filter(market=market))).all()
         )
         all_open_dates = set(
             self.db.scalars(
@@ -210,11 +208,11 @@ class DatabaseIntegrationService:
             ).all()
         )
         calendar_latest_date = max(all_open_dates) if all_open_dates else None
-        target_start_date = calendar_latest_date - timedelta(days=DAILY_BAR_TARGET_WINDOW_DAYS) if calendar_latest_date else None
+        target_start_date = (
+            calendar_latest_date - timedelta(days=DAILY_BAR_TARGET_WINDOW_DAYS) if calendar_latest_date else None
+        )
         open_dates = {
-            trade_date
-            for trade_date in all_open_dates
-            if target_start_date is None or trade_date >= target_start_date
+            trade_date for trade_date in all_open_dates if target_start_date is None or trade_date >= target_start_date
         }
         coverage_status = "ok"
         coverage_message = None
@@ -247,7 +245,9 @@ class DatabaseIntegrationService:
             "daily_expected_symbol_days": expected_symbol_days,
             "daily_actual_symbol_days": actual_symbol_days,
             "daily_missing_symbol_days": missing_symbol_days,
-            "daily_completeness": None if coverage_status == "degraded" else _ratio(actual_symbol_days, expected_symbol_days),
+            "daily_completeness": None
+            if coverage_status == "degraded"
+            else _ratio(actual_symbol_days, expected_symbol_days),
         }
 
 
@@ -366,7 +366,10 @@ def _build_sync_watermarks(batches: list[IngestBatch], *, coverage_summary: dict
 
     return sorted(
         watermarks.values(),
-        key=lambda item: (_dt_value(item["last_success_at"]) or _dt_value(item["last_failed_at"]), item["dataset_name"]),
+        key=lambda item: (
+            _dt_value(item["last_success_at"]) or _dt_value(item["last_failed_at"]),
+            item["dataset_name"],
+        ),
         reverse=True,
     )[:12]
 
@@ -424,7 +427,9 @@ def _build_provider_integrations(batches: list[IngestBatch]) -> list[dict]:
                 provider["fallback_successes"] += 1
         if batch.status == "failed":
             provider["failures"] += 1
-            provider["last_failure_at"] = _max_datetime(provider["last_failure_at"], batch.finished_at or batch.started_at)
+            provider["last_failure_at"] = _max_datetime(
+                provider["last_failure_at"], batch.finished_at or batch.started_at
+            )
 
     return sorted(
         providers.values(),

@@ -92,9 +92,9 @@ def _split_baostock_code(code: str) -> tuple[str, str]:
 
     # BaoStock 前缀 → 系统标准交易所代码 的映射
     exchange_map = {
-        "sh": "SSE",    # 上海 (Shanghai)
-        "sz": "SZSE",   # 深圳 (Shenzhen)
-        "bj": "BSE",    # 北京 (Beijing)
+        "sh": "SSE",  # 上海 (Shanghai)
+        "sz": "SZSE",  # 深圳 (Shenzhen)
+        "bj": "BSE",  # 北京 (Beijing)
     }
     return symbol, exchange_map.get(
         exchange_code.lower(),
@@ -209,7 +209,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
 
     code = "baostock"
     name = "BaoStock"
-    priority = 20         # 比 AKShare 低一点（AKShare=10），作为备选方案
+    priority = 20  # 比 AKShare 低一点（AKShare=10），作为备选方案
     requires_token = False
     default_enabled = True
 
@@ -266,13 +266,9 @@ class BaoStockAdapter(StockDataSourceAdapter):
             )
         except Exception as exc:
             logger.warning("BaoStock health check failed: %s", exc)
-            return HealthCheckResult(
-                healthy=False, status="unhealthy", message=str(exc)
-            )
+            return HealthCheckResult(healthy=False, status="unhealthy", message=str(exc))
 
-        return HealthCheckResult(
-            healthy=True, status="healthy", message="BaoStock package is available."
-        )
+        return HealthCheckResult(healthy=True, status="healthy", message="BaoStock package is available.")
 
     def _fetch_stock_industry_map(self, client: Any) -> dict[str, str]:
         if not hasattr(client, "query_stock_industry"):
@@ -308,9 +304,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
         另外，BaoStock 的 login 可能偶发失败，所以加了重试（最多 2 次）。
         """
         if market.upper() != "A_SHARE":
-            raise ValueError(
-                "BaoStock stock list adapter currently supports A_SHARE only."
-            )
+            raise ValueError("BaoStock stock list adapter currently supports A_SHARE only.")
 
         client = self._get_client()
         errors: list[str] = []
@@ -320,9 +314,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
             login_result = client.login()
             # BaoStock 的 login 返回一个对象，error_code == "0" 表示成功
             if getattr(login_result, "error_code", "0") != "0":
-                errors.append(
-                    getattr(login_result, "error_msg", "BaoStock login failed.")
-                )
+                errors.append(getattr(login_result, "error_msg", "BaoStock login failed."))
                 if attempt < 2:
                     sleep(1)
                     continue
@@ -359,14 +351,9 @@ class BaoStockAdapter(StockDataSourceAdapter):
                 if hasattr(client, "logout"):
                     client.logout()
 
-        raise RuntimeError(
-            "; ".join(error for error in errors if error)
-            or "BaoStock query_stock_basic failed."
-        )
+        raise RuntimeError("; ".join(error for error in errors if error) or "BaoStock query_stock_basic failed.")
 
-    def normalize_stock_list(
-        self, raw_records: list[dict[str, Any]]
-    ) -> list[NormalizedStock]:
+    def normalize_stock_list(self, raw_records: list[dict[str, Any]]) -> list[NormalizedStock]:
         """
         把 BaoStock 的原始股票数据转成统一格式。
 
@@ -383,14 +370,8 @@ class BaoStockAdapter(StockDataSourceAdapter):
         normalized: list[NormalizedStock] = []
 
         for record in raw_records:
-            raw_code = _clean_text(
-                record.get("code") or record.get("证券代码")
-            )
-            name = _clean_text(
-                record.get("code_name")
-                or record.get("名称")
-                or record.get("证券简称")
-            )
+            raw_code = _clean_text(record.get("code") or record.get("证券代码"))
+            name = _clean_text(record.get("code_name") or record.get("名称") or record.get("证券简称"))
             if raw_code is None or name is None:
                 continue
 
@@ -398,11 +379,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
             symbol, exchange = _split_baostock_code(raw_code)
 
             # 判断退市状态：BaoStock 中 status="0" 表示退市
-            status = (
-                "DELISTED"
-                if str(record.get("status") or "").strip() == "0"
-                else "LISTED"
-            )
+            status = "DELISTED" if str(record.get("status") or "").strip() == "0" else "LISTED"
 
             normalized.append(
                 NormalizedStock(
@@ -414,9 +391,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
                     # AKShare 没有的字段，BaoStock 有：
                     industry=_clean_industry(record.get("industry")),
                     listing_date=_parse_baostock_date(record.get("ipoDate")),
-                    delisting_date=_parse_baostock_date(
-                        record.get("outDate")
-                    ),
+                    delisting_date=_parse_baostock_date(record.get("outDate")),
                     source=self.code,
                 )
             )
@@ -448,9 +423,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
         和 fetch_stock_list 一样需要 login/logout。
         """
         if market.upper() != "A_SHARE":
-            raise ValueError(
-                "BaoStock daily bars adapter currently supports A_SHARE only."
-            )
+            raise ValueError("BaoStock daily bars adapter currently supports A_SHARE only.")
         adjust_type_code = normalize_daily_bar_adjust_type(adjust_type)
         adjustflag = {"none": "3", "qfq": "2", "hfq": "1"}[adjust_type_code]
 
@@ -459,9 +432,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
         # 登录
         login_result = client.login()
         if getattr(login_result, "error_code", "0") != "0":
-            raise RuntimeError(
-                getattr(login_result, "error_msg", "BaoStock login failed.")
-            )
+            raise RuntimeError(getattr(login_result, "error_msg", "BaoStock login failed."))
 
         try:
             # 查询日K线
@@ -470,7 +441,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
                 "date,code,open,high,low,close,preclose,volume,amount,adjustflag",
                 start_date=start_date.isoformat(),
                 end_date=end_date.isoformat(),
-                frequency="d",       # 日线
+                frequency="d",  # 日线
                 adjustflag=adjustflag,
             )
             if getattr(result_set, "error_code", "0") != "0":
@@ -487,9 +458,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
             if hasattr(client, "logout"):
                 client.logout()
 
-    def normalize_daily_bars(
-        self, raw_records: list[dict[str, Any]]
-    ) -> list[NormalizedDailyBar]:
+    def normalize_daily_bars(self, raw_records: list[dict[str, Any]]) -> list[NormalizedDailyBar]:
         """
         把 BaoStock 的原始日K线转成统一格式。
 
@@ -514,12 +483,7 @@ class BaoStockAdapter(StockDataSourceAdapter):
             low = _to_float(record.get("low"))
             close = _to_float(record.get("close"))
 
-            if (
-                open_price is None
-                or high is None
-                or low is None
-                or close is None
-            ):
+            if open_price is None or high is None or low is None or close is None:
                 continue
 
             normalized.append(
@@ -566,23 +530,17 @@ class BaoStockAdapter(StockDataSourceAdapter):
         每一天是否开市的信息。
         """
         if market.upper() != "A_SHARE":
-            raise ValueError(
-                "BaoStock trading calendar adapter currently supports A_SHARE only."
-            )
+            raise ValueError("BaoStock trading calendar adapter currently supports A_SHARE only.")
 
         client = self._get_client()
 
         login_result = client.login()
         if getattr(login_result, "error_code", "0") != "0":
-            raise RuntimeError(
-                getattr(login_result, "error_msg", "BaoStock login failed.")
-            )
+            raise RuntimeError(getattr(login_result, "error_msg", "BaoStock login failed."))
 
         try:
             if not hasattr(client, "query_trade_dates"):
-                raise RuntimeError(
-                    "BaoStock client does not expose query_trade_dates."
-                )
+                raise RuntimeError("BaoStock client does not expose query_trade_dates.")
             result_set = client.query_trade_dates(
                 start_date=start_date.isoformat(),
                 end_date=end_date.isoformat(),
@@ -616,21 +574,11 @@ class BaoStockAdapter(StockDataSourceAdapter):
         normalized: list[NormalizedTradingCalendar] = []
 
         for record in raw_records:
-            trade_date = _parse_baostock_date(
-                record.get("calendar_date") or record.get("date")
-            )
+            trade_date = _parse_baostock_date(record.get("calendar_date") or record.get("date"))
             if trade_date is None:
                 continue
 
-            raw_is_open = (
-                str(
-                    record.get("is_trading_day")
-                    or record.get("is_open")
-                    or ""
-                )
-                .strip()
-                .lower()
-            )
+            raw_is_open = str(record.get("is_trading_day") or record.get("is_open") or "").strip().lower()
 
             normalized.append(
                 NormalizedTradingCalendar(

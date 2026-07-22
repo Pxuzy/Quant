@@ -72,7 +72,8 @@ def _mark_duplicate_active_replays_failed(bind) -> None:
                 status="failed",
                 progress=100,
                 finished_at=func.now(),
-                error_message="Superseded by active replay identity migration; survivor task id=" + str(group["survivor_id"]),
+                error_message="Superseded by active replay identity migration; survivor task id="
+                + str(group["survivor_id"]),
             )
         )
 
@@ -93,8 +94,7 @@ def upgrade() -> None:
     if bind.dialect.name == "sqlite":
         op.execute(
             sa.text(
-                f"CREATE UNIQUE INDEX {_INDEX} ON sync_tasks "
-                f"(input_raw_artifact_id, adjust_type) WHERE {_PREDICATE}"
+                f"CREATE UNIQUE INDEX {_INDEX} ON sync_tasks (input_raw_artifact_id, adjust_type) WHERE {_PREDICATE}"
             )
         )
         return

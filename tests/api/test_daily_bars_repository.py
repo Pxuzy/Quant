@@ -207,14 +207,34 @@ def test_daily_bars_repository_isolates_parquet_by_lake_root_and_reports_idempot
 def test_daily_bars_repository_keeps_last_duplicate_and_reads_parquet_truth(tmp_path, monkeypatch):
     repo = DailyBarRepository(lake_root=tmp_path / "lake")
     first = NormalizedDailyBar(
-        symbol="600519", exchange="SSE", market="A_SHARE", trade_date=date(2026, 6, 1),
-        open=1665.0, high=1680.0, low=1660.0, close=1675.0, pre_close=None,
-        volume=1000.0, amount=1675000.0, adjust_factor=1.0, source="fixture",
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        trade_date=date(2026, 6, 1),
+        open=1665.0,
+        high=1680.0,
+        low=1660.0,
+        close=1675.0,
+        pre_close=None,
+        volume=1000.0,
+        amount=1675000.0,
+        adjust_factor=1.0,
+        source="fixture",
     )
     replacement = NormalizedDailyBar(
-        symbol="600519", exchange="SSE", market="A_SHARE", trade_date=date(2026, 6, 1),
-        open=1665.0, high=1690.0, low=1660.0, close=1685.0, pre_close=None,
-        volume=1000.0, amount=1685000.0, adjust_factor=1.0, source="fixture",
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        trade_date=date(2026, 6, 1),
+        open=1665.0,
+        high=1690.0,
+        low=1660.0,
+        close=1685.0,
+        pre_close=None,
+        volume=1000.0,
+        amount=1685000.0,
+        adjust_factor=1.0,
+        source="fixture",
         ingested_at=first.ingested_at,
     )
 
@@ -229,9 +249,19 @@ def test_daily_bars_repository_keeps_last_duplicate_and_reads_parquet_truth(tmp_
 def test_daily_bars_repository_propagates_parquet_write_failure(tmp_path, monkeypatch):
     repo = DailyBarRepository(lake_root=tmp_path / "lake")
     record = NormalizedDailyBar(
-        symbol="600519", exchange="SSE", market="A_SHARE", trade_date=date(2026, 6, 1),
-        open=1665.0, high=1680.0, low=1660.0, close=1675.0, pre_close=None,
-        volume=1000.0, amount=1675000.0, adjust_factor=1.0, source="fixture",
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        trade_date=date(2026, 6, 1),
+        open=1665.0,
+        high=1680.0,
+        low=1660.0,
+        close=1675.0,
+        pre_close=None,
+        volume=1000.0,
+        amount=1675000.0,
+        adjust_factor=1.0,
+        source="fixture",
     )
     monkeypatch.setattr(
         "backend.app.repositories.daily_bars.pq.write_table",
@@ -249,14 +279,34 @@ def test_daily_bars_repository_propagates_parquet_write_failure(tmp_path, monkey
 def test_daily_bars_repository_replaces_existing_parquet_row_without_persistent_duckdb(tmp_path, monkeypatch):
     repo = DailyBarRepository(lake_root=tmp_path / "lake")
     first = NormalizedDailyBar(
-        symbol="600519", exchange="SSE", market="A_SHARE", trade_date=date(2026, 6, 1),
-        open=1665.0, high=1680.0, low=1660.0, close=1675.0, pre_close=None,
-        volume=1000.0, amount=1675000.0, adjust_factor=1.0, source="fixture",
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        trade_date=date(2026, 6, 1),
+        open=1665.0,
+        high=1680.0,
+        low=1660.0,
+        close=1675.0,
+        pre_close=None,
+        volume=1000.0,
+        amount=1675000.0,
+        adjust_factor=1.0,
+        source="fixture",
     )
     replacement = NormalizedDailyBar(
-        symbol="600519", exchange="SSE", market="A_SHARE", trade_date=date(2026, 6, 1),
-        open=1665.0, high=1690.0, low=1660.0, close=1685.0, pre_close=None,
-        volume=1000.0, amount=1685000.0, adjust_factor=1.0, source="fixture",
+        symbol="600519",
+        exchange="SSE",
+        market="A_SHARE",
+        trade_date=date(2026, 6, 1),
+        open=1665.0,
+        high=1690.0,
+        low=1660.0,
+        close=1685.0,
+        pre_close=None,
+        volume=1000.0,
+        amount=1685000.0,
+        adjust_factor=1.0,
+        source="fixture",
         ingested_at=first.ingested_at,
     )
     assert repo.write_many([first]) == 1

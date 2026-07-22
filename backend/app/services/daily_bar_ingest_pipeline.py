@@ -108,7 +108,9 @@ class DailyBarIngestPipeline:
         try:
             latest = self.daily_bar_repo.latest_trade_date(market=(task.market or "A_SHARE").strip().upper())
             if latest is not None:
-                self.stock_repo.update_data_freshness(symbol=symbol, market=task.market or "A_SHARE", latest_data_date=latest)
+                self.stock_repo.update_data_freshness(
+                    symbol=symbol, market=task.market or "A_SHARE", latest_data_date=latest
+                )
         except Exception:
             pass  # best-effort, 不影响主流程
         return records_read, records_written

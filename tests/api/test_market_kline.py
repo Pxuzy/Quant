@@ -91,15 +91,17 @@ def test_market_kline_handles_provider_empty_data_shape(client, monkeypatch):
 
 def test_market_kline_parses_tencent_day_row_order(client, monkeypatch):
     def fake_request(url: str, encoding: str = "utf-8") -> str:
-        return json.dumps({
-            "data": {
-                "sh600900": {
-                    "qfqday": [
-                        ["2026-06-26", "26.25", "26.72", "26.65", "26.15", "1282652"],
-                    ],
+        return json.dumps(
+            {
+                "data": {
+                    "sh600900": {
+                        "qfqday": [
+                            ["2026-06-26", "26.25", "26.72", "26.65", "26.15", "1282652"],
+                        ],
+                    },
                 },
-            },
-        })
+            }
+        )
 
     monkeypatch.setattr("backend.app.services.kline_service._request", fake_request)
 
@@ -116,16 +118,18 @@ def test_market_kline_accepts_long_history_request(client, monkeypatch):
 
     def fake_request(url: str, encoding: str = "utf-8") -> str:
         requested_urls.append(url)
-        return json.dumps({
-            "data": {
-                "sh600900": {
-                    "qfqday": [
-                        ["2026-06-24", "28.10", "28.50", "28.30", "27.90", "1000"],
-                        ["2026-06-25", "28.30", "28.80", "28.60", "28.10", "1200"],
-                    ],
+        return json.dumps(
+            {
+                "data": {
+                    "sh600900": {
+                        "qfqday": [
+                            ["2026-06-24", "28.10", "28.50", "28.30", "27.90", "1000"],
+                            ["2026-06-25", "28.30", "28.80", "28.60", "28.10", "1200"],
+                        ],
+                    },
                 },
-            },
-        })
+            }
+        )
 
     monkeypatch.setattr("backend.app.services.kline_service._request", fake_request)
 
