@@ -195,7 +195,8 @@ Quant/
 | --- | --- |
 | `backend/app/models/__init__.py` | 集中导出 19 个 ORM 实体。 |
 | `backend/app/models/entities.py` | 定义全部 ORM 表、关系、约束、索引、UTC 时间和 pgvector/JSON 兼容列。 |
-| `backend/app/repositories/__init__.py` | 标识 repository 包并承载公共导入。 |
+| `backend/app/repositories/_base.py` | SQLAlchemy Repository 基类，提供 `self.db` 公共入口。 |
+| `backend/app/repositories/_query.py` | 公用 `paginated_query()` 分页查询 helper。 |
 | `backend/app/repositories/stocks.py` | 查询、分页、upsert 股票主数据并更新数据新鲜度。 |
 | `backend/app/repositories/daily_bars.py` | 以文件锁和原子替换幂等写入分区 Parquet，并通过 DuckDB/PyArrow 查询日线。 |
 | `backend/app/repositories/trading_calendars.py` | upsert、分页和查询市场交易日历。 |
@@ -249,9 +250,10 @@ Quant/
 
 | 文件 | 功能 |
 | --- | --- |
-| `backend/app/services/__init__.py` | 标识服务包并承载少量公共导入。 |
 | `backend/app/services/_http.py` | 共享 HTTP 请求工具（_request 函数 + 2 秒请求缓存）。 |
 | `backend/app/services/_utils.py` | 共享清洗/交易所代码/报价辅助函数。 |
+| `backend/app/services/_provider.py` | `ProviderSelector` — adapter 筛选、健康检查、历史成功率排序和使用统计。 |
+| `backend/app/services/_task_runner.py` | `SyncTaskRunner` — task 启动/成功/失败/日志/提交/刷新。 |
 | `backend/app/services/data_source_service.py` | 编排 provider 注册、配置、健康检查与 capability smoke test。 |
 | `backend/app/services/stock_sync_service.py` | 创建/执行股票列表同步，择源、保存 raw、校验、入库和更新数据集。 |
 | `backend/app/services/sync_service.py` | 编排单股日线同步、自动 fallback、版本发布，并组合市场修复 mixin。 |
@@ -265,15 +267,13 @@ Quant/
 | `backend/app/services/normalized_data_validation.py` | 对 canonical 股票、日线和日历执行字段、范围、重复键等硬校验。 |
 | `backend/app/services/dataset_manifest.py` | 规范化、校验、哈希并原子持久化 dataset manifest。 |
 | `backend/app/services/dataset_version_publisher.py` | 从 canonical 日线生成不可变版本分区/manifest 并登记发布状态。 |
-| `backend/app/services/dataset_service.py` | 查询数据集目录并同步投影行数。 |
-| `backend/app/services/dataset_row_count_projection.py` | 为逻辑数据集计算和回写实时行数投影。 |
+| `backend/app/services/dataset_service.py` | 查询数据集目录、同步投影行数（含已合并的行数投影逻辑）。 |
 | `backend/app/services/data_quality_service.py` | 检查重复、缺失交易日、OHLC 边界、负值和股票覆盖并记录报告。 |
-| `backend/app/services/database_status_service.py` | 汇总元数据库、数据湖和 DuckDB 可用性/大小并脱敏连接串。 |
 | `backend/app/services/database_integration_service.py` | 聚合覆盖率、水位、数据集、provider、批次和 lineage 控制面视图。 |
+| `backend/app/services/database_status_service.py` | 汇总元数据库、数据湖和 DuckDB 可用性/大小并脱敏连接串。 |
 | `backend/app/services/research_data_service.py` | 通过当前 Parquet 或已发布 snapshot 读取受治理日线并返回 manifest 契约。 |
 | `backend/app/services/stock_query_service.py` | 聚合股票分页、详情、覆盖、缺口、OHLC 质量及相关批次。 |
-| `backend/app/services/sync_task_service.py` | 提供同步任务、日志、批次、运行状态的查询视图。 |
-| `backend/app/services/sync_schedule_service.py` | 管理 cron 配置、校验表达式并把计划触发转换为正式任务。 |
+| `backend/app/services/sync_task_service.py` | 任务/日志/批次/runner 状态查询 + cron 调度管理（已合并计划服务）。 |
 | `backend/app/services/quote_service.py` | 实时行情（腾讯API）、指数行情和股票搜索。 |
 | `backend/app/services/kline_service.py` | K 线优先读取本地 governed 日线，必要时请求展示型外部行情。 |
 | `backend/app/services/board_service.py` | 板块排行、板块成分股、股票所属行业查询（公共 API）。 |
