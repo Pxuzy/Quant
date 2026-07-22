@@ -407,21 +407,21 @@ class AkShareAdapter(StockDataSourceAdapter):
         # 准备备选方案列表：哪个函数可用就用哪个
         candidates: list[tuple[str, Any]] = []
 
-        # 方案一（较新的 AKShare 版本）
-        if hasattr(client, "stock_info_a_code_name"):
-            candidates.append(
-                (
-                    "stock_info_a_code_name",
-                    lambda: _records_from_frame(client.stock_info_a_code_name()),
-                )
-            )
-
-        # 方案二（较旧的 AKShare 版本兼容）
+        # 方案一（带行业信息）
         if hasattr(client, "stock_zh_a_spot_em"):
             candidates.append(
                 (
                     "stock_zh_a_spot_em",
                     lambda: _records_from_frame(client.stock_zh_a_spot_em()),
+                )
+            )
+
+        # 方案二（较新的 AKShare 版本，仅代码+名称）
+        if hasattr(client, "stock_info_a_code_name"):
+            candidates.append(
+                (
+                    "stock_info_a_code_name",
+                    lambda: _records_from_frame(client.stock_info_a_code_name()),
                 )
             )
 
