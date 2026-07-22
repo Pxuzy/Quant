@@ -1,13 +1,11 @@
 """K线服务 - 历史K线、图表数据"""
 
 import json
-import re
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict
+from typing import Dict, List
 
 from backend.app.repositories.daily_bars import DailyBarRepository
-
 from backend.app.services.quote_service import _request
 
 logger = logging.getLogger(__name__)

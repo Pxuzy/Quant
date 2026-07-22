@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from backend.app.models import SyncSchedule
 
-
 DEFAULT_SYNC_SCHEDULES: tuple[dict[str, str | bool | None], ...] = (
     {
         "code": "daily_bars_after_close",

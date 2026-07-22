@@ -1,14 +1,14 @@
 from backend.app.models.entities import (
     DataQualityReport,
-    DataSource,
     Dataset,
     DatasetVersion,
     DatasetVersionPartition,
-    Snapshot,
-    SnapshotMember,
+    DataSource,
     IngestBatch,
     NewsArticle,
     RawArtifact,
+    Snapshot,
+    SnapshotMember,
     Stock,
     StockBoard,
     StockBoardMember,
@@ -16,6 +16,8 @@ from backend.app.models.entities import (
     SyncTask,
     SyncTaskLog,
     TradingCalendar,
+    Watchlist,
+    WatchlistItem,
 )
 
 __all__ = [
@@ -36,4 +38,6 @@ __all__ = [
     "SyncTask",
     "SyncTaskLog",
     "TradingCalendar",
+    "Watchlist",
+    "WatchlistItem",
 ]

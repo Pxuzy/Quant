@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from backend.app.adapters.base import HealthCheckResult, NormalizedStock, StockDataSourceAdapter
 from backend.app.adapters.registry import AdapterRegistry, default_adapter_registry
 from backend.app.core.market_symbols import is_common_stock_symbol
+from backend.app.db.cache import invalidate_data_cache
 from backend.app.models import SyncTask
 from backend.app.repositories.data_sources import DataSourceRepository
 from backend.app.repositories.datasets import DatasetRepository
@@ -15,10 +16,8 @@ from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.repositories.stocks import StockRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.services.database_integration_service import invalidate_coverage_cache
-from backend.app.db.cache import invalidate_data_cache
-from backend.app.services.raw_artifact_store import RawArtifactStore
 from backend.app.services.normalized_data_validation import validate_stock_records
-
+from backend.app.services.raw_artifact_store import RawArtifactStore
 
 AUTO_SOURCE_CODE = "auto"
 # Idempotency window: skip creating duplicate tasks within this window

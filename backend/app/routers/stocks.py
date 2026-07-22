@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
 from backend.app.schemas.stocks import (
     PaginatedStocks,
-    StockDailyIngestBatchesRead,
     StockDailyCoverageRead,
+    StockDailyIngestBatchesRead,
     StockDailyQualityRead,
     StockRead,
     StockSyncRequest,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import replace
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -12,7 +11,6 @@ from backend.app.models import RawArtifact, SyncTask
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.services.raw_artifact_store import RawArtifactStore
 from backend.app.services.sync_service import MarketDataSyncService
-
 
 RAW_DAILY_BARS_REPLAY_TASK_TYPE = "daily_bars_raw_replay"
 

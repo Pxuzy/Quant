@@ -2,17 +2,16 @@ from __future__ import annotations
 
 from datetime import date
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
 from backend.app.schemas.sync_tasks import (
     PaginatedSyncTasks,
+    SyncRunnerStatusRead,
     SyncScheduleRead,
     SyncSchedulesRead,
     SyncScheduleUpdate,
-    SyncRunnerStatusRead,
     SyncTaskIngestBatchesRead,
     SyncTaskLogsRead,
     SyncTaskRead,

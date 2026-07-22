@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 

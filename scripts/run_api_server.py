@@ -14,7 +14,6 @@ from typing import IO
 
 import uvicorn
 
-
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8021
 APP_IMPORT = "backend.app.main:app"

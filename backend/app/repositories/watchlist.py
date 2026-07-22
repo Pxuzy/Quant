@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.entities import Watchlist, WatchlistItem
 
-
 DEFAULT_WATCHLIST_NAME = "default"
 
 

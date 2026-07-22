@@ -2,15 +2,14 @@
 同步同花顺板块成分股 — 超稳健版
 从 DB 取 provider_code，直接爬 THS 网站，不依赖 akshare THS API
 """
-import sys
+import logging
 import os
 import re
-import time
-import logging
+import sys
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from html.parser import HTMLParser
-from typing import Optional
 
 os.environ.setdefault("TQDM_DISABLE", "1")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -189,9 +188,8 @@ def main():
 
         # Phase 3: Update stock industries
         logger.info(f"\nPhase 3: 更新股票行业分类...")
+
         from backend.app.repositories.stocks import StockRepository
-        from backend.app.models import Stock
-        from sqlalchemy import select
 
         industry_by_symbol = {}
         for board in repo.list_boards(category="行业板块"):

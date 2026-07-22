@@ -1,6 +1,6 @@
 """新闻抓取入口脚本 — 由 cron job 调用"""
-import sys
 import logging
+import sys
 
 sys.path.insert(0, ".")
 

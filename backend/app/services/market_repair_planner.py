@@ -9,7 +9,6 @@ from backend.app.repositories.daily_bars import DailyBarRepository
 from backend.app.repositories.stocks import StockRepository
 from backend.app.repositories.trading_calendars import TradingCalendarRepository
 
-
 DEFAULT_MARKET_REPAIR_START_POLICY = "requested_start"
 LISTING_DATE_START_POLICY = "listing_date"
 

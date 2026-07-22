@@ -2,21 +2,20 @@
 
 from __future__ import annotations
 
-
 from fastapi import APIRouter, Query
 
+from backend.app.services.board_service import (
+    get_sector_constituents,
+    get_sector_rankings,
+    get_sector_stocks,
+    get_stock_sectors,
+    sync_ths_industry_boards,
+)
+from backend.app.services.kline_service import get_history_kline
 from backend.app.services.quote_service import (
     get_index_quotes,
     get_realtime_quotes,
     search_stock,
-)
-from backend.app.services.kline_service import get_history_kline
-from backend.app.services.board_service import (
-    get_sector_rankings,
-    get_sector_stocks,
-    get_sector_constituents,
-    get_stock_sectors,
-    sync_ths_industry_boards,
 )
 
 router = APIRouter(prefix="/api/market", tags=["market"])

@@ -7,7 +7,6 @@ from backend.app.adapters.baostock import BaoStockAdapter
 from backend.app.adapters.base import StockDataSourceAdapter
 from backend.app.adapters.stock_sdk import StockSdkAdapter
 
-
 # =============================================================================
 # 【小白必读】registry.py 是什么？
 # =============================================================================

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import date
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
+from backend.app.repositories.daily_bars import DailyBarRepository
 from backend.app.schemas.market_data import (
     DailyBarsMarketRepairPreviewResponse,
     DailyBarsMarketRepairRequest,
@@ -14,7 +14,6 @@ from backend.app.schemas.market_data import (
     PaginatedDailyBars,
 )
 from backend.app.schemas.sync_tasks import SyncTaskRead
-from backend.app.repositories.daily_bars import DailyBarRepository
 from backend.app.services.sync_service import MarketDataSyncService
 
 router = APIRouter(prefix="/api/market-data", tags=["market-data"])

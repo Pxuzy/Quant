@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import os
 import fcntl
+import os
+from collections.abc import Sequence
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 from threading import Lock
-from collections.abc import Sequence
-from contextlib import contextmanager
 
 try:
     import duckdb

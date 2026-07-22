@@ -5,7 +5,6 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any
 
-
 DAILY_BAR_ADJUST_TYPES = {"none", "qfq", "hfq"}
 
 

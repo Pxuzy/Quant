@@ -12,7 +12,6 @@ from datetime import date, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
-
 _HEX_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9_.-]+$")
 _VOLATILE_FIELDS = {"created_at", "generated_at"}

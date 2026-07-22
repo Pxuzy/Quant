@@ -32,11 +32,11 @@ from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE
 
 # Re-export pipeline surface for callers composing the sync stack.
 from .pipeline import (  # noqa: F401
-    DailyBarIngestPipeline,
     DEFAULT_ADJUST_TYPE,
     DEFAULT_MARKET_REPAIR_MAX_SYMBOLS,
     MARKET_REPAIR_TASK_TYPE,
     MAX_MARKET_REPAIR_SYMBOLS,
+    DailyBarIngestPipeline,
 )
 from .repair_service import _MarketRepairMixin
 

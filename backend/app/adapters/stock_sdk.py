@@ -5,10 +5,7 @@ from datetime import date, datetime
 from typing import Any
 
 from backend.app.adapters._http import (
-    NODE_STOCK_SDK_SCRIPT,
     _NodeStockSdkClient,
-    _NodeStockSdkNamespace,
-    _stock_sdk_cwd,
 )
 from backend.app.adapters.base import (
     AdapterCapability,

@@ -11,20 +11,16 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlalchemy.orm import Session
-
 from backend.app.adapters.base import HealthCheckResult, StockDataSourceAdapter, normalize_daily_bar_adjust_type
 from backend.app.models import SyncTask
-from backend.app.repositories.ingest_batches import IngestBatchRepository
 from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.services.market_repair_planner import (
     DEFAULT_MARKET_REPAIR_START_POLICY,
     LISTING_DATE_START_POLICY,
     MarketRepairPlan,
-    MarketRepairPlanner,
 )
-from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE
 from backend.app.services.raw_artifact_store import RawArtifactStore
+from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE
 
 from .pipeline import (
     DEFAULT_ADJUST_TYPE,
@@ -32,8 +28,9 @@ from .pipeline import (
     MARKET_REPAIR_TASK_TYPE,
     MAX_MARKET_REPAIR_SYMBOLS,
 )
+
 if TYPE_CHECKING:
-    from .sync_service import MarketDataSyncService
+    pass
 
 
 class _MarketRepairMixin:
@@ -459,6 +456,7 @@ class _MarketRepairMixin:
             return 0, 0, [], []
 
         from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
+
         from backend.app.core.config import get_settings
 
         parallelism = get_settings().repair_parallelism

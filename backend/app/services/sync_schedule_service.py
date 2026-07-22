@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from backend.app.models import SyncSchedule, SyncTask
 from backend.app.repositories.sync_schedules import SyncScheduleRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
-from backend.app.services.sync_service import MarketDataSyncService
 from backend.app.services.stock_sync_service import StockSyncService
+from backend.app.services.sync_service import MarketDataSyncService
 from backend.app.services.trading_calendar_service import TradingCalendarService
 
 CRON_FIELD_RANGES: tuple[tuple[int, int], ...] = (

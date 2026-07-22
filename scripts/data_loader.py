@@ -11,17 +11,14 @@ DataLoader — Qlib 式 DataBundle，双引擎版。
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Callable
-from urllib.parse import urlparse
+from typing import Any
 
 from cachetools import TTLCache
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.core.config import get_settings
-
 
 # ─── DataAccessLayer ─────────────────────────────────────
 # 三态引擎：PG / SQLite / DuckDB，按 database_url 自动选择。
@@ -77,7 +74,6 @@ class DataAccessLayer:
 
     def _init_duckdb_schema(self) -> None:
         """Auto-create DuckDB tables if they don't exist."""
-        import duckdb as _duckdb
 
         con = self._duck
         # daily_bars — mirrors the Parquet schema for unified access
@@ -293,7 +289,7 @@ class DataAccessLayer:
         page_size: int = 20,
     ) -> tuple[list[dict], int]:
         """新闻查询。返回 (records, total)"""
-        from backend.app.repositories.news_articles import NewsArticle, NewsRepository
+        from backend.app.repositories.news_articles import NewsRepository
 
         session = self._get_session()
         try:
@@ -331,7 +327,7 @@ class DataAccessLayer:
             # SQLite 降级：搜索 news_articles 标题/摘要
             session = self._get_session()
             try:
-                from backend.app.repositories.news_articles import NewsArticle
+                from backend.app.repositories.news_articles import NewsRepository
 
                 articles, _ = NewsRepository(session).list_news(keyword="", page=1, page_size=limit)
                 return [

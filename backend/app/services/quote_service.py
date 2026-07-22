@@ -1,16 +1,16 @@
 """实时行情服务 - 行情查询、股票搜索、新闻"""
 
-import urllib.request
-import urllib.parse
-import json
-import re
-import logging
 import contextlib
 import io
+import json
+import logging
+import re
 import time
+import urllib.parse
+import urllib.request
 from datetime import datetime
 from importlib import import_module
-from typing import List, Dict
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 

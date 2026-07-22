@@ -204,7 +204,7 @@ _FETCHERS: dict[str, callable] = {
 
 
 if __name__ == "__main__":
-    import sys, json
+    import json
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     result = run_news_ingest()
     print(json.dumps(result, ensure_ascii=False, indent=2))

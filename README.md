@@ -34,8 +34,9 @@ Recommended reading order:
 2. [Product definition](./docs/product/stock-workbench-product-definition.md)
 3. [Feature catalog](./docs/product/feature-catalog.md)
 4. [System architecture](./docs/architecture/system-overview.md)
-5. [Dataset version and snapshot design](./docs/architecture/dataset-version-snapshot-design.md)
-6. [Stock data lifecycle](./docs/data/lifecycle.md)
+5. [完整架构说明（含全部文件功能）](./docs/architecture/ARCHITECTURE.md)
+6. [Dataset version and snapshot design](./docs/architecture/dataset-version-snapshot-design.md)
+7. [Stock data lifecycle](./docs/data/lifecycle.md)
 7. [Development runbook](./docs/operations/development-runbook.md)
 8. [Roadmap and status](./docs/status/roadmap.md)
 

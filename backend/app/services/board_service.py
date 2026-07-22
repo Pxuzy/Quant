@@ -1,17 +1,16 @@
 """板块服务 - 板块成分股、排行、同花顺行业板块同步"""
 
 import json
-import re
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 from backend.app.db.session import SessionLocal, get_engine
 from backend.app.repositories.stock_boards import StockBoardRepository
 from backend.app.repositories.stocks import StockRepository
-
 from backend.app.services import quote_service as _qs
 
 logger = logging.getLogger(__name__)

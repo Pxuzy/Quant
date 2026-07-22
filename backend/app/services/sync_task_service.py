@@ -9,7 +9,6 @@ from backend.app.repositories.ingest_batches import IngestBatchRepository
 from backend.app.repositories.sync_schedules import SyncScheduleRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 
-
 WORKER_COMMAND = "python -m backend.worker.sync_stocks --run-next-pending"
 WORKER_NOTE = "创建同步任务后，API 只负责入队；本地轻量 worker 会执行最早的待执行 V1 同步任务。"
 SUPPORTED_WORKER_TASK_TYPES = ("stock_list", "daily_bars", "daily_bars_market_repair", "calendars", "daily_bars_raw_replay")

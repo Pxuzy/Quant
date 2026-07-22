@@ -6,7 +6,6 @@ from typing import Iterable
 
 from backend.app.adapters.base import NormalizedDailyBar, NormalizedStock, NormalizedTradingCalendar
 
-
 SUPPORTED_MARKETS = {"A_SHARE"}
 SUPPORTED_EXCHANGES = {"SSE", "SZSE", "BSE"}
 LISTED_STATUSES = {"LISTED", "DELISTED", "SUSPENDED"}

@@ -14,7 +14,6 @@ from backend.app.models import Dataset, IngestBatch, Snapshot, SnapshotMember
 from backend.app.repositories.daily_bars import DailyBarRepository
 from backend.app.services.dataset_manifest import manifest_sha256, validate_manifest
 
-
 BAR_READER_CONTRACT = {
     "name": "BarReader",
     "dataset": "daily_bars",

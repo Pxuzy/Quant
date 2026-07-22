@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from backend.app.core.config import ensure_database_parent, get_settings
 from backend.app.db.base import Base
 
-
 _engine: Engine | None = None
 _engine_url: str | None = None
 _database_url_override: str | None = None
@@ -92,8 +91,8 @@ def _run_alembic_upgrade(engine: Engine) -> None:
     """Run Alembic migrations against the given engine."""
     from pathlib import Path
 
-    from alembic.config import Config
     from alembic import command
+    from alembic.config import Config
 
     alembic_cfg = Config()
     project_root = Path(__file__).resolve().parents[3]

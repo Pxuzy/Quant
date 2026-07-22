@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from backend.app.models import Dataset
 
-
 STOCK_SCHEMA = {
     "symbol": "string",
     "exchange": "string",

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from inspect import signature
 from importlib import import_module
+from inspect import signature
 from time import sleep
 from typing import Any
 

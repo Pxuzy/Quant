@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from fastapi import APIRouter
 
 from backend.app.core.config import get_settings

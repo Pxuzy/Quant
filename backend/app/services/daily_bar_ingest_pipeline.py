@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import date
 
 from backend.app.adapters.base import StockDataSourceAdapter
+from backend.app.db.cache import invalidate_data_cache
 from backend.app.models import SyncTask
 from backend.app.repositories.daily_bars import DailyBarRepository
 from backend.app.repositories.datasets import DatasetRepository
@@ -11,10 +12,9 @@ from backend.app.repositories.ingest_batches import IngestBatchRepository
 from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.repositories.stocks import StockRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
-from backend.app.services.raw_artifact_store import RawArtifactStore
 from backend.app.services.database_integration_service import invalidate_coverage_cache
-from backend.app.db.cache import invalidate_data_cache
 from backend.app.services.normalized_data_validation import validate_daily_bar_records
+from backend.app.services.raw_artifact_store import RawArtifactStore
 
 
 class DailyBarIngestPipeline:

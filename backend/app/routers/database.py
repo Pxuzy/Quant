@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from datetime import date
 
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
 from backend.app.schemas.database import DatabaseIntegrationOverviewRead, DatabaseLineageRead, DatabaseStatusRead
-from backend.app.services.database_integration_service import DEFAULT_COVERAGE_MARKET
-from backend.app.services.database_integration_service import DatabaseIntegrationService
+from backend.app.services.database_integration_service import DEFAULT_COVERAGE_MARKET, DatabaseIntegrationService
 from backend.app.services.database_status_service import DatabaseStatusService
 
 router = APIRouter(prefix="/api/database", tags=["database"])

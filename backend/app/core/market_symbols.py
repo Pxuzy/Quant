@@ -5,7 +5,6 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from backend.app.models import Stock
 
-
 BSE_COMMON_STOCK_PREFIXES = ("43", "83", "87", "88", "92")
 SSE_COMMON_STOCK_PREFIXES = ("60", "68", "689")
 SZSE_COMMON_STOCK_PREFIXES = ("00", "30")
