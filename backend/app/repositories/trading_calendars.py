@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.adapters.base import NormalizedTradingCalendar
 from backend.app.models import TradingCalendar
+from backend.app.repositories._query import paginated_query
 
 
 class TradingCalendarRepository:
@@ -33,15 +34,15 @@ class TradingCalendarRepository:
         if is_open is not None:
             conditions.append(TradingCalendar.is_open.is_(is_open))
 
-        total_stmt = select(func.count(TradingCalendar.id))
-        records_stmt = select(TradingCalendar).order_by(TradingCalendar.market.asc(), TradingCalendar.trade_date.desc())
-        if conditions:
-            total_stmt = total_stmt.where(*conditions)
-            records_stmt = records_stmt.where(*conditions)
-
-        total = self.db.scalar(total_stmt) or 0
-        records = self.db.scalars(records_stmt.offset((page - 1) * page_size).limit(page_size)).all()
-        return list(records), total
+        from backend.app.repositories._query import paginated_query
+        return paginated_query(
+            self.db,
+            model=TradingCalendar,
+            conditions=conditions,
+            order_by=(TradingCalendar.market.asc(), TradingCalendar.trade_date.desc()),
+            page=page,
+            page_size=page_size,
+        )
 
     def count(self, *, market: str | None = None) -> int:
         stmt = select(func.count(TradingCalendar.id))

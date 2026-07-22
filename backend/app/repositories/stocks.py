@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend.app.adapters.base import NormalizedStock
 from backend.app.core.market_symbols import is_common_stock_symbol, listed_common_stock_filter
 from backend.app.models import Stock
+from backend.app.repositories._query import paginated_query
 
 
 class StockRepository:

@@ -13,19 +13,40 @@ class NewsRepository:
         self.db = db
 
     def upsert_many(self, records: list[dict]) -> int:
-        """批量写入新闻，按 (source, external_id) 去重"""
+        """批量写入新闻，按 (source, external_id) 去重。批量预取现有键消除 N+1。"""
+        if not records:
+            return 0
+
+        # Step 1: bulk-fetch all existing keys in one query
+        key_pairs = [
+            (record.get("source", "sina"), record.get("external_id") or record.get("url", ""))
+            for record in records
+        ]
+        seen_keys: set[tuple[str, str]] = set()
+        deduped_pairs: list[tuple[str, str]] = []
+        for source, eid in key_pairs:
+            key = (source, eid)
+            if key not in seen_keys:
+                seen_keys.add(key)
+                deduped_pairs.append(key)
+
+        existing_map: dict[tuple[str, str | None], NewsArticle] = {}  # (source, external_id) -> obj
+        if deduped_pairs:
+            clauses = [
+                (NewsArticle.source == source) & (NewsArticle.external_id == eid)
+                for source, eid in deduped_pairs
+            ]
+            if clauses:
+                from functools import reduce
+                from operator import or_
+                for row in self.db.scalars(select(NewsArticle).where(reduce(or_, clauses))):
+                    existing_map[(row.source, row.external_id)] = row
+
+        # Step 2: insert or update in memory, no more queries
         written = 0
-        for record in records:
-            external_id = record.get("external_id") or record.get("url", "")
-            source = record.get("source", "sina")
-
-            existing = self.db.scalar(
-                select(NewsArticle).where(
-                    NewsArticle.source == source,
-                    NewsArticle.external_id == external_id,
-                )
-            )
-
+        for source, eid in deduped_pairs:
+            record = records[key_pairs.index((source, eid))]
+            existing = existing_map.get((source, eid))
             if existing is None:
                 article = NewsArticle(
                     title=record["title"],
@@ -34,18 +55,18 @@ class NewsRepository:
                     source=source,
                     category=record.get("category"),
                     related_symbols=record.get("related_symbols", []),
-                    external_id=external_id,
+                    external_id=eid,
                     published_at=record.get("published_at"),
                 )
                 self.db.add(article)
                 written += 1
             else:
-                # Update existing record
                 existing.title = record["title"]
                 existing.summary = record.get("summary")
                 existing.category = record.get("category")
                 existing.related_symbols = record.get("related_symbols", [])
                 written += 1
+
         self.db.flush()
         return written
 
