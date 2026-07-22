@@ -229,10 +229,8 @@ class _MarketRepairMixin:
         records_read = 0
         records_written = 0
         try:
-            self.task_repo.mark_running(task)
-            self.task_repo.add_log(
+            self.task_runner.start(
                 task,
-                level="info",
                 message="Market daily bars repair started.",
                 payload=self._task_payload(task, source=task.source),
             )
@@ -245,30 +243,24 @@ class _MarketRepairMixin:
             )
             if not failed_symbols:
                 self._publish_daily_bars_version(task=task, source=adapter.code)
-            self.task_repo.complete(
+            return self.task_runner.succeed(
                 task,
+                message="Market daily bars repair completed.",
                 records_read=records_read,
                 records_written=records_written,
                 failed_symbols=failed_symbols,
                 failed_chunks=failed_chunks,
                 failure_reason=f"{len(failed_symbols)} market repair symbol(s) failed." if failed_symbols else None,
             )
-            self.task_repo.add_log(
-                task,
-                level="info",
-                message="Market daily bars repair completed.",
-                payload={"records_read": records_read, "records_written": records_written},
-            )
-            self.db.commit()
-            self.db.refresh(task)
-            return task
         except Exception as exc:
             self.provider_selector.mark_unhealthy(task.source, str(exc))
-            self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(task, level="error", message="Market daily bars repair failed.", payload={"error": str(exc)})
-            self.db.commit()
-            self.db.refresh(task)
-            return task
+            return self.task_runner.fail(
+                task,
+                message=str(exc),
+                records_read=records_read,
+                records_written=records_written,
+                log_message="Market daily bars repair failed.",
+            )
 
     # ------------------------------------------------------------------ #
     # Internal repair helpers                                            #
@@ -319,10 +311,8 @@ class _MarketRepairMixin:
         errors: list[str] = []
 
         try:
-            self.task_repo.mark_running(task)
-            self.task_repo.add_log(
+            self.task_runner.start(
                 task,
-                level="info",
                 message="Market daily bars repair started.",
                 payload={**self._task_payload(task, source=AUTO_SOURCE_CODE), "candidate_sources": candidate_codes},
             )
@@ -360,19 +350,15 @@ class _MarketRepairMixin:
                     self._record_adapter_result(adapter.code, success=False, capability="daily_bars")
                     continue
 
-                self.task_repo.complete(
+                self._record_adapter_result(adapter.code, success=True, capability="daily_bars")
+                return self.task_runner.succeed(
                     task,
+                    message="Market daily bars repair completed.",
                     records_read=records_read,
                     records_written=records_written,
                     failed_symbols=failed_symbols,
                     failed_chunks=failed_chunks,
                     failure_reason=f"{len(failed_symbols)} market repair symbol(s) failed." if failed_symbols else None,
-                )
-                self._record_adapter_result(adapter.code, success=True, capability="daily_bars")
-                self.task_repo.add_log(
-                    task,
-                    level="info",
-                    message="Market daily bars repair completed.",
                     payload={
                         "source": AUTO_SOURCE_CODE,
                         "selected_source": adapter.code,
@@ -380,17 +366,15 @@ class _MarketRepairMixin:
                         "records_written": records_written,
                     },
                 )
-                self.db.commit()
-                self.db.refresh(task)
-                return task
-
             raise RuntimeError(f"All daily-bars data sources failed: {'; '.join(errors)}")
         except Exception as exc:
-            self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(task, level="error", message="Market daily bars repair failed.", payload={"error": str(exc)})
-            self.db.commit()
-            self.db.refresh(task)
-            return task
+            return self.task_runner.fail(
+                task,
+                message=str(exc),
+                records_read=records_read,
+                records_written=records_written,
+                log_message="Market daily bars repair failed.",
+            )
 
     def _repair_market_with_adapter(
         self,

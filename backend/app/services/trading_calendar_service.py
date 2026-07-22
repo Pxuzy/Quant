@@ -14,12 +14,12 @@ from backend.app.repositories.ingest_batches import IngestBatchRepository
 from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.repositories.trading_calendars import TradingCalendarRepository
+from backend.app.services._provider import ProviderSelector
+from backend.app.services._task_runner import SyncTaskRunner
 from backend.app.services.database_integration_service import invalidate_coverage_cache
 from backend.app.services.normalized_data_validation import validate_calendar_records
 from backend.app.services.raw_artifact_store import RawArtifactStore
 from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE
-from backend.app.services._provider import ProviderSelector
-from backend.app.services._task_runner import SyncTaskRunner
 
 
 class TradingCalendarService:
@@ -130,10 +130,8 @@ class TradingCalendarService:
         records_read = 0
         records_written = 0
         try:
-            self.task_repo.mark_running(task)
-            self.task_repo.add_log(
+            self.task_runner.start(
                 task,
-                level="info",
                 message="Trading calendar sync started.",
                 payload=self._task_payload(task, source=task.source),
             )
@@ -141,28 +139,21 @@ class TradingCalendarService:
                 raise RuntimeError(f"Data source '{task.source}' is disabled.")
 
             records_read, records_written = self._sync_with_adapter(task=task, adapter=adapter)
-            self.task_repo.complete(task, records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(
+            return self.task_runner.succeed(
                 task,
-                level="info",
                 message="Trading calendar sync completed.",
-                payload={"records_read": records_read, "records_written": records_written},
+                records_read=records_read,
+                records_written=records_written,
             )
-            self.db.commit()
-            self.db.refresh(task)
-            return task
         except Exception as exc:
             self.provider_selector.mark_unhealthy(task.source, str(exc))
-            self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(
+            return self.task_runner.fail(
                 task,
-                level="error",
-                message="Trading calendar sync failed.",
-                payload={"error": str(exc)},
+                message=str(exc),
+                records_read=records_read,
+                records_written=records_written,
+                log_message="Trading calendar sync failed.",
             )
-            self.db.commit()
-            self.db.refresh(task)
-            return task
 
     def run_next_pending_calendar_sync(self) -> SyncTask | None:
         task = self.task_repo.get_next_pending_calendar_task()
@@ -225,10 +216,8 @@ class TradingCalendarService:
         errors: list[str] = []
 
         try:
-            self.task_repo.mark_running(task)
-            self.task_repo.add_log(
+            self.task_runner.start(
                 task,
-                level="info",
                 message="Trading calendar sync started.",
                 payload={**self._task_payload(task, source=AUTO_SOURCE_CODE), "candidate_sources": candidate_codes},
             )
@@ -260,11 +249,11 @@ class TradingCalendarService:
                     )
                     continue
 
-                self.task_repo.complete(task, records_read=records_read, records_written=records_written)
-                self.task_repo.add_log(
+                completed_task = self.task_runner.succeed(
                     task,
-                    level="info",
                     message="Trading calendar sync completed.",
+                    records_read=records_read,
+                    records_written=records_written,
                     payload={
                         "source": AUTO_SOURCE_CODE,
                         "selected_source": adapter.code,
@@ -272,24 +261,20 @@ class TradingCalendarService:
                         "records_written": records_written,
                     },
                 )
-                self.db.commit()
-                self.db.refresh(task)
                 invalidate_coverage_cache(market)
-                return task
+                return completed_task
 
             raise RuntimeError(f"All calendar data sources failed: {'; '.join(errors)}")
         except Exception as exc:
-            self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(
+            failed_task = self.task_runner.fail(
                 task,
-                level="error",
-                message="Trading calendar sync failed.",
-                payload={"error": str(exc)},
+                message=str(exc),
+                records_read=records_read,
+                records_written=records_written,
+                log_message="Trading calendar sync failed.",
             )
-            self.db.commit()
-            self.db.refresh(task)
             invalidate_coverage_cache(market)
-            return task
+            return failed_task
 
     def _sync_with_adapter(self, *, task: SyncTask, adapter: StockDataSourceAdapter) -> tuple[int, int]:
         health = adapter.health_check()

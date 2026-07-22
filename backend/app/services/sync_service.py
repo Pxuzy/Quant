@@ -25,12 +25,12 @@ from backend.app.repositories.ingest_batches import IngestBatchRepository
 from backend.app.repositories.stocks import StockRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
 from backend.app.repositories.trading_calendars import TradingCalendarRepository
+from backend.app.services._provider import ProviderSelector
+from backend.app.services._task_runner import SyncTaskRunner
 from backend.app.services.daily_bar_ingest_pipeline import DailyBarIngestPipeline
 from backend.app.services.dataset_version_publisher import DatasetVersionPublisher
 from backend.app.services.market_repair_planner import MarketRepairPlanner
 from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE
-from backend.app.services._provider import ProviderSelector
-from backend.app.services._task_runner import SyncTaskRunner
 
 # Re-export pipeline surface for callers composing the sync stack.
 from .pipeline import (  # noqa: F401
@@ -174,10 +174,8 @@ class MarketDataSyncService(_MarketRepairMixin):
         records_read = 0
         records_written = 0
         try:
-            self.task_repo.mark_running(task)
-            self.task_repo.add_log(
+            self.task_runner.start(
                 task,
-                level="info",
                 message="Daily bars sync started.",
                 payload=self._task_payload(task, source=task.source),
             )
@@ -188,23 +186,21 @@ class MarketDataSyncService(_MarketRepairMixin):
             records_read, records_written = self._sync_with_adapter(task=task, adapter=adapter)
             self.task_repo.require_heartbeat(task)
             self._publish_daily_bars_version(task=task, source=adapter.code)
-            self.task_repo.complete(task, records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(
+            return self.task_runner.succeed(
                 task,
-                level="info",
                 message="Daily bars sync completed.",
-                payload={"records_read": records_read, "records_written": records_written},
+                records_read=records_read,
+                records_written=records_written,
             )
-            self.db.commit()
-            self.db.refresh(task)
-            return task
         except Exception as exc:
             self.provider_selector.mark_unhealthy(task.source, str(exc))
-            self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(task, level="error", message="Daily bars sync failed.", payload={"error": str(exc)})
-            self.db.commit()
-            self.db.refresh(task)
-            return task
+            return self.task_runner.fail(
+                task,
+                message=str(exc),
+                records_read=records_read,
+                records_written=records_written,
+                log_message="Daily bars sync failed.",
+            )
 
     def run_daily_bars_sync(
         self,
@@ -275,10 +271,8 @@ class MarketDataSyncService(_MarketRepairMixin):
         errors: list[str] = []
 
         try:
-            self.task_repo.mark_running(task)
-            self.task_repo.add_log(
+            self.task_runner.start(
                 task,
-                level="info",
                 message="Daily bars sync started.",
                 payload={**self._task_payload(task, source=AUTO_SOURCE_CODE), "candidate_sources": candidate_codes},
             )
@@ -314,12 +308,12 @@ class MarketDataSyncService(_MarketRepairMixin):
                     self._record_adapter_result(adapter.code, success=False, capability="daily_bars")
                     continue
 
-                self.task_repo.complete(task, records_read=records_read, records_written=records_written)
                 self._record_adapter_result(adapter.code, success=True, capability="daily_bars")
-                self.task_repo.add_log(
+                return self.task_runner.succeed(
                     task,
-                    level="info",
                     message="Daily bars sync completed.",
+                    records_read=records_read,
+                    records_written=records_written,
                     payload={
                         "source": AUTO_SOURCE_CODE,
                         "selected_source": adapter.code,
@@ -327,17 +321,15 @@ class MarketDataSyncService(_MarketRepairMixin):
                         "records_written": records_written,
                     },
                 )
-                self.db.commit()
-                self.db.refresh(task)
-                return task
-
             raise RuntimeError(f"All daily-bars data sources failed: {'; '.join(errors)}")
         except Exception as exc:
-            self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(task, level="error", message="Daily bars sync failed.", payload={"error": str(exc)})
-            self.db.commit()
-            self.db.refresh(task)
-            return task
+            return self.task_runner.fail(
+                task,
+                message=str(exc),
+                records_read=records_read,
+                records_written=records_written,
+                log_message="Daily bars sync failed.",
+            )
 
     def _sync_with_adapter(self, *, task: SyncTask, adapter: StockDataSourceAdapter) -> tuple[int, int]:
         health = adapter.health_check()

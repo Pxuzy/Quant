@@ -15,11 +15,11 @@ from backend.app.repositories.ingest_batches import IngestBatchRepository
 from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.repositories.stocks import StockRepository
 from backend.app.repositories.sync_tasks import SyncTaskRepository
+from backend.app.services._provider import ProviderSelector
+from backend.app.services._task_runner import SyncTaskRunner
 from backend.app.services.database_integration_service import invalidate_coverage_cache
 from backend.app.services.normalized_data_validation import validate_stock_records
 from backend.app.services.raw_artifact_store import RawArtifactStore
-from backend.app.services._provider import ProviderSelector
-from backend.app.services._task_runner import SyncTaskRunner
 
 AUTO_SOURCE_CODE = "auto"
 # Idempotency window: skip creating duplicate tasks within this window
@@ -129,10 +129,8 @@ class StockSyncService:
         records_read = 0
         records_written = 0
         try:
-            self.task_repo.mark_running(task)
-            self.task_repo.add_log(
+            self.task_runner.start(
                 task,
-                level="info",
                 message="Stock list sync started.",
                 payload={"source": source, "market": market},
             )
@@ -141,29 +139,23 @@ class StockSyncService:
 
             records_read, records_written = self._sync_with_adapter(task=task, adapter=adapter, market=market)
 
-            self.task_repo.complete(task, records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(
+            completed_task = self.task_runner.succeed(
                 task,
-                level="info",
                 message="Stock list sync completed.",
-                payload={"records_read": records_read, "records_written": records_written},
+                records_read=records_read,
+                records_written=records_written,
             )
-            self.db.commit()
-            self.db.refresh(task)
             invalidate_coverage_cache(market)
-            return task
+            return completed_task
         except Exception as exc:
             self.provider_selector.mark_unhealthy(source, str(exc))
-            self.task_repo.fail(
+            return self.task_runner.fail(
                 task,
                 message=str(exc),
                 records_read=records_read,
                 records_written=records_written,
+                log_message="Stock list sync failed.",
             )
-            self.task_repo.add_log(task, level="error", message="Stock list sync failed.", payload={"error": str(exc)})
-            self.db.commit()
-            self.db.refresh(task)
-            return task
 
     def run_stock_sync(self, *, source: str = AUTO_SOURCE_CODE, market: str = "A_SHARE") -> SyncTask:
         task = self.create_stock_sync_task(source=source, market=market)
@@ -185,10 +177,8 @@ class StockSyncService:
         errors: list[str] = []
 
         try:
-            self.task_repo.mark_running(task)
-            self.task_repo.add_log(
+            self.task_runner.start(
                 task,
-                level="info",
                 message="Stock list sync started.",
                 payload={"source": AUTO_SOURCE_CODE, "market": market, "candidate_sources": candidate_codes},
             )
@@ -221,11 +211,12 @@ class StockSyncService:
                     self._record_adapter_result(adapter.code, success=False, capability="stock_list")
                     continue
 
-                self.task_repo.complete(task, records_read=records_read, records_written=records_written)
-                self.task_repo.add_log(
+                self._record_adapter_result(adapter.code, success=True, capability="stock_list")
+                completed_task = self.task_runner.succeed(
                     task,
-                    level="info",
                     message="Stock list sync completed.",
+                    records_read=records_read,
+                    records_written=records_written,
                     payload={
                         "source": AUTO_SOURCE_CODE,
                         "selected_source": adapter.code,
@@ -233,21 +224,20 @@ class StockSyncService:
                         "records_written": records_written,
                     },
                 )
-                self._record_adapter_result(adapter.code, success=True, capability="stock_list")
-                self.db.commit()
-                self.db.refresh(task)
                 invalidate_coverage_cache(market)
                 invalidate_data_cache("stocks")
                 invalidate_data_cache("search")
-                return task
+                return completed_task
 
             raise RuntimeError(f"All stock-list data sources failed: {'; '.join(errors)}")
         except Exception as exc:
-            self.task_repo.fail(task, message=str(exc), records_read=records_read, records_written=records_written)
-            self.task_repo.add_log(task, level="error", message="Stock list sync failed.", payload={"error": str(exc)})
-            self.db.commit()
-            self.db.refresh(task)
-            return task
+            return self.task_runner.fail(
+                task,
+                message=str(exc),
+                records_read=records_read,
+                records_written=records_written,
+                log_message="Stock list sync failed.",
+            )
 
     def _record_adapter_result(self, code: str, *, success: bool, capability: str) -> None:
         self.provider_selector.record_result(code, success=success, capability=capability)
@@ -344,7 +334,7 @@ def _find_recent_similar_task(
     window_minutes: int = IDEMPOTENCY_WINDOW_MINUTES,
 ) -> SyncTask | None:
     """Find a recent running/pending task with the same type/source/market.
-    
+
     Returns the existing task if found within the idempotency window,
     None otherwise.
     """
