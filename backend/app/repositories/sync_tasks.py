@@ -12,6 +12,9 @@ from sqlalchemy.orm import Session
 from backend.app.models import SyncTask, SyncTaskLog
 
 
+DEFAULT_LEASE_SECONDS = 1800
+
+
 class SyncTaskRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -202,7 +205,7 @@ class SyncTaskRepository:
         self.db.refresh(task)
         return True
 
-    def require_heartbeat(self, task: SyncTask, *, lease_seconds: int = 1800) -> None:
+    def require_heartbeat(self, task: SyncTask, *, lease_seconds: int = DEFAULT_LEASE_SECONDS) -> None:
         owner = getattr(task, "_lease_fence_owner", task.lease_owner)
         attempt = getattr(task, "_lease_fence_attempt", task.attempt)
         if not owner or not self.heartbeat(

@@ -14,7 +14,7 @@ from backend.app.repositories.datasets import DatasetRepository
 from backend.app.repositories.ingest_batches import IngestBatchRepository
 from backend.app.repositories.raw_artifacts import RawArtifactRepository
 from backend.app.repositories.stocks import StockRepository
-from backend.app.repositories.sync_tasks import SyncTaskRepository
+from backend.app.repositories.sync_tasks import SyncTaskRepository, SyncTaskLog, DEFAULT_LEASE_SECONDS
 from backend.app.services._provider import ProviderSelector
 from backend.app.services._task_runner import SyncTaskRunner
 from backend.app.services.database_integration_service import invalidate_coverage_cache
