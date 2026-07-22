@@ -31,7 +31,7 @@ def get_settings() -> Settings:
         ),
         data_lake_dir=data_lake_dir,
         duckdb_path=os.getenv("DUCKDB_PATH", str(default_duckdb_path)),
-        repair_parallelism=int(os.getenv("QUANT_REPAIR_PARALLELISM", "5")),
+        repair_parallelism=int(os.getenv("QUANT_REPAIR_PARALLELISM", "20")),
     )
 
 
