@@ -3,13 +3,13 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend.app.repositories._base import BaseRepository
+
 from backend.app.models import Dataset, DatasetVersion, Snapshot, SnapshotMember
 from backend.app.models.entities import utcnow
 
 
-class SnapshotRepository:
-    def __init__(self, db: Session) -> None:
-        self.db = db
+class SnapshotRepository(BaseRepository):
 
     def create_draft(self, *, name: str) -> Snapshot:
         normalized_name = name.strip()

@@ -10,10 +10,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models import DataQualityReport, Dataset, IngestBatch, Stock, TradingCalendar
 from backend.app.repositories.daily_bars import DailyBarRepository
-from backend.app.services.dataset_row_count_projection import (
-    project_dataset_row_count,
-    sync_projected_dataset_row_count,
-)
+from backend.app.services.dataset_service import project_dataset_row_count, sync_projected_dataset_row_count
 
 DAILY_BAR_REQUIRED_FIELDS = (
     "symbol", "exchange", "market", "trade_date",

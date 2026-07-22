@@ -5,6 +5,8 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.repositories._base import BaseRepository
+
 from backend.app.models import Dataset
 
 STOCK_SCHEMA = {
@@ -45,9 +47,7 @@ TRADING_CALENDAR_SCHEMA = {
 }
 
 
-class DatasetRepository:
-    def __init__(self, db: Session) -> None:
-        self.db = db
+class DatasetRepository(BaseRepository):
 
     def upsert_stock_dataset(self, *, source: str, row_count: int, latest_data_date: date) -> Dataset:
         dataset = self.db.scalar(select(Dataset).where(Dataset.name == "stocks"))

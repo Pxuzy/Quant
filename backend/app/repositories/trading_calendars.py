@@ -5,14 +5,14 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend.app.repositories._base import BaseRepository
+
 from backend.app.adapters.base import NormalizedTradingCalendar
 from backend.app.models import TradingCalendar
 from backend.app.repositories._query import paginated_query
 
 
-class TradingCalendarRepository:
-    def __init__(self, db: Session) -> None:
-        self.db = db
+class TradingCalendarRepository(BaseRepository):
 
     def list_days(
         self,

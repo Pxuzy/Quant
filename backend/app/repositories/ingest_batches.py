@@ -5,13 +5,13 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.repositories._base import BaseRepository
+
 from backend.app.models import IngestBatch, SyncTask
 from backend.app.models.entities import utcnow
 
 
-class IngestBatchRepository:
-    def __init__(self, db: Session) -> None:
-        self.db = db
+class IngestBatchRepository(BaseRepository):
 
     def create_batch(
         self,

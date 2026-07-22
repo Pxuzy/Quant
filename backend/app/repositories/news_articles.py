@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
+from backend.app.repositories._base import BaseRepository
+
 from backend.app.models.entities import NewsArticle
 
 
-class NewsRepository:
-    def __init__(self, db: Session) -> None:
-        self.db = db
+class NewsRepository(BaseRepository):
 
     def upsert_many(self, records: list[dict]) -> int:
         """批量写入新闻，按 (source, external_id) 去重。批量预取现有键消除 N+1。"""

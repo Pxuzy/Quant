@@ -16,7 +16,7 @@ from backend.app.schemas.sync_tasks import (
     SyncTaskLogsRead,
     SyncTaskRead,
 )
-from backend.app.services.sync_schedule_service import SyncScheduleService
+from backend.app.services.sync_task_service import SyncScheduleService
 from backend.app.services.sync_task_service import SyncTaskService
 
 router = APIRouter(prefix="/api/sync-tasks", tags=["sync-tasks"])

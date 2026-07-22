@@ -3,6 +3,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.repositories._base import BaseRepository
+
 from backend.app.models import SyncSchedule
 
 DEFAULT_SYNC_SCHEDULES: tuple[dict[str, str | bool | None], ...] = (
@@ -44,9 +46,7 @@ DEFAULT_SYNC_SCHEDULES: tuple[dict[str, str | bool | None], ...] = (
 DEFAULT_SCHEDULE_ORDER = {str(item["code"]): index for index, item in enumerate(DEFAULT_SYNC_SCHEDULES)}
 
 
-class SyncScheduleRepository:
-    def __init__(self, db: Session) -> None:
-        self.db = db
+class SyncScheduleRepository(BaseRepository):
 
     def ensure_defaults(self) -> list[SyncSchedule]:
         schedules: list[SyncSchedule] = []

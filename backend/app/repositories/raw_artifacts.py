@@ -4,13 +4,13 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
+from backend.app.repositories._base import BaseRepository
+
 from backend.app.models import RawArtifact, SyncTask
 from backend.app.services.raw_artifact_store import RawArtifactMetadata
 
 
-class RawArtifactRepository:
-    def __init__(self, db: Session) -> None:
-        self.db = db
+class RawArtifactRepository(BaseRepository):
 
     def create_artifact(
         self,

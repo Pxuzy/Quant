@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.repositories._base import BaseRepository
+
 from backend.app.adapters.base import HealthCheckResult, StockDataSourceAdapter
 from backend.app.adapters.registry import AdapterRegistry
 from backend.app.models import DataSource
@@ -14,9 +16,7 @@ LEGACY_DEFAULT_SETTINGS: dict[str, dict[str, object]] = {
 }
 
 
-class DataSourceRepository:
-    def __init__(self, db: Session) -> None:
-        self.db = db
+class DataSourceRepository(BaseRepository):
 
     def upsert_adapter(self, adapter: StockDataSourceAdapter) -> DataSource:
         data_source = self.db.scalar(select(DataSource).where(DataSource.code == adapter.code))

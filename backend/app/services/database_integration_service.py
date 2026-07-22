@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.market_symbols import listed_common_stock_filter
 from backend.app.models import Dataset, IngestBatch, Stock, SyncTask, TradingCalendar
 from backend.app.repositories.daily_bars import DailyBarRepository
-from backend.app.services.dataset_row_count_projection import sync_projected_dataset_row_count
+from backend.app.services.dataset_service import sync_projected_dataset_row_count
 
 logger = logging.getLogger(__name__)
 

@@ -3,12 +3,12 @@ from __future__ import annotations
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from backend.app.repositories._base import BaseRepository
+
 from backend.app.models import StockBoard, StockBoardMember
 
 
-class StockBoardRepository:
-    def __init__(self, db: Session) -> None:
-        self.db = db
+class StockBoardRepository(BaseRepository):
 
     def list_boards(self, *, category: str | None = None) -> list[StockBoard]:
         stmt = select(StockBoard).order_by(StockBoard.category, StockBoard.change_pct.desc().nullslast(), StockBoard.name)
