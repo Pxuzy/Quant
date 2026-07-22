@@ -12,7 +12,6 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from backend.app.core.config import reset_settings_cache  # noqa: E402
-from backend.app.db.duckdb_store import close_duckdb  # noqa: E402
 from backend.app.db.session import configure_database, init_db  # noqa: E402
 from backend.app.main import create_app  # noqa: E402
 
@@ -20,12 +19,11 @@ from backend.app.main import create_app  # noqa: E402
 @pytest.fixture(autouse=True)
 def isolated_storage(tmp_path, monkeypatch):
     """Give every API test a private SQLite, DuckDB, and Parquet storage root."""
-    close_duckdb()
+    reset_settings_cache()
     monkeypatch.setenv("DATA_LAKE_DIR", str(tmp_path / "lake"))
     monkeypatch.setenv("DUCKDB_PATH", str(tmp_path / "quant.duckdb"))
     reset_settings_cache()
     yield
-    close_duckdb()
     reset_settings_cache()
 
 

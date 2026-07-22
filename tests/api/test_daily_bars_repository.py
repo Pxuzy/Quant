@@ -198,12 +198,6 @@ def test_daily_bars_repository_isolates_parquet_by_lake_root_and_reports_idempot
 
     assert first_repo.write_many([record]) == 1
     assert first_repo.write_many([record]) == 0
-    monkeypatch.setattr(
-        "backend.app.db.duckdb_store.write_daily_bars",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("The governed repository must not write a persistent DuckDB mirror.")
-        ),
-    )
     assert first_repo.read_all()[0]["close"] == 1675.0
     assert second_repo.read_all() == []
     assert first_repo.count(market="A_SHARE") == 1
@@ -225,10 +219,6 @@ def test_daily_bars_repository_keeps_last_duplicate_and_reads_parquet_truth(tmp_
     )
 
     assert repo.write_many([first, replacement]) == 1
-    monkeypatch.setattr(
-        "backend.app.db.duckdb_store.get_duckdb",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError()),
-    )
 
     rows, total = repo.list_daily_bars(symbol="600519", market="A_SHARE")
 
@@ -270,11 +260,5 @@ def test_daily_bars_repository_replaces_existing_parquet_row_without_persistent_
         ingested_at=first.ingested_at,
     )
     assert repo.write_many([first]) == 1
-    monkeypatch.setattr(
-        "backend.app.db.duckdb_store.write_daily_bars",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("Persistent DuckDB writes are outside the governed repository path.")
-        ),
-    )
     assert repo.write_many([replacement]) == 1
     assert repo.read_all()[0]["close"] == 1685.0
