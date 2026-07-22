@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  quant:
+    build: .
+    container_name: quant-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - quant-data:/data
+    environment:
+      - DATA_LAKE_DIR=/data/lake
+      - DUCKDB_PATH=/data/quant.duckdb
+      - DATABASE_URL=sqlite:////data/quant.db
+      - APP_NAME=Quant API
+      - APP_ENV=production
+      - CORS_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  quant-data:
