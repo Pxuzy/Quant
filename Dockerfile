@@ -7,19 +7,26 @@ COPY frontend/ .
 RUN npm run build
 
 # Stage 2: Build backend
-FROM python:3.11-slim AS backend
+FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
-RUN pip install --no-cache-dir -e ".[dev,adapters]"
+# Install runtime deps first (layer caching)
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir fastapi uvicorn[standard] sqlalchemy pydantic alembic duckdb httpx requests pandas numpy pyarrow cachetools apscheduler
 
+# Copy source
 COPY backend/ backend/
 COPY scripts/ scripts/
+COPY README.md ./
 
+# Install the package itself
+RUN pip install --no-cache-dir .
+
+# Copy built frontend
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
 EXPOSE 8000
