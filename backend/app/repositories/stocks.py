@@ -3,11 +3,10 @@ from __future__ import annotations
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.repositories._base import BaseRepository
-
 from backend.app.adapters.base import NormalizedStock
 from backend.app.core.market_symbols import is_common_stock_symbol, listed_common_stock_filter
 from backend.app.models import Stock
+from backend.app.repositories._base import BaseRepository
 from backend.app.repositories._query import paginated_query
 
 

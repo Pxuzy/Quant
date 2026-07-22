@@ -4,9 +4,8 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from backend.app.repositories._base import BaseRepository
-
 from backend.app.models import RawArtifact, SyncTask
+from backend.app.repositories._base import BaseRepository
 from backend.app.services.raw_artifact_store import RawArtifactMetadata
 
 

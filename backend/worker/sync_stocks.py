@@ -12,14 +12,14 @@ from collections.abc import Callable
 from datetime import date
 from typing import Any, TypeVar
 
-from backend.app.db.session import SessionLocal, configure_database, init_db
 from backend.app.adapters.base import normalize_daily_bar_adjust_type
+from backend.app.db.session import SessionLocal, configure_database, init_db
 from backend.app.models import RawArtifact, SyncTask
 from backend.app.repositories.sync_tasks import SyncTaskRepository
-from backend.app.services.sync_service import MarketDataSyncService
-from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE, StockSyncService
-from backend.app.services.trading_calendar_service import TradingCalendarService
 from backend.app.services.raw_replay_service import RAW_DAILY_BARS_REPLAY_TASK_TYPE, RawDailyBarsReplayService
+from backend.app.services.stock_sync_service import AUTO_SOURCE_CODE, StockSyncService
+from backend.app.services.sync_service import MarketDataSyncService
+from backend.app.services.trading_calendar_service import TradingCalendarService
 
 SUPPORTED_PENDING_TASK_TYPES = ("stock_list", "daily_bars", "daily_bars_market_repair", "calendars", RAW_DAILY_BARS_REPLAY_TASK_TYPE)
 T = TypeVar("T")

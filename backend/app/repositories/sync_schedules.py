@@ -3,9 +3,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.repositories._base import BaseRepository
-
 from backend.app.models import SyncSchedule
+from backend.app.repositories._base import BaseRepository
 
 DEFAULT_SYNC_SCHEDULES: tuple[dict[str, str | bool | None], ...] = (
     {

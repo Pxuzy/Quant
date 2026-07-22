@@ -8,7 +8,6 @@ import logging
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 
-
 from backend.app.db.session import SessionLocal, get_engine
 from backend.app.models.entities import NewsArticle  # noqa: F401 register model
 

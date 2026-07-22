@@ -5,9 +5,8 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.repositories._base import BaseRepository
-
 from backend.app.models import Dataset
+from backend.app.repositories._base import BaseRepository
 
 STOCK_SCHEMA = {
     "symbol": "string",

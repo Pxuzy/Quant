@@ -3,9 +3,8 @@ from __future__ import annotations
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from backend.app.repositories._base import BaseRepository
-
 from backend.app.models import StockBoard, StockBoardMember
+from backend.app.repositories._base import BaseRepository
 
 
 class StockBoardRepository(BaseRepository):

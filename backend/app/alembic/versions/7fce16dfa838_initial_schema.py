@@ -6,8 +6,8 @@
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 
@@ -342,8 +342,8 @@ def upgrade() -> None:
 
 def _get_recent_inspector(engine):
     """Get a fresh inspector — needed because op.get_bind().engine may cache old schema."""
-    from sqlalchemy import inspect as sa_inspect
     from sqlalchemy import create_engine
+    from sqlalchemy import inspect as sa_inspect
     url = engine.url.render_as_string(hide_password=False)
     temp_engine = create_engine(url)
     try:

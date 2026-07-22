@@ -5,9 +5,8 @@ from datetime import datetime, timezone
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.repositories._base import BaseRepository
-
 from backend.app.models.entities import NewsArticle
+from backend.app.repositories._base import BaseRepository
 
 
 class NewsRepository(BaseRepository):

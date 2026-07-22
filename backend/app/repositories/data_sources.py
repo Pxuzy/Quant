@@ -5,11 +5,10 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.repositories._base import BaseRepository
-
 from backend.app.adapters.base import HealthCheckResult, StockDataSourceAdapter
 from backend.app.adapters.registry import AdapterRegistry
 from backend.app.models import DataSource
+from backend.app.repositories._base import BaseRepository
 
 LEGACY_DEFAULT_SETTINGS: dict[str, dict[str, object]] = {
     "akshare": {"enabled": False, "priority": 60},

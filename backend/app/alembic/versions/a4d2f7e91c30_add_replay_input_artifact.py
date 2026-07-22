@@ -2,10 +2,9 @@
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy import inspect
-
 
 revision: str = "a4d2f7e91c30"
 down_revision: Union[str, Sequence[str], None] = "9c1f4e6b7a2d"

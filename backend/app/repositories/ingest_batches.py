@@ -5,10 +5,9 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.repositories._base import BaseRepository
-
 from backend.app.models import IngestBatch, SyncTask
 from backend.app.models.entities import utcnow
+from backend.app.repositories._base import BaseRepository
 
 
 class IngestBatchRepository(BaseRepository):

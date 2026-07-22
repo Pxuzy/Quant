@@ -5,7 +5,6 @@ from typing import Any, Mapping, Sequence, Union
 from alembic import op
 from sqlalchemy import inspect
 
-
 revision: str = "d2f4b8c1e907"
 down_revision: Union[str, Sequence[str], None] = "c7e1a8d4b930"
 branch_labels: Union[str, Sequence[str], None] = None

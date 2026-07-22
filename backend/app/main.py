@@ -12,8 +12,8 @@ from backend.app.db.session import init_db
 from backend.app.routers import (
     data_quality,
     data_sources,
-    datasets,
     database,
+    datasets,
     health,
     market,
     market_data,
