@@ -158,7 +158,6 @@ Quant/
 | `backend/app/db/__init__.py` | 汇总数据库包的公共导出。 |
 | `backend/app/db/base.py` | 定义 SQLAlchemy 2 声明式 ORM 基类。 |
 | `backend/app/db/cache.py` | 延迟接入脚本数据加载缓存并提供按域失效入口。 |
-| `backend/app/db/duckdb_store.py` | 管理可复用 DuckDB 连接及日线表的兼容写入。 |
 | `backend/app/db/session.py` | 配置 SQLAlchemy engine/session、SQLite pragma、PG 扩展、Alembic 升级和 FastAPI DB 依赖。 |
 
 ### 4.2 数据源适配器
@@ -251,6 +250,8 @@ Quant/
 | 文件 | 功能 |
 | --- | --- |
 | `backend/app/services/__init__.py` | 标识服务包并承载少量公共导入。 |
+| `backend/app/services/_http.py` | 共享 HTTP 请求工具（_request 函数 + 2 秒请求缓存）。 |
+| `backend/app/services/_utils.py` | 共享清洗/交易所代码/报价辅助函数。 |
 | `backend/app/services/data_source_service.py` | 编排 provider 注册、配置、健康检查与 capability smoke test。 |
 | `backend/app/services/stock_sync_service.py` | 创建/执行股票列表同步，择源、保存 raw、校验、入库和更新数据集。 |
 | `backend/app/services/sync_service.py` | 编排单股日线同步、自动 fallback、版本发布，并组合市场修复 mixin。 |
@@ -273,9 +274,10 @@ Quant/
 | `backend/app/services/stock_query_service.py` | 聚合股票分页、详情、覆盖、缺口、OHLC 质量及相关批次。 |
 | `backend/app/services/sync_task_service.py` | 提供同步任务、日志、批次、运行状态的查询视图。 |
 | `backend/app/services/sync_schedule_service.py` | 管理 cron 配置、校验表达式并把计划触发转换为正式任务。 |
-| `backend/app/services/quote_service.py` | 获取实时行情、指数、搜索和展示型新闻，并提供降级解析逻辑。 |
+| `backend/app/services/quote_service.py` | 实时行情（腾讯API）、指数行情和股票搜索。 |
 | `backend/app/services/kline_service.py` | K 线优先读取本地 governed 日线，必要时请求展示型外部行情。 |
-| `backend/app/services/board_service.py` | 获取/缓存同花顺行业板块和成员，关联实时行情并回写股票行业。 |
+| `backend/app/services/board_service.py` | 板块排行、板块成分股、股票所属行业查询（公共 API）。 |
+| `backend/app/services/ths_sector_fetcher.py` | 同花顺行业板块数据抓取、HTML 解析、缓存、排行和同步。 |
 | `backend/app/services/news_ingest_service.py` | 从新浪/财联社拉取、分类、关联股票、去重持久化并清理旧新闻。 |
 
 ### 4.8 Worker 与脚本
