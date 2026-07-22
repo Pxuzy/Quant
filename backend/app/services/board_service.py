@@ -12,6 +12,17 @@ from backend.app.db.session import SessionLocal, get_engine
 from backend.app.repositories.stock_boards import StockBoardRepository
 from backend.app.repositories.stocks import StockRepository
 from backend.app.services import quote_service as _qs
+from backend.app.services._http import _request
+from backend.app.services._utils import (
+    _clean_text,
+    _empty_quote,
+    _exchange_from_symbol,
+    _member_from_row,
+    _records_from_frame,
+    _stock_quote_code,
+    _to_float,
+    _to_int,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +79,7 @@ class _THSMemberTableParser(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         if self._cell is not None:
-            text = _qs._clean_text(data)
+            text = _clean_text(data)
             if text:
                 self._cell.append(text)
 
@@ -104,9 +115,9 @@ def _load_ths_map() -> dict:
 def _fetch_ths_industry_code_map(ak) -> dict[str, str]:
     names = ak.stock_board_industry_name_ths()
     return {
-        _qs._clean_text(row.get("name")): _qs._clean_text(row.get("code"))
-        for row in _qs._records_from_frame(names)
-        if _qs._clean_text(row.get("name")) and _qs._clean_text(row.get("code"))
+        _clean_text(row.get("name")): _clean_text(row.get("code"))
+        for row in _records_from_frame(names)
+        if _clean_text(row.get("name")) and _clean_text(row.get("code"))
     }
 
 
@@ -119,12 +130,12 @@ def _fetch_ths_industry_members(ak, name: str) -> list[dict]:
         "Referer": "http://q.10jqka.com.cn/thshy/",
     }
     first_url = f"http://q.10jqka.com.cn/thshy/detail/code/{provider_code}/"
-    first_html = _qs._request(first_url, headers=headers, timeout=15, encoding="gbk")
+    first_html = _request(first_url, headers=headers, timeout=15, encoding="gbk")
     m = re.search(r'class=["\']page_info["\'][^>]*>\s*\d+\s*/\s*(\d+)', first_html)
     page_count = int(m.group(1)) if m else 1
     html_pages = [first_html]
     for page in range(2, page_count + 1):
-        html_pages.append(_qs._request(
+        html_pages.append(_request(
             f"http://q.10jqka.com.cn/thshy/detail/code/{provider_code}/page/{page}/",
             headers=headers, timeout=15, encoding="gbk",
         ))
@@ -139,7 +150,7 @@ def _fetch_ths_industry_members(ak, name: str) -> list[dict]:
                 table_headers = row
                 continue
             if table_headers and len(row) >= len(table_headers):
-                member = _qs._member_from_row(dict(zip(table_headers, row, strict=False)))
+                member = _member_from_row(dict(zip(table_headers, row, strict=False)))
                 if member and (member["symbol"], member["exchange"]) not in seen:
                     members.append(member)
                     seen.add((member["symbol"], member["exchange"]))
@@ -183,10 +194,10 @@ def _db_board_stocks(sector_name: str, *, category: str | None) -> list[dict]:
                     members = repo.list_members(board=board)
             if not members:
                 return []
-            codes = [_qs._stock_quote_code(m.symbol, m.exchange) for m in members]
+            codes = [_stock_quote_code(m.symbol, m.exchange) for m in members]
             quotes_by_code = _quotes_for_codes(codes)
             return [
-                {**quotes_by_code.get(code, _qs._empty_quote(code, m.name)), "sectors": [sector_name]}
+                {**quotes_by_code.get(code, _empty_quote(code, m.name)), "sectors": [sector_name]}
                 for m, code in zip(members, codes, strict=False)
             ]
         finally:
@@ -239,24 +250,24 @@ def _fetch_ths_industry_boards() -> list[dict]:
         logger.warning(f"同花顺行业板块代码表抓取失败: {exc}")
         code_by_name = {}
     rows = []
-    for row in _qs._records_from_frame(summary):
-        name = _qs._clean_text(row.get("板块"))
+    for row in _records_from_frame(summary):
+        name = _clean_text(row.get("板块"))
         if not name:
             continue
-        up_count = _qs._to_int(row.get("上涨家数"))
-        down_count = _qs._to_int(row.get("下跌家数"))
+        up_count = _to_int(row.get("上涨家数"))
+        down_count = _to_int(row.get("下跌家数"))
         rows.append({
             "name": name, "category": "行业板块", "source": "akshare_ths",
             "provider_code": code_by_name.get(name),
-            "change_pct": _qs._to_float(row.get("涨跌幅")) or 0,
+            "change_pct": _to_float(row.get("涨跌幅")) or 0,
             "up_count": up_count, "down_count": down_count,
             "stock_count": up_count + down_count,
-            "amount": (_qs._to_float(row.get("总成交额")) or 0) * 100_000_000,
-            "volume": (_qs._to_float(row.get("总成交量")) or 0) * 10_000,
-            "net_inflow": (_qs._to_float(row.get("净流入")) or 0) * 100_000_000,
-            "leader_name": _qs._clean_text(row.get("领涨股")),
-            "leader_price": _qs._to_float(row.get("领涨股-最新价")),
-            "leader_change_pct": _qs._to_float(row.get("领涨股-涨跌幅")),
+            "amount": (_to_float(row.get("总成交额")) or 0) * 100_000_000,
+            "volume": (_to_float(row.get("总成交量")) or 0) * 10_000,
+            "net_inflow": (_to_float(row.get("净流入")) or 0) * 100_000_000,
+            "leader_name": _clean_text(row.get("领涨股")),
+            "leader_price": _to_float(row.get("领涨股-最新价")),
+            "leader_change_pct": _to_float(row.get("领涨股-涨跌幅")),
         })
     return rows
 
@@ -291,7 +302,7 @@ def _static_sector_rankings(requested_categories: list[str]) -> list[dict]:
                 codes = sector_stocks_map.get(name, [])
                 groups.append({
                     "name": name, "category": "行业板块",
-                    "codes": [_qs._stock_quote_code(s, _qs._exchange_from_symbol(s)) for s in codes],
+                    "codes": [_stock_quote_code(s, _exchange_from_symbol(s)) for s in codes],
                 })
         else:
             groups.extend(g for g in STATIC_BOARD_GROUPS if g["category"] == category)
@@ -355,8 +366,8 @@ def _fetch_board_members(category: str, name: str) -> list[dict]:
             return members
         raise
     seen = {(m["symbol"], m["exchange"]) for m in members}
-    for row in _qs._records_from_frame(frame):
-        member = _qs._member_from_row(row)
+    for row in _records_from_frame(frame):
+        member = _member_from_row(row)
         if member and (member["symbol"], member["exchange"]) not in seen:
             members.append(member)
             seen.add((member["symbol"], member["exchange"]))
@@ -366,7 +377,7 @@ def _fetch_board_members(category: str, name: str) -> list[dict]:
 def get_stock_sectors(code: str) -> List[str]:
     """获取股票所属的同花顺一级行业板块列表"""
     symbol = code.replace("sh", "").replace("sz", "").replace("bj", "")
-    exchange = _qs._exchange_from_symbol(symbol)
+    exchange = _exchange_from_symbol(symbol)
     try:
         get_engine()
         db = SessionLocal()
@@ -388,14 +399,14 @@ def get_stock_sectors(code: str) -> List[str]:
 
 def get_sector_stocks(sector_name: str = "能源金属", category: str | None = None) -> List[Dict]:
     """获取板块成分股实时行情"""
-    normalized_category = _qs._clean_text(category)
+    normalized_category = _clean_text(category)
     if normalized_category == "行业板块":
         _ensure_ths_industry_boards()
         rows = _db_board_stocks(sector_name, category=normalized_category)
         if rows:
             return rows
         stocks = _load_ths_map().get("sector_to_stocks", {}).get(sector_name, [])
-        codes = [_qs._stock_quote_code(s, _qs._exchange_from_symbol(s)) for s in stocks]
+        codes = [_stock_quote_code(s, _exchange_from_symbol(s)) for s in stocks]
     elif normalized_category:
         codes = STATIC_BOARD_CODE_MAP.get((normalized_category, sector_name), [])
     else:
@@ -404,7 +415,7 @@ def get_sector_stocks(sector_name: str = "能源金属", category: str | None = 
             return rows
         stocks = _load_ths_map().get("sector_to_stocks", {}).get(sector_name, [])
         if stocks:
-            codes = [_qs._stock_quote_code(s, _qs._exchange_from_symbol(s)) for s in stocks]
+            codes = [_stock_quote_code(s, _exchange_from_symbol(s)) for s in stocks]
         else:
             codes = STATIC_BOARD_LEGACY_CODE_MAP.get(sector_name, [])
     quotes = _qs.get_realtime_quotes(codes)
@@ -432,7 +443,7 @@ def _db_industry_groups() -> list[dict]:
                 stocks = repo.list_stocks_by_industry(
                     industry=industry, market="A_SHARE", status="LISTED", limit=4, common_only=True,
                 )
-                group_samples.append((industry, stock_count, [_qs._stock_quote_code(s.symbol, s.exchange) for s in stocks]))
+                group_samples.append((industry, stock_count, [_stock_quote_code(s.symbol, s.exchange) for s in stocks]))
             for industry, stock_count in groups[24:]:
                 group_samples.append((industry, stock_count, []))
             all_codes = sorted({c for _, _, cs in group_samples for c in cs})
@@ -470,10 +481,10 @@ def _db_sector_stocks(industry: str) -> list[dict]:
             )
             if not stocks:
                 return []
-            codes = [_qs._stock_quote_code(s.symbol, s.exchange) for s in stocks]
+            codes = [_stock_quote_code(s.symbol, s.exchange) for s in stocks]
             quotes_by_code = _quotes_for_codes(codes)
             return [
-                {**quotes_by_code.get(c, _qs._empty_quote(c, s.name)), "sectors": [industry]}
+                {**quotes_by_code.get(c, _empty_quote(c, s.name)), "sectors": [industry]}
                 for s, c in zip(stocks, codes, strict=False)
             ]
         finally:

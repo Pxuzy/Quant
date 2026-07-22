@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 
 from backend.app.repositories.daily_bars import DailyBarRepository
-from backend.app.services.quote_service import _request
+from backend.app.services._http import _request
 
 logger = logging.getLogger(__name__)
 

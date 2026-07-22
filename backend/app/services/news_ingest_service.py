@@ -8,13 +8,14 @@ import logging
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 
+
 from backend.app.db.session import SessionLocal, get_engine
 from backend.app.models.entities import NewsArticle  # noqa: F401 register model
 
 # Ensure engine is initialized at module level
 get_engine()
 from backend.app.repositories.news_articles import NewsRepository
-from backend.app.services.quote_service import _classify_news, _request
+from backend.app.services._http import _request
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,51 @@ logger = logging.getLogger(__name__)
 DEFAULT_KEYWORDS = ["A股", "股市", "财经", "央行", "新能源", "半导体"]
 MAX_PER_KEYWORD = 20
 NEWS_SOURCES = ["sina", "cls"]
+
+_NEWS_CATEGORY_KEYWORDS = {
+    "政策": ["央行", "降准", "降息", "政策", "监管", "国务院", "证监会", "财政", "货币", "利率"],
+    "公司": ["分红", "业绩", "公告", "减持", "增持", "回购", "营收", "净利润", "合同", "中标", "募资"],
+    "行业": ["板块", "行业", "光伏", "新能源", "芯片", "人工智能", "汽车", "医药", "消费", "半导体", "锂电"],
+}
+
+
+def _classify_news(title: str, summary: str) -> str:
+    text = (title + " " + summary).lower()
+    for category, keywords in _NEWS_CATEGORY_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            return category
+    return "市场"
+
+
+def get_news(keyword: str = "A股", limit: int = 20, page: int = 1) -> list[dict]:
+    """获取新浪财经新闻。"""
+    params = urlencode({
+        "pageid": "153", "lid": "2516", "k": keyword,
+        "num": str(min(limit, 50)), "page": str(page),
+    })
+    url = f"https://feed.mix.sina.com.cn/api/roll/get?{params}"
+    try:
+        data = json.loads(_request(url))
+    except Exception as e:
+        logger.error(f"新闻请求失败: {e}")
+        return []
+    results = []
+    for item in data.get("result", {}).get("data", [])[:limit]:
+        try:
+            created_ts = int(item.get("ctime", 0))
+            results.append({
+                "title": item.get("title", ""), "url": item.get("url", ""),
+                "summary": item.get("summary", "")[:200],
+                "source": item.get("media_name", "新浪"),
+                "created_at": (
+                    datetime.fromtimestamp(created_ts).strftime("%Y-%m-%d %H:%M:%S")
+                    if created_ts else ""
+                ),
+                "category": _classify_news(item.get("title", ""), item.get("summary", "")),
+            })
+        except Exception as e:
+            logger.warning(f"解析新闻失败: {e}")
+    return results
 
 # ── 辅助函数 ──
 
