@@ -407,21 +407,21 @@ class AkShareAdapter(StockDataSourceAdapter):
         # 准备备选方案列表：哪个函数可用就用哪个
         candidates: list[tuple[str, Any]] = []
 
-        # 方案一（带行业信息）
-        if hasattr(client, "stock_zh_a_spot_em"):
-            candidates.append(
-                (
-                    "stock_zh_a_spot_em",
-                    lambda: _records_from_frame(client.stock_zh_a_spot_em()),
-                )
-            )
-
-        # 方案二（较新的 AKShare 版本，仅代码+名称）
+        # 方案一（较新的 AKShare 版本，最快）
         if hasattr(client, "stock_info_a_code_name"):
             candidates.append(
                 (
                     "stock_info_a_code_name",
                     lambda: _records_from_frame(client.stock_info_a_code_name()),
+                )
+            )
+
+        # 方案二（带实时行情字段，较慢）
+        if hasattr(client, "stock_zh_a_spot_em"):
+            candidates.append(
+                (
+                    "stock_zh_a_spot_em",
+                    lambda: _records_from_frame(client.stock_zh_a_spot_em()),
                 )
             )
 
@@ -471,10 +471,9 @@ class AkShareAdapter(StockDataSourceAdapter):
             )
             name = _clean_text(record.get("name") or record.get("名称") or record.get("证券简称"))
 
-            industry = _clean_text(
-                record.get("行业")          # stock_zh_a_spot_em
-                or record.get("industry")   # English key
-            )
+            # 行业字段：stock_info_a_code_name 无此字段，stock_zh_a_spot_em 也无
+            # 行业数据可从同花顺板块数据（POST /api/market/sectors/sync）补全
+            industry = None
 
             # 没有代码或名称的记录直接跳过（可能是脏数据）
             if symbol is None or name is None:
