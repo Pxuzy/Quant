@@ -1,0 +1,157 @@
+/* ══════════════════════════════════════════════════
+   TradingView 亮色风格 — 全局 CSS 变量与基础样式
+   ══════════════════════════════════════════════════ */
+
+:root[data-quant-theme='light'] {
+  /* 背景 */
+  --tv-bg-page: #f5f6f8;
+  --tv-bg-card: #ffffff;
+  --tv-bg-hover: #f0f1f3;
+  --tv-bg-row-alt: #f8f9fb;
+
+  /* 边框 */
+  --tv-border: #e0e3e8;
+  --tv-border-light: #e8eaef;
+
+  /* 文字 */
+  --tv-text-primary: #131722;
+  --tv-text-secondary: #5d606b;
+  --tv-text-tertiary: #9b9ea8;
+
+  /* 价格颜色 */
+  --tv-up: #22ab94;
+  --tv-down: #f23645;
+  --tv-up-bg: rgba(34, 171, 148, 0.08);
+  --tv-down-bg: rgba(242, 54, 69, 0.08);
+
+  /* 交互 */
+  --tv-accent: #2962ff;
+  --tv-accent-hover: #1e4fd9;
+
+  /* 字号 */
+  --tv-font-size-xs: 11px;
+  --tv-font-size-sm: 12px;
+  --tv-font-size-md: 13px;
+  --tv-font-size-lg: 15px;
+
+  /* 圆角 */
+  --tv-radius-sm: 2px;
+  --tv-radius-md: 4px;
+}
+
+:root[data-quant-theme='dark'] {
+  --tv-up: #22ab94;
+  --tv-down: #f23645;
+  --tv-up-bg: rgba(34, 171, 148, 0.15);
+  --tv-down-bg: rgba(242, 54, 69, 0.15);
+  --tv-border: #2a2e39;
+  --tv-bg-hover: #1e222d;
+  --tv-bg-row-alt: #1a1e28;
+}
+
+/* ═══ 价格标签 ═══ */
+.price-up    { color: var(--tv-up) !important; }
+.price-down  { color: var(--tv-down) !important; }
+
+.price-cell {
+  font-family: 'Roboto Mono', 'SF Mono', 'Consolas', monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ═══ 表格 TradingView 风格 ═══ */
+.tv-table .ant-table-row:nth-child(even) td {
+  background: var(--tv-bg-row-alt);
+}
+
+.tv-table .ant-table-row:hover td {
+  background: var(--tv-bg-hover) !important;
+}
+
+.tv-table .ant-table-thead th {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tv-text-secondary);
+  border-bottom: 1px solid var(--tv-border);
+}
+
+/* ═══ 卡片 TradingView 风格 ═══ */
+.tv-card {
+  border: 1px solid var(--tv-border) !important;
+  box-shadow: none !important;
+  border-radius: 4px !important;
+}
+
+.tv-card .ant-card-head {
+  border-bottom: 1px solid var(--tv-border-light);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ═══ 数字等宽 ═══ */
+.tv-number {
+  font-family: 'Roboto Mono', 'SF Mono', 'Consolas', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+/* ═══ 涨跌幅徽章 ═══ */
+.change-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: 2px;
+  font-size: 12px;
+  font-family: 'Roboto Mono', monospace;
+  font-weight: 500;
+}
+
+.change-badge.up {
+  background: var(--tv-up-bg);
+  color: var(--tv-up);
+}
+
+.change-badge.down {
+  background: var(--tv-down-bg);
+  color: var(--tv-down);
+}
+
+/* ═══ 页面入场动画 ═══ */
+.page-enter {
+  animation: pageFadeIn 0.25s ease-out;
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ═══ 卡片入场 ═══ */
+.card-enter {
+  animation: cardFadeIn 0.3s ease-out both;
+}
+
+.card-enter:nth-child(1) { animation-delay: 0.02s; }
+.card-enter:nth-child(2) { animation-delay: 0.06s; }
+.card-enter:nth-child(3) { animation-delay: 0.10s; }
+.card-enter:nth-child(4) { animation-delay: 0.14s; }
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

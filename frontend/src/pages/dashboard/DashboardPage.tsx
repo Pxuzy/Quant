@@ -438,7 +438,7 @@ export function DashboardPage() {
   const isLoading = indexQuery.isLoading && !indexQuery.data;
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page page-enter">
       <div className="dashboard-toolbar">
         <Typography.Title level={3} style={{ margin: 0 }}>
           市场行情仪表盘
@@ -489,7 +489,7 @@ export function DashboardPage() {
         <div className="dashboard-monitor-grid">
           <aside className="dashboard-monitor-left">
             <Card
-              className="dashboard-panel"
+              className="dashboard-panel tv-card"
               size="small"
               title="板块排行"
               extra={
@@ -588,7 +588,7 @@ export function DashboardPage() {
                 </Space>
               }
             >
-              <Table
+              <Table className="tv-table"
                 dataSource={sectorQuery.data ?? []}
                 columns={sectorColumns}
                 rowKey="code"
@@ -602,7 +602,7 @@ export function DashboardPage() {
 
           <aside className="dashboard-monitor-right">
             <Card
-              className="dashboard-panel"
+              className="dashboard-panel tv-card"
               size="small"
               title="自选监控"
               extra={
@@ -634,7 +634,7 @@ export function DashboardPage() {
                 </div>
               )}
 
-              <Table
+              <Table className="tv-table"
                 dataSource={favQuery.data ?? []}
                 columns={favColumns}
                 rowKey="code"
@@ -646,7 +646,7 @@ export function DashboardPage() {
               />
             </Card>
 
-            <Card className="dashboard-panel" size="small" title="预警与操作">
+            <Card className="dashboard-panel tv-card" size="small" title="预警与操作">
               <div className="dashboard-alert-list">
                 <div className="dashboard-alert-row">
                   <strong>指数涨跌</strong>
