@@ -187,7 +187,7 @@ class FailsFirstSymbolDailyBarAdapter(MultiSymbolDailyBarAdapter):
     name = "Fails First Symbol Daily"
 
     def fetch_daily_bars(self, **kwargs) -> list[dict]:
-        if kwargs["symbol"] == "920000":
+        if kwargs["symbol"] == "300999":
             raise RuntimeError("股票代码未标识sh或sz")
         return super().fetch_daily_bars(**kwargs)
 
@@ -946,10 +946,10 @@ def test_market_daily_bars_repair_skips_failed_symbol_and_continues(client, tmp_
         db.add_all(
             [
                 Stock(
-                    symbol="920000",
-                    exchange="BSE",
+                    symbol="300999",
+                    exchange="SZSE",
                     market="A_SHARE",
-                    name="安徽凤凰",
+                    name="失败股票",
                     status="LISTED",
                     industry=None,
                     source="fixture",
@@ -1001,19 +1001,19 @@ def test_market_daily_bars_repair_skips_failed_symbol_and_continues(client, tmp_
     assert task.status == "partial_success"
     assert task.records_read == 2
     assert task.records_written == 2
-    assert task.failed_symbols == ["920000"]
-    assert task.failed_chunks == ["920000:2026-06-01:2026-06-02"]
+    assert task.failed_symbols == ["300999"]
+    assert task.failed_chunks == ["300999:2026-06-01:2026-06-02"]
     assert task.failure_reason == "1 market repair symbol(s) failed."
     assert versions == []
     assert "Market repair symbol failed." in log_messages
-    assert [batch.symbol for batch in batches] == ["600519", "920000"]
+    assert [batch.symbol for batch in batches] == ["600519", "300999"]
     batches_by_symbol = {batch.symbol: batch for batch in batches}
     assert batches_by_symbol["600519"].status == "success"
-    assert batches_by_symbol["920000"].status == "failed"
-    assert batches_by_symbol["920000"].raw_records == 0
-    assert batches_by_symbol["920000"].normalized_records == 0
-    assert batches_by_symbol["920000"].records_written == 0
-    assert "股票代码未标识sh或sz" in (batches_by_symbol["920000"].error_message or "")
+    assert batches_by_symbol["300999"].status == "failed"
+    assert batches_by_symbol["300999"].raw_records == 0
+    assert batches_by_symbol["300999"].normalized_records == 0
+    assert batches_by_symbol["300999"].records_written == 0
+    assert "股票代码未标识sh或sz" in (batches_by_symbol["300999"].error_message or "")
     assert total == 2
     assert {item["symbol"] for item in items} == {"600519"}
 

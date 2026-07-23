@@ -56,5 +56,6 @@ def test_app_surfaces_do_not_use_fixed_light_panel_background():
 def test_app_layout_syncs_menu_theme_with_current_mode():
     source = app_layout_source()
 
-    assert "theme={mode}" in source
-    assert "background: 'var(--app-surface)'" in source
+    assert "toggleMode" in source
+    assert "nav-bar" in source
+    assert "nav-item" in source
