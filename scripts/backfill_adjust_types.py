@@ -2,9 +2,9 @@
 import subprocess, sys, time, os
 
 ADJUST_TYPES = ["none", "qfq", "hfq"]
-BATCH_SIZE = 150       # 每批股票数
-BATCH_TIMEOUT = 300    # 单批超时（秒）
-MAX_EMPTY_RUNS = 3     # 连续空跑上限（防止死循环）
+BATCH_SIZE = 20        # 小批次，避免触发腾讯/AKShare限速
+BATCH_TIMEOUT = 300
+MAX_EMPTY_RUNS = 3
 
 base_cmd = [
     sys.executable, "-m", "backend.worker.sync_stocks",
@@ -16,7 +16,12 @@ base_cmd = [
 ]
 
 # 避免代理干扰东方财富 API
-env = {**os.environ, "NO_PROXY": "push2his.eastmoney.com,*.eastmoney.com,123.126.*", "no_proxy": "push2his.eastmoney.com,*.eastmoney.com,123.126.*"}
+env = {
+    **os.environ,
+    "QUANT_REPAIR_PARALLELISM": "3",
+    "NO_PROXY": "push2his.eastmoney.com,*.eastmoney.com,123.126.*",
+    "no_proxy": "push2his.eastmoney.com,*.eastmoney.com,123.126.*",
+}
 
 for adj in ADJUST_TYPES:
     print(f"\n{'='*50}")
@@ -27,7 +32,13 @@ for adj in ADJUST_TYPES:
     while empty_runs < MAX_EMPTY_RUNS:
         cmd = base_cmd + ["--adjust-type", adj, "--max-symbols", str(BATCH_SIZE)]
         print(f"  运行: {adj} batch (BATCH_SIZE={BATCH_SIZE})...", flush=True)
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=BATCH_TIMEOUT, env=env)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=BATCH_TIMEOUT, env=env)
+        except subprocess.TimeoutExpired as exc:
+            print(f"  ⚠ 超时: {adj} batch after {BATCH_TIMEOUT}s; 保留任务状态，稍后重试", flush=True)
+            empty_runs += 1
+            time.sleep(5)
+            continue
         out = result.stdout.strip()
         err = result.stderr.strip()
 

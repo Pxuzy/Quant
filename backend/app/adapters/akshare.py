@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import logging
+import json
 from datetime import date
 from importlib import import_module
 from inspect import signature
 from time import sleep
 from typing import Any
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
 
@@ -586,7 +589,26 @@ class AkShareAdapter(StockDataSourceAdapter):
         try:
             return [{**record, "__adjust_type": adjust_type_code} for record in _try_fetch(candidates)]
         except RuntimeError as exc:
-            raise RuntimeError(f"AKShare daily-bars fetch failed: {exc}") from exc
+            # AKShare 的 Eastmoney 历史端点经常对出口 IP 返回空连接。
+            # 使用腾讯行情的同等复权接口作为受限 fallback；仍然走统一归一化和质量校验。
+            try:
+                records = _fetch_tencent_daily_bars(
+                    symbol=symbol,
+                    exchange=exchange,
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust_type=adjust_type_code,
+                )
+                logger.warning(
+                    "AKShare daily-bars fallback used: provider=tencent symbol=%s adjust_type=%s",
+                    symbol,
+                    adjust_type_code,
+                )
+                return records
+            except Exception as fallback_exc:
+                raise RuntimeError(
+                    f"AKShare daily-bars fetch failed: {exc}; Tencent fallback failed: {fallback_exc}"
+                ) from fallback_exc
 
     def normalize_daily_bars(self, raw_records: list[dict[str, Any]]) -> list[NormalizedDailyBar]:
         """
@@ -768,3 +790,60 @@ def _to_float(value: Any, *, default: float | None = None) -> float | None:
     if text is None:
         return default
     return float(text)
+
+
+def _fetch_tencent_daily_bars(
+    *,
+    symbol: str,
+    exchange: str | None,
+    start_date: date,
+    end_date: date,
+    adjust_type: str,
+) -> list[dict[str, Any]]:
+    """Fetch daily OHLCV from Tencent's public quote endpoint."""
+    prefix = {"SSE": "sh", "SZSE": "sz", "BSE": "bj"}.get((exchange or "").upper())
+    if prefix is None:
+        raise ValueError(f"unsupported exchange for Tencent endpoint: {exchange}")
+    key = f"{prefix}{symbol}"
+    series_key = {"none": "day", "qfq": "qfqday", "hfq": "hfqday"}[adjust_type]
+    query = urlencode({
+        "param": f"{key},day,{start_date.isoformat()},{end_date.isoformat()},1000,{'' if adjust_type == 'none' else adjust_type}",
+    })
+    request = Request(
+        f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?{query}",
+        headers={"User-Agent": "Mozilla/5.0", "Referer": "https://gu.qq.com/"},
+    )
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with urlopen(request, timeout=15) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt == 2:
+                raise
+            sleep(0.5 * (attempt + 1))
+    else:
+        raise RuntimeError(f"Tencent request failed: {last_error}")
+    if payload.get("code") != 0:
+        raise RuntimeError(f"Tencent response code={payload.get('code')}")
+    rows = payload.get("data", {}).get(key, {}).get(series_key, [])
+    if not rows:
+        raise RuntimeError("Tencent returned no daily bars")
+    return [
+        {
+            "symbol": symbol,
+            "日期": row[0],
+            "开盘": row[1],
+            "收盘": row[2],
+            "最高": row[3],
+            "最低": row[4],
+            "成交量": row[5],
+            "成交额": None,
+            "__adjust_type": adjust_type,
+            "__provider": "tencent",
+        }
+        for row in rows
+        if len(row) >= 6
+    ]

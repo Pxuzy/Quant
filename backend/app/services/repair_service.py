@@ -455,7 +455,7 @@ class _MarketRepairMixin:
             future = executor.submit(
                 adapter.fetch_daily_bars,
                 symbol=item.symbol,
-                exchange=None,
+                exchange=item.exchange,
                 market=market_name,
                 start_date=item.start_date,
                 end_date=item.end_date,
