@@ -1193,9 +1193,9 @@ export function SyncTasksPage() {
           <Typography.Text type="secondary">手动同步、定时计划、任务状态</Typography.Text>
         </Space>
         <Space>
-          <Button icon={<Icons.CheckCircleOutlined />} onClick={() => message.info('正在触发质量检查')}>质量检查</Button>
-          <Button icon={<Icons.SendOutlined />} onClick={() => message.info('正在触发新闻抓取')}>抓取新闻</Button>
-          <Button icon={<Icons.DatabaseOutlined />} onClick={() => message.success('行业分类已在服务器端自动完成')}>同步行业</Button>
+          <Button icon={<CheckCircleOutlined />} onClick={() => message.info('正在触发质量检查')}>质量检查</Button>
+          <Button icon={<SendOutlined />} onClick={() => message.info('正在触发新闻抓取')}>抓取新闻</Button>
+          <Button icon={<DatabaseOutlined />} onClick={() => message.success('行业分类已在服务器端自动完成')}>同步行业</Button>
         </Space>
       </div>
 
