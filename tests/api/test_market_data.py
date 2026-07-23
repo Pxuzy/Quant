@@ -1006,7 +1006,7 @@ def test_market_daily_bars_repair_skips_failed_symbol_and_continues(client, tmp_
     assert task.failure_reason == "1 market repair symbol(s) failed."
     assert versions == []
     assert "Market repair symbol failed." in log_messages
-    assert [batch.symbol for batch in batches] == ["600519", "300999"]
+    assert [batch.symbol for batch in batches] == ["300999", "600519"]
     batches_by_symbol = {batch.symbol: batch for batch in batches}
     assert batches_by_symbol["600519"].status == "success"
     assert batches_by_symbol["300999"].status == "failed"
