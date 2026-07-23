@@ -74,6 +74,7 @@ class MarketRepairPlanner:
             if supported_exchanges is None or stock.exchange in supported_exchanges
             if is_common_stock_symbol(stock.symbol, stock.exchange, market)
             if stock.exchange != "BSE"  # BSE 不支持日线复权数据
+            if stock.delisting_date is None or stock.delisting_date > end_date  # 已退市的不处理
         ]
         if not stocks:
             raise RuntimeError(f"股票池没有 {market} 已上市股票，请先同步股票池。")

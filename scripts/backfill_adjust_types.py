@@ -1,5 +1,5 @@
 """批量拉取复权数据：按 adjust_type 分批处理，直到所有股票补全。"""
-import subprocess, sys, time
+import subprocess, sys, time, os
 
 ADJUST_TYPES = ["none", "qfq", "hfq"]
 BATCH_SIZE = 150       # 每批股票数
@@ -9,11 +9,14 @@ MAX_EMPTY_RUNS = 3     # 连续空跑上限（防止死循环）
 base_cmd = [
     sys.executable, "-m", "backend.worker.sync_stocks",
     "--task-type", "daily_bars_market_repair",
-    "--source", "akshare",           # Baostock 黑名单问题，暂用 AKShare
+    "--source", "akshare",           # 暂用 AKShare
     "--start-date", "2026-06-01",
     "--end-date", "2026-07-22",
     "--start-policy", "requested_start",
 ]
+
+# 避免代理干扰东方财富 API
+env = {**os.environ, "NO_PROXY": "push2his.eastmoney.com,*.eastmoney.com,123.126.*", "no_proxy": "push2his.eastmoney.com,*.eastmoney.com,123.126.*"}
 
 for adj in ADJUST_TYPES:
     print(f"\n{'='*50}")
@@ -24,7 +27,7 @@ for adj in ADJUST_TYPES:
     while empty_runs < MAX_EMPTY_RUNS:
         cmd = base_cmd + ["--adjust-type", adj, "--max-symbols", str(BATCH_SIZE)]
         print(f"  运行: {adj} batch (BATCH_SIZE={BATCH_SIZE})...", flush=True)
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=BATCH_TIMEOUT)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=BATCH_TIMEOUT, env=env)
         out = result.stdout.strip()
         err = result.stderr.strip()
 

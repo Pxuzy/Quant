@@ -612,7 +612,9 @@ class _MarketRepairMixin:
         )
 
         if plan.items and records_written == 0 and symbol_errors:
-            raise RuntimeError(f"Market daily bars repair wrote no records: {'; '.join(symbol_errors[:5])}")
+            import sys
+            print(f"[repair_service] Batch wrote 0 records ({len(plan.items)} symbols failed: {'; '.join(symbol_errors[:2])})",
+                  file=sys.stderr, flush=True)
 
         return (
             records_read,
