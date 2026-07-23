@@ -1,98 +1,89 @@
-import { Suspense, type ReactNode } from 'react';
+import { Suspense, type ReactNode, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import * as Icons from '@ant-design/icons';
-import { Button, Layout, Menu, Space, Typography } from 'antd';
+import { Layout, Tooltip } from 'antd';
 import { useThemeMode } from '../app/ThemeProvider';
+import { StatusBar } from './StatusBar';
+import { RightPanel } from './RightPanel';
 
 type NavItem = {
   key: string;
   label: string;
   path: string;
   icon: ReactNode;
-  aliases?: string[];
-  group?: 'workbench' | 'admin';
 };
 
 const NAV_ITEMS: NavItem[] = [
-  // 工作台
-  { key: 'dashboard', label: '仪表盘', path: '/dashboard', icon: <Icons.DashboardOutlined />, group: 'workbench' },
-  { key: 'watchlist', label: '自选股', path: '/watchlist', icon: <Icons.StarOutlined />, group: 'workbench' },
-  { key: 'news', label: '新闻', path: '/news', icon: <Icons.ReadOutlined />, group: 'workbench' },
-
-  // 数据
-  { key: 'stocks', label: '股票池', path: '/stocks', icon: <Icons.TableOutlined />, group: 'admin' },
-  { key: 'sync-tasks', label: '同步任务', path: '/sync-tasks', icon: <Icons.CloudSyncOutlined />, group: 'admin' },
-  { key: 'data-sources', label: '数据源', path: '/data-sources', icon: <Icons.ApiOutlined />, group: 'admin' },
-  { key: 'database', label: '数据库', path: '/database', icon: <Icons.AreaChartOutlined />, group: 'admin' },
+  { key: 'dashboard',  label: '仪表盘',  path: '/dashboard',  icon: <Icons.DashboardOutlined /> },
+  { key: 'watchlist',  label: '自选股',   path: '/watchlist',  icon: <Icons.StarOutlined /> },
+  { key: 'stocks',     label: '股票池',   path: '/stocks',     icon: <Icons.TableOutlined /> },
+  { key: 'news',       label: '新闻',     path: '/news',       icon: <Icons.ReadOutlined /> },
+  { key: 'sync-tasks', label: '同步任务',  path: '/sync-tasks', icon: <Icons.CloudSyncOutlined /> },
+  { key: 'data-sources', label: '数据源', path: '/data-sources', icon: <Icons.ApiOutlined /> },
+  { key: 'database',   label: '数据库',   path: '/database',   icon: <Icons.DatabaseOutlined /> },
 ];
 
-// ponytail: 用循环替代逐条 if，新增路由只需在 NAV_ITEMS 添加一行，无需改 findNavItem
-function findNavItem(pathname: string) {
-  // 精确匹配工作台路由
-  const exact = NAV_ITEMS.find((i) => i.group === 'workbench' && pathname === i.path);
-  if (exact) return exact;
-  // 前缀匹配（/stock/xxx 等动态路由）
-  const prefix = NAV_ITEMS.find((i) => i.group === 'workbench' && pathname.startsWith(i.path + '/'));
-  if (prefix) return prefix;
-  // 数据后台路由
-  return NAV_ITEMS.find((i) => i.group === 'admin' && (pathname.startsWith(i.path) || i.aliases?.some((a) => pathname.startsWith(a)))) ?? NAV_ITEMS[0];
+function findCurrent(pathname: string) {
+  for (const item of NAV_ITEMS) {
+    if (pathname === item.path || pathname.startsWith(item.path + '/')) return item;
+  }
+  return NAV_ITEMS[0];
 }
 
 export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { mode, toggleMode } = useThemeMode();
-  const pathname = location?.pathname || '/';
-  const current = findNavItem(pathname);
+  const { toggleMode } = useThemeMode();
+  const [rightOpen, setRightOpen] = useState(true);
+  const current = findCurrent(location?.pathname || '/');
 
   return (
     <Layout className="app-shell">
-      <Layout.Sider className="app-sider" style={{ background: 'var(--app-surface)' }} width={224}>
-        <div className="brand">
-          <div className="brand-mark"><Icons.LineChartOutlined /></div>
-          <div>
-            <Typography.Text className="brand-name">Quant</Typography.Text>
-            <Typography.Text className="brand-subtitle">股票数据库工作台</Typography.Text>
-          </div>
+      {/* ═══ 左侧窄图标栏 ═══ */}
+      <nav className="nav-bar">
+        <div className="nav-brand" onClick={() => navigate({ to: '/dashboard' })}>
+          <Icons.LineChartOutlined style={{ fontSize: 22, color: '#2962ff' }} />
         </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[current.key]}
-          theme={mode}
-          onClick={({ key }) => {
-            const target = NAV_ITEMS.find((i) => i.key === key);
-            if (target) void navigate({ to: target.path });
-          }}
-          items={[
-            ...NAV_ITEMS.filter((i) => i.group === 'workbench').map((i) => ({ key: i.key, icon: i.icon, label: i.label })),
-            { type: 'divider' as const, key: 'divider' },
-            ...NAV_ITEMS.filter((i) => i.group === 'admin').map((i) => ({ key: i.key, icon: i.icon, label: i.label })),
-          ]}
-        />
-      </Layout.Sider>
-      <Layout>
-        <Layout.Header className="app-header">
-          <Space className="header-left" size={12}>
-            <Space className="header-crumb" size={10}>
-              <Typography.Text strong>{current.label}</Typography.Text>
-            </Space>
-          </Space>
-          <Space className="header-right" size={10}>
-            <Button className="header-sync-button" type="primary" icon={<Icons.CloudSyncOutlined />}
-              onClick={() => void navigate({ to: '/sync-tasks', search: { focus: 'daily-bars-market-repair' } })}>
-              补日线
-            </Button>
-            <Button className="theme-toggle" icon={mode === 'dark' ? <Icons.SunOutlined /> : <Icons.MoonOutlined />} onClick={toggleMode}>
-              {mode === 'dark' ? '浅色' : '深色'}
-            </Button>
-          </Space>
-        </Layout.Header>
+        <div className="nav-items">
+          {NAV_ITEMS.map((item) => (
+            <Tooltip key={item.key} title={item.label} placement="right">
+              <div
+                className={`nav-item ${current.key === item.key ? 'active' : ''}`}
+                onClick={() => navigate({ to: item.path })}
+              >
+                {item.icon}
+              </div>
+            </Tooltip>
+          ))}
+        </div>
+        <div className="nav-footer">
+          <Tooltip title="切换主题" placement="right">
+            <div className="nav-item" onClick={toggleMode}>
+              <Icons.SwapOutlined />
+            </div>
+          </Tooltip>
+        </div>
+      </nav>
+
+      {/* ═══ 中间主区 ═══ */}
+      <Layout className="main-area">
         <Layout.Content className="app-content">
           <Suspense fallback={<div className="route-loading">加载中...</div>}>
             <Outlet />
           </Suspense>
         </Layout.Content>
+        <StatusBar />
       </Layout>
+
+      {/* ═══ 右侧面板 ═══ */}
+      {rightOpen && (
+        <aside className="right-panel">
+          <RightPanel />
+        </aside>
+      )}
+      <div className="right-toggle" onClick={() => setRightOpen(!rightOpen)}>
+        {rightOpen ? <Icons.RightOutlined /> : <Icons.LeftOutlined />}
+      </div>
     </Layout>
   );
 }
