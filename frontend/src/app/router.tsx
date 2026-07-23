@@ -10,57 +10,29 @@ import {
 } from '@tanstack/react-router';
 import { AppLayout } from '../layouts/AppLayout';
 
-const DataSystemOverviewPage = lazy(() =>
-  import('../pages/data-system/overview/DataSystemOverviewPage').then((module) => ({
-    default: module.DataSystemOverviewPage,
-  })),
+const DashboardPage = lazy(() =>
+  import('../pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+);
+const WatchlistPage = lazy(() =>
+  import('../pages/watchlist/WatchlistPage').then((m) => ({ default: m.WatchlistPage })),
 );
 const NewsPage = lazy(() =>
   import('../pages/news/NewsPage').then((m) => ({ default: m.NewsPage })),
 );
-
-const DashboardPage = lazy(() =>
-  import('../pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
-);
-const PipelinePage = lazy(() =>
-  import('../pages/data-system/pipeline/PipelinePage').then((module) => ({
-    default: module.PipelinePage,
-  })),
-);
-const AlertsPage = lazy(() =>
-  import('../pages/data-system/alerts/AlertsPage').then((module) => ({
-    default: module.AlertsPage,
-  })),
-);
 const StocksWorkbenchPage = lazy(() =>
-  import('../pages/data-system/stocks/StocksWorkbenchPage').then((module) => ({
-    default: module.StocksWorkbenchPage,
-  })),
+  import('../pages/data-system/stocks/StocksWorkbenchPage').then((m) => ({ default: m.StocksWorkbenchPage })),
 );
 const StockDetailPage = lazy(() =>
-  import('../pages/data-system/stocks/StockDetailPage').then((module) => ({
-    default: module.StockDetailPage,
-  })),
-);
-const DataSourcesWorkbenchPage = lazy(() =>
-  import('../pages/data-system/data-sources/DataSourcesPage').then((module) => ({
-    default: module.DataSourcesPage,
-  })),
-);
-const NumericSummaryPage = lazy(() =>
-  import('../pages/data-system/numeric-summary/NumericSummaryPage').then((module) => ({
-    default: module.NumericSummaryPage,
-  })),
-);
-const DatabaseManagementPage = lazy(() =>
-  import('../pages/data-system/database/DatabaseManagementPage').then((module) => ({
-    default: module.DatabaseManagementPage,
-  })),
+  import('../pages/data-system/stocks/StockDetailPage').then((m) => ({ default: m.StockDetailPage })),
 );
 const SyncTasksPage = lazy(() =>
-  import('../pages/data-system/sync-tasks/SyncTasksPage').then((module) => ({
-    default: module.SyncTasksPage,
-  })),
+  import('../pages/data-system/sync-tasks/SyncTasksPage').then((m) => ({ default: m.SyncTasksPage })),
+);
+const DataSourcesPage = lazy(() =>
+  import('../pages/data-system/data-sources/DataSourcesPage').then((m) => ({ default: m.DataSourcesPage })),
+);
+const DatabasePage = lazy(() =>
+  import('../pages/data-system/database/DatabaseManagementPage').then((m) => ({ default: m.DatabaseManagementPage })),
 );
 export type StocksSearch = {
   keyword?: string;
@@ -172,27 +144,21 @@ const dashboardRoute = createRoute({
   component: DashboardPage,
 });
 
-const overviewRoute = createRoute({
+const watchlistRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/data-system',
-  component: DataSystemOverviewPage,
+  path: '/watchlist',
+  component: WatchlistPage,
 });
 
-const pipelineRoute = createRoute({
+const newsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/data-system/pipeline',
-  component: PipelinePage,
-});
-
-const alertsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/data-system/alerts',
-  component: AlertsPage,
+  path: '/news',
+  component: NewsPage,
 });
 
 const stocksRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/data-system/stocks',
+  path: '/stocks',
   validateSearch: (search): StocksSearch => ({
     keyword: stringSearch(search.keyword),
     exchange: stringSearch(search.exchange),
@@ -209,7 +175,7 @@ const stocksRoute = createRoute({
 
 const stockDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/data-system/stocks/$symbol',
+  path: '/stocks/\$symbol'
   validateSearch: (search): StockDetailSearch => ({
     market: stringSearch(search.market),
   }),
@@ -218,19 +184,13 @@ const stockDetailRoute = createRoute({
 
 const dataSourcesRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/data-system/data-sources',
-  component: DataSourcesWorkbenchPage,
-});
-
-const numericSummaryRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/data-system/numeric-summary',
-  component: NumericSummaryPage,
+  path: '/data-sources',
+  component: DataSourcesPage,
 });
 
 const databaseRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/data-system/database',
+  path: '/database',
   validateSearch: (search): DatabaseSearch => ({
     market: stringSearch(search.market),
     view: stringSearch(search.view),
@@ -249,12 +209,12 @@ const databaseRoute = createRoute({
     qualityPage: numberSearch(search.qualityPage),
     qualityPageSize: numberSearch(search.qualityPageSize),
   }),
-  component: DatabaseManagementPage,
+  component: DatabasePage,
 });
 
 const syncTasksRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/data-system/sync-tasks',
+  path: '/sync-tasks',
   validateSearch: (search): SyncTasksSearch => ({
     status: stringSearch(search.status),
     source: stringSearch(search.source),
@@ -293,15 +253,12 @@ const notFoundRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   dashboardRoute,
+  watchlistRoute,
   newsRoute,
   notFoundRoute,
-  overviewRoute,
-  pipelineRoute,
-  alertsRoute,
   stocksRoute,
   stockDetailRoute,
   dataSourcesRoute,
-  numericSummaryRoute,
   databaseRoute,
   syncTasksRoute,
 ]);

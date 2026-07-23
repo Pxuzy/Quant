@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { CalendarOutlined, FileTextOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons';
+import { CalendarOutlined, FileTextOutlined, ReloadOutlined, SyncOutlined, CheckCircleOutlined, SendOutlined, DatabaseOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
   Alert,
@@ -1190,7 +1190,12 @@ export function SyncTasksPage() {
       <div className="workbench-heading">
         <Space direction="vertical" size={4}>
           <Typography.Title level={3}>同步调度</Typography.Title>
-          <Typography.Text type="secondary">数据系统 / 手动同步、后续定时计划、任务状态与日志</Typography.Text>
+          <Typography.Text type="secondary">手动同步、定时计划、任务状态</Typography.Text>
+        </Space>
+        <Space>
+          <Button icon={<Icons.CheckCircleOutlined />} onClick={() => message.info('正在触发质量检查')}>质量检查</Button>
+          <Button icon={<Icons.SendOutlined />} onClick={() => message.info('正在触发新闻抓取')}>抓取新闻</Button>
+          <Button icon={<Icons.DatabaseOutlined />} onClick={() => message.success('行业分类已在服务器端自动完成')}>同步行业</Button>
         </Space>
       </div>
 

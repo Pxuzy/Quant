@@ -16,16 +16,14 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   // 工作台
   { key: 'dashboard', label: '仪表盘', path: '/dashboard', icon: <Icons.DashboardOutlined />, group: 'workbench' },
-  { key: 'overview', label: '数据总览', path: '/data-system', icon: <Icons.AppstoreOutlined />, group: 'workbench' },
+  { key: 'watchlist', label: '自选股', path: '/watchlist', icon: <Icons.StarOutlined />, group: 'workbench' },
   { key: 'news', label: '新闻', path: '/news', icon: <Icons.ReadOutlined />, group: 'workbench' },
-  { key: 'data-sources', label: '数据源', path: '/data-system/data-sources', icon: <Icons.ApiOutlined />, group: 'workbench' },
-  // 数据后台
-  { key: 'stocks', label: '股票池', path: '/data-system/stocks', icon: <Icons.TableOutlined />, group: 'admin' },
-  { key: 'sync-tasks', label: '同步调度', path: '/data-system/sync-tasks', icon: <Icons.CloudSyncOutlined />, group: 'admin' },
-  { key: 'pipeline', label: '数据管线', path: '/data-system/pipeline', icon: <Icons.NodeIndexOutlined />, group: 'admin' },
-  { key: 'numeric-summary', label: '数值数据', path: '/data-system/numeric-summary', icon: <Icons.NumberOutlined />, group: 'admin' },
-  { key: 'database', label: '数据库', path: '/data-system/database', icon: <Icons.AreaChartOutlined />, aliases: ['/data-system/data-quality', '/data-system/datasets', '/data-system/trading-calendars'], group: 'admin' },
-  { key: 'alerts', label: '异常中心', path: '/data-system/alerts', icon: <Icons.WarningOutlined />, group: 'admin' },
+
+  // 数据
+  { key: 'stocks', label: '股票池', path: '/stocks', icon: <Icons.TableOutlined />, group: 'admin' },
+  { key: 'sync-tasks', label: '同步任务', path: '/sync-tasks', icon: <Icons.CloudSyncOutlined />, group: 'admin' },
+  { key: 'data-sources', label: '数据源', path: '/data-sources', icon: <Icons.ApiOutlined />, group: 'admin' },
+  { key: 'database', label: '数据库', path: '/database', icon: <Icons.AreaChartOutlined />, group: 'admin' },
 ];
 
 // ponytail: 用循环替代逐条 if，新增路由只需在 NAV_ITEMS 添加一行，无需改 findNavItem
@@ -81,7 +79,7 @@ export function AppLayout() {
           </Space>
           <Space className="header-right" size={10}>
             <Button className="header-sync-button" type="primary" icon={<Icons.CloudSyncOutlined />}
-              onClick={() => void navigate({ to: '/data-system/sync-tasks', search: { focus: 'daily-bars-market-repair' } })}>
+              onClick={() => void navigate({ to: '/sync-tasks', search: { focus: 'daily-bars-market-repair' } })}>
               补日线
             </Button>
             <Button className="theme-toggle" icon={mode === 'dark' ? <Icons.SunOutlined /> : <Icons.MoonOutlined />} onClick={toggleMode}>
