@@ -1,5 +1,9 @@
 """批量拉取复权数据：按 adjust_type 分批处理，直到所有股票补全。"""
-import subprocess, sys, time, os
+import json
+import os
+import subprocess
+import sys
+import time
 
 ADJUST_TYPES = ["none", "qfq", "hfq"]
 BATCH_SIZE = 20        # 小批次，避免触发腾讯/AKShare限速
@@ -42,14 +46,21 @@ for adj in ADJUST_TYPES:
         out = result.stdout.strip()
         err = result.stderr.strip()
 
-        if result.returncode == 0 and out:
-            print(f"  → {out[-120:]}")
-            # 检查是否有写入
-            if '"records_written": 0' in out and '"partial_success"' not in out:
+        payload = None
+        if out:
+            try:
+                payload = json.loads(out.splitlines()[-1])
+            except json.JSONDecodeError:
+                pass
+
+        if payload and payload.get("status") in {"success", "partial_success"}:
+            written = int(payload.get("records_written") or 0)
+            print(f"  → status={payload['status']} records_written={written}")
+            if written > 0:
+                empty_runs = 0
+            else:
                 empty_runs += 1
                 print(f"  ⚠ 空批次 ({empty_runs}/{MAX_EMPTY_RUNS})")
-            else:
-                empty_runs = 0  # 有数据就重置计数
         else:
             print(f"  ⚠ 异常: rc={result.returncode}")
             if out:
