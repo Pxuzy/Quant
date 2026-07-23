@@ -117,13 +117,13 @@ class DailyBarRepository:
                         continue
 
                     deduped = {
-                        (row["symbol"], row["exchange"], row["market"], row["trade_date"], row["adjust_type"]): row
+                        (row["symbol"], row["exchange"], row["market"], row["trade_date"], row.get("adjust_type") or "none"): row
                         for row in existing_rows
                     }
                     deduped.update({_daily_bar_identity(row): row for row in group})
                     sorted_rows = sorted(
                         deduped.values(),
-                        key=lambda row: (row["symbol"], row["exchange"], row["adjust_type"]),
+                        key=lambda row: (row["symbol"], row["exchange"], row.get("adjust_type") or "none"),
                     )
                     temporary_path = file_path.with_suffix(".parquet.tmp")
                     pq.write_table(pa.Table.from_pylist(sorted_rows, schema=DAILY_BAR_ARROW_SCHEMA), temporary_path)
@@ -672,7 +672,7 @@ def _normalize_row(row: dict) -> dict:
 
 
 def _daily_bar_identity(row: dict) -> tuple:
-    return tuple(row.get(column) for column in ("symbol", "exchange", "market", "trade_date", "adjust_type"))
+    return (row["symbol"], row["exchange"], row["market"], row["trade_date"], row.get("adjust_type") or "none")
 
 
 def _daily_bar_content(row: dict | None) -> tuple | None:
