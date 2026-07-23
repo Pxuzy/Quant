@@ -51,7 +51,11 @@ for adj in ADJUST_TYPES:
             else:
                 empty_runs = 0  # 有数据就重置计数
         else:
-            print(f"  ⚠ 异常: rc={result.returncode} err={err[:200]}")
+            print(f"  ⚠ 异常: rc={result.returncode}")
+            if out:
+                print(f"  stdout: {out[-1000:]}")
+            if err:
+                print(f"  stderr: {err[-1000:]}")
             empty_runs += 1
 
         if empty_runs >= MAX_EMPTY_RUNS:
