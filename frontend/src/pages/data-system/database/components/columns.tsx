@@ -258,21 +258,21 @@ export function buildWatermarkColumns(coverage?: DatabaseCoverageSummary): Colum
         return (
           <Space size={2}>
             {taskId ? (
-              <Link to="/data-system/sync-tasks" search={{ taskId, page: 1, pageSize: 10 }}>
+              <Link to="/sync-tasks" search={{ taskId, page: 1, pageSize: 10 }}>
                 <Button type="link" size="small" icon={<ProfileOutlined />}>
                   任务
                 </Button>
               </Link>
             ) : null}
             {failureTaskId ? (
-              <Link to="/data-system/sync-tasks" search={{ taskId: failureTaskId, page: 1, pageSize: 10 }}>
+              <Link to="/sync-tasks" search={{ taskId: failureTaskId, page: 1, pageSize: 10 }}>
                 <Button type="link" size="small">
                   失败
                 </Button>
               </Link>
             ) : null}
             {focus ? (
-              <Link to="/data-system/sync-tasks" search={getRepairSearch(watermark, coverage)}>
+              <Link to="/sync-tasks" search={getRepairSearch(watermark, coverage)}>
                 <Button type="link" size="small" icon={<CloudSyncOutlined />}>
                   补数
                 </Button>
@@ -500,14 +500,14 @@ export function buildBatchColumns(onTraceBatch?: (batch: RecentIngestBatch) => v
         return (
           <Space size={2}>
             {taskId ? (
-              <Link to="/data-system/sync-tasks" search={{ taskId, page: 1, pageSize: 10 }}>
+              <Link to="/sync-tasks" search={{ taskId, page: 1, pageSize: 10 }}>
                 <Button type="link" size="small" icon={<ProfileOutlined />}>
                   任务
                 </Button>
               </Link>
             ) : null}
             {batch.dataset_name === 'daily_bars' && batch.symbol ? (
-              <Link to="/data-system/stocks/$symbol" params={{ symbol: batch.symbol }}>
+              <Link to="/stocks/$symbol" params={{ symbol: batch.symbol }}>
                 <Button type="link" size="small" icon={<StockOutlined />}>
                   股票
                 </Button>
@@ -627,14 +627,14 @@ export function buildLineageColumns(): ColumnsType<DatabaseLineageItem> {
         return (
           <Space size={2}>
             {taskId ? (
-              <Link to="/data-system/sync-tasks" search={{ taskId, page: 1, pageSize: 10 }}>
+              <Link to="/sync-tasks" search={{ taskId, page: 1, pageSize: 10 }}>
                 <Button type="link" size="small" icon={<ProfileOutlined />}>
                   任务
                 </Button>
               </Link>
             ) : null}
             {item.dataset_name === 'daily_bars' && item.symbol ? (
-              <Link to="/data-system/stocks/$symbol" params={{ symbol: item.symbol }}>
+              <Link to="/stocks/$symbol" params={{ symbol: item.symbol }}>
                 <Button type="link" size="small" icon={<StockOutlined />}>
                   股票
                 </Button>
@@ -724,7 +724,7 @@ export function buildReportColumns(
                   : ''}
               </Typography.Text>
               {taskId ? (
-                <Link to="/data-system/sync-tasks" search={{ taskId, page: 1, pageSize: 10 }}>
+                <Link to="/sync-tasks" search={{ taskId, page: 1, pageSize: 10 }}>
                   <Button type="link" size="small" icon={<ProfileOutlined />}>
                     任务
                   </Button>

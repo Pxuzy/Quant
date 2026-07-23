@@ -21,8 +21,8 @@ function normalizeV1Market(market?: string) {
 export function StocksWorkbenchPage() {
   const { message } = AntApp.useApp();
   const workbenchRef = useRef<HTMLDivElement>(null);
-  const search = useSearch({ from: '/data-system/stocks' });
-  const navigate = useNavigate({ from: '/data-system/stocks' });
+  const search = useSearch({ from: '/stocks' });
+  const navigate = useNavigate({ from: '/stocks' });
 
   const filters = useMemo<StockFilterValues>(
     () => ({
@@ -211,7 +211,7 @@ export function StocksWorkbenchPage() {
                 loading={stocksQuery.isFetching}
                 onViewDetails={(stock) => {
                   void navigate({
-                    to: '/data-system/stocks/$symbol',
+                    to: '/stocks/$symbol',
                     params: { symbol: stock.symbol },
                     search: { market: normalizeV1Market(stock.market || filters.market) },
                   });

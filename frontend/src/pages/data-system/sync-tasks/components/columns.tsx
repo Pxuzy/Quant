@@ -159,7 +159,7 @@ export function buildBatchColumns(): ColumnsType<IngestBatch> {
       width: 104,
       render: (_, record) =>
         canTraceBatchToStock(record) ? (
-          <Link to="/data-system/stocks/$symbol" params={{ symbol: getBatchSymbol(record) ?? '' }}>
+          <Link to="/stocks/$symbol" params={{ symbol: getBatchSymbol(record) ?? '' }}>
             <Button type="link" size="small" icon={<FileTextOutlined />}>
               查看股票
             </Button>
@@ -326,14 +326,14 @@ export function buildWatermarkColumns(coverage?: DatabaseCoverageSummary): Colum
         return (
           <Space size={2}>
             {failureTaskId ? (
-              <Link to="/data-system/sync-tasks" search={{ taskId: failureTaskId, page: 1, pageSize: DEFAULT_PAGE_SIZE }}>
+              <Link to="/sync-tasks" search={{ taskId: failureTaskId, page: 1, pageSize: DEFAULT_PAGE_SIZE }}>
                 <Button type="link" size="small">
                   失败
                 </Button>
               </Link>
             ) : null}
             {focus ? (
-              <Link to="/data-system/sync-tasks" search={getWatermarkRepairSearch(watermark, coverage)}>
+              <Link to="/sync-tasks" search={getWatermarkRepairSearch(watermark, coverage)}>
                 <Button type="link" size="small">
                   补数
                 </Button>

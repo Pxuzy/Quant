@@ -157,8 +157,8 @@ import {
 export function DatabaseManagementPage() {
   const { message } = AntApp.useApp();
   const pageRef = useRef<HTMLDivElement>(null);
-  const search = useSearch({ from: '/data-system/database' });
-  const navigate = useNavigate({ from: '/data-system/database' });
+  const search = useSearch({ from: '/database' });
+  const navigate = useNavigate({ from: '/database' });
   const hasLineageFilters = Boolean(
     search.lineageBatchId ||
       search.lineageDatasetName ||

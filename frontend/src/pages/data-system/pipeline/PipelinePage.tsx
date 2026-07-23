@@ -93,7 +93,7 @@ const taskColumns: ColumnsType<SyncTask> = [
     key: 'action',
     width: 90,
     render: (_, record) => (
-      <Link to="/data-system/sync-tasks" search={{ taskId: Number(record.id), page: 1, pageSize: 10 }}>
+      <Link to="/sync-tasks" search={{ taskId: Number(record.id), page: 1, pageSize: 10 }}>
         <Button type="link" size="small">
           查看
         </Button>
@@ -132,7 +132,7 @@ export function PipelinePage() {
             <Button icon={<ReloadOutlined />} onClick={refresh} loading={isRefreshing}>
               刷新
             </Button>
-            <Link to="/data-system/sync-tasks">
+            <Link to="/sync-tasks">
               <Button type="primary" icon={<CloudSyncOutlined />}>
                 同步调度
               </Button>
@@ -176,16 +176,16 @@ export function PipelinePage() {
 
         <Card title="正式入口">
           <Space wrap>
-            <Link to="/data-system/sync-tasks" search={{ focus: 'stock-list' }}>
+            <Link to="/sync-tasks" search={{ focus: 'stock-list' }}>
               <Button icon={<CloudSyncOutlined />}>股票池同步</Button>
             </Link>
-            <Link to="/data-system/sync-tasks" search={{ focus: 'daily-bars' }}>
+            <Link to="/sync-tasks" search={{ focus: 'daily-bars' }}>
               <Button icon={<SyncOutlined />}>单股日线同步</Button>
             </Link>
-            <Link to="/data-system/sync-tasks" search={{ focus: 'daily-bars-market-repair' }}>
+            <Link to="/sync-tasks" search={{ focus: 'daily-bars-market-repair' }}>
               <Button icon={<ToolOutlined />}>市场日线补齐</Button>
             </Link>
-            <Link to="/data-system/sync-tasks" search={{ focus: 'calendars' }}>
+            <Link to="/sync-tasks" search={{ focus: 'calendars' }}>
               <Button icon={<DatabaseOutlined />}>交易日历同步</Button>
             </Link>
           </Space>

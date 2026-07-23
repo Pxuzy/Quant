@@ -158,8 +158,8 @@ export function SyncTasksPage() {
   const stockCardRef = useRef<HTMLDivElement>(null);
   const dailyBarsCardRef = useRef<HTMLDivElement>(null);
   const calendarCardRef = useRef<HTMLDivElement>(null);
-  const search = useSearch({ from: '/data-system/sync-tasks' });
-  const navigate = useNavigate({ from: '/data-system/sync-tasks' });
+  const search = useSearch({ from: '/sync-tasks' });
+  const navigate = useNavigate({ from: '/sync-tasks' });
   const [dailyBarsMode, setDailyBarsMode] = useState<DailyBarsMode>(
     search.focus === 'daily-bars-market-repair' ? 'market-repair' : 'single',
   );

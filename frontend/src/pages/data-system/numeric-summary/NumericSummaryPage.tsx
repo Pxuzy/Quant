@@ -150,7 +150,7 @@ export function NumericSummaryPage() {
 
   const openDailySync = () => {
     void navigate({
-      to: '/data-system/sync-tasks',
+      to: '/sync-tasks',
       search: {
         focus: hasCoverageGap ? 'daily-bars-market-repair' : 'daily-bars',
         market: coverage?.market ?? 'A_SHARE',
@@ -162,12 +162,12 @@ export function NumericSummaryPage() {
   };
   const openLatestBatchLineage = (batch?: RecentIngestBatch) => {
     if (!batch) {
-      void navigate({ to: '/data-system/database' });
+      void navigate({ to: '/database' });
       return;
     }
     const batchId = Number(batch.id);
     void navigate({
-      to: '/data-system/database',
+      to: '/database',
       search: {
         lineageBatchId: Number.isFinite(batchId) ? batchId : undefined,
         lineageDatasetName: batch.dataset_name,
@@ -413,8 +413,8 @@ export function NumericSummaryPage() {
                   <Button type="primary" icon={<RightOutlined />} onClick={openDailySync}>
                     去补日线
                   </Button>
-                  <Button onClick={() => void navigate({ to: '/data-system/stocks' })}>看股票池</Button>
-                  <Button onClick={() => void navigate({ to: '/data-system/database' })}>看数据库</Button>
+                  <Button onClick={() => void navigate({ to: '/stocks' })}>看股票池</Button>
+                  <Button onClick={() => void navigate({ to: '/database' })}>看数据库</Button>
                 </Space>
               </Space>
             )}

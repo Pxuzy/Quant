@@ -70,9 +70,9 @@ import { CloseVolumeChart, QualityTags } from './components/charts';
 export function StockDetailPage() {
   const { message } = AntApp.useApp();
   const pageRef = useRef<HTMLDivElement>(null);
-  const params = useParams({ from: '/data-system/stocks/$symbol' });
-  const search = useSearch({ from: '/data-system/stocks/$symbol' });
-  const navigate = useNavigate({ from: '/data-system/stocks/$symbol' });
+  const params = useParams({ from: '/stocks/$symbol' });
+  const search = useSearch({ from: '/stocks/$symbol' });
+  const navigate = useNavigate({ from: '/stocks/$symbol' });
   const rawSymbol = params.symbol;
   const symbol = normalizeStockRouteSymbol(rawSymbol);
   const displayCode = rawSymbol.toUpperCase();
@@ -163,7 +163,7 @@ export function StockDetailPage() {
           refetchDailyData();
           const taskId = Number(task.id);
           void navigate({
-            to: '/data-system/sync-tasks',
+            to: '/sync-tasks',
             search: {
               focus: 'daily-bars',
               taskId: Number.isFinite(taskId) ? taskId : undefined,
@@ -187,7 +187,7 @@ export function StockDetailPage() {
     <div className="workbench stock-detail-page" ref={pageRef}>
       <section className={`stock-terminal-quote motion-summary-card ${quoteTrendClass}`}>
         <div className="stock-terminal-identity">
-          <Link to="/data-system/stocks" search={{ market }} className="stock-detail-back">
+          <Link to="/stocks" search={{ market }} className="stock-detail-back">
             <ArrowLeftOutlined /> 返回股票池
           </Link>
           <div className="stock-terminal-title-row">
@@ -258,7 +258,7 @@ export function StockDetailPage() {
               latestIngestBatch ? (
                 <Space wrap size={4}>
                   <Link
-                    to="/data-system/database"
+                    to="/database"
                     search={getBatchLineageSearch(latestIngestBatch, { market, symbol })}
                   >
                     <Button type="link" icon={<DatabaseOutlined />}>
@@ -267,7 +267,7 @@ export function StockDetailPage() {
                   </Link>
                   {getNumericTaskId(latestIngestBatch) ? (
                     <Link
-                      to="/data-system/sync-tasks"
+                      to="/sync-tasks"
                       search={{ taskId: getNumericTaskId(latestIngestBatch), page: 1, pageSize: 10 }}
                     >
                       <Button type="link" icon={<ProfileOutlined />}>
@@ -400,7 +400,7 @@ export function StockDetailPage() {
                             <StatusTag value={getBatchQualityStatus(batch)} />
                             {getNumericBatchId(batch) ? (
                               <Link
-                                to="/data-system/database"
+                                to="/database"
                                 search={getBatchLineageSearch(batch, { market, symbol })}
                               >
                                 <Button type="link" size="small" icon={<DatabaseOutlined />}>
@@ -410,7 +410,7 @@ export function StockDetailPage() {
                             ) : null}
                             {getNumericTaskId(batch) ? (
                               <Link
-                                to="/data-system/sync-tasks"
+                                to="/sync-tasks"
                                 search={{ taskId: getNumericTaskId(batch), page: 1, pageSize: 10 }}
                               >
                                 <Button type="link" size="small" icon={<ProfileOutlined />}>
@@ -528,7 +528,7 @@ export function StockDetailPage() {
                       <Space wrap>
                         {latestIngestBatch && latestIngestBatch.status === 'failed' && getNumericTaskId(latestIngestBatch) ? (
                           <Link
-                            to="/data-system/sync-tasks"
+                            to="/sync-tasks"
                             search={{ taskId: getNumericTaskId(latestIngestBatch), page: 1, pageSize: 10 }}
                           >
                             <Button size="small" icon={<ProfileOutlined />}>
@@ -548,7 +548,7 @@ export function StockDetailPage() {
                           </Button>
                         )}
                         {latestIngestBatch ? (
-                          <Link to="/data-system/database" search={getBatchLineageSearch(latestIngestBatch, { market, symbol })}>
+                          <Link to="/database" search={getBatchLineageSearch(latestIngestBatch, { market, symbol })}>
                             <Button size="small" icon={<DatabaseOutlined />}>
                               看血缘
                             </Button>

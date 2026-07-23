@@ -182,7 +182,7 @@ export function TaskBatchesTable({ task, batches, loading, error }: TaskBatchesT
       width: 104,
       render: (_, record) =>
         canTraceBatchToStock(record) ? (
-          <Link to="/data-system/stocks/$symbol" params={{ symbol: getBatchSymbol(record) ?? '' }}>
+          <Link to="/stocks/$symbol" params={{ symbol: getBatchSymbol(record) ?? '' }}>
             <Button type="link" size="small" icon={<FileTextOutlined />}>
               查看股票
             </Button>

@@ -66,13 +66,13 @@ export function DataClosedLoopPanel({
             </div>
             <Space wrap size={[10, 8]}>
               {hasDailyGap ? (
-                <Link to="/data-system/sync-tasks" search={repairSearch}>
+                <Link to="/sync-tasks" search={repairSearch}>
                   <Button type="primary" icon={<CloudSyncOutlined />}>
                     创建市场级补齐任务
                   </Button>
                 </Link>
               ) : null}
-              <Link to="/data-system/sync-tasks">
+              <Link to="/sync-tasks">
                 <Button icon={<ProfileOutlined />}>查看同步调度</Button>
               </Link>
             </Space>
@@ -193,7 +193,7 @@ export function CoverageSummaryPanel({
           message="检测到市场级日线缺口"
           description={`建议从同步调度创建市场级日线缺口补齐任务，范围 ${formatRange(coverage.coverage_start_date, coverage.coverage_end_date)}（最近半年）。`}
           action={
-            <Link to="/data-system/sync-tasks" search={getMarketRepairSearch(coverage)}>
+            <Link to="/sync-tasks" search={getMarketRepairSearch(coverage)}>
               <Button size="small" type="primary">
                 去补齐日线
               </Button>

@@ -73,7 +73,7 @@ export type FreshnessItem = {
   qualityStatus: string;
   storageType?: string | null;
   actionLabel: string;
-  actionPath: '/data-system/stocks' | '/data-system/sync-tasks';
+  actionPath: '/stocks' | '/sync-tasks';
   actionSearch?: { focus?: string };
 };
 
@@ -89,7 +89,7 @@ export type RepairSearch = {
 
 export type QualityAction = {
   label: string;
-  to: '/data-system/sync-tasks' | '/data-system/stocks' | '/data-system/database';
+  to: '/sync-tasks' | '/stocks' | '/database';
   search?: RepairSearch | { qualityDatasetName?: string; qualityPage?: number; qualityPageSize?: number };
 };
 
@@ -250,7 +250,7 @@ export function getDatasetFreshnessItems(snapshots: DatasetSnapshot[]): Freshnes
       qualityStatus: stocks?.quality_status ?? 'unknown',
       storageType: stocks?.storage_type,
       actionLabel: '查看股票池',
-      actionPath: '/data-system/stocks',
+      actionPath: '/stocks',
     },
     {
       datasetName: 'daily_bars',
@@ -262,7 +262,7 @@ export function getDatasetFreshnessItems(snapshots: DatasetSnapshot[]): Freshnes
       qualityStatus: dailyBars?.quality_status ?? 'unknown',
       storageType: dailyBars?.storage_type,
       actionLabel: '补日线数据',
-      actionPath: '/data-system/sync-tasks',
+      actionPath: '/sync-tasks',
       actionSearch: { focus: 'daily-bars-market-repair' },
     },
     {
@@ -275,7 +275,7 @@ export function getDatasetFreshnessItems(snapshots: DatasetSnapshot[]): Freshnes
       qualityStatus: calendars?.quality_status ?? 'unknown',
       storageType: calendars?.storage_type,
       actionLabel: '同步日历',
-      actionPath: '/data-system/sync-tasks',
+      actionPath: '/sync-tasks',
       actionSearch: { focus: 'calendars' },
     },
   ];
@@ -369,14 +369,14 @@ export function getQualityReportAction(report: DataQualityReport, coverage?: Dat
     ) {
       return {
         label: '补齐日线',
-        to: '/data-system/sync-tasks',
+        to: '/sync-tasks',
         search: getMarketRepairSearch(coverage),
       };
     }
 
     return {
       label: '看批次',
-      to: '/data-system/sync-tasks',
+      to: '/sync-tasks',
       search: { focus: 'daily-bars' },
     };
   }
@@ -384,7 +384,7 @@ export function getQualityReportAction(report: DataQualityReport, coverage?: Dat
   if (report.dataset_name === 'stocks' || report.dataset_name === 'stock_list') {
     return {
       label: '同步股票池',
-      to: '/data-system/sync-tasks',
+      to: '/sync-tasks',
       search: { focus: 'stock-list' },
     };
   }
@@ -392,7 +392,7 @@ export function getQualityReportAction(report: DataQualityReport, coverage?: Dat
   if (report.dataset_name === 'trading_calendars' || report.dataset_name === 'calendars') {
     return {
       label: '同步日历',
-      to: '/data-system/sync-tasks',
+      to: '/sync-tasks',
       search: { focus: 'calendars' },
     };
   }

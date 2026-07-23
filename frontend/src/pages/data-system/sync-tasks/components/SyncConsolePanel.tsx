@@ -259,7 +259,7 @@ export function SyncConsolePanel({
                     {decision.actionLabel}
                   </Button>
                 ) : actionSearch ? (
-                  <Link to="/data-system/sync-tasks" search={actionSearch}>
+                  <Link to="/sync-tasks" search={actionSearch}>
                     <Button type="primary">{decision.actionLabel}</Button>
                   </Link>
                 ) : null}

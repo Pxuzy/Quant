@@ -426,7 +426,7 @@ export function DataSourcesPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>数据源管理</Typography.Title>
         <Typography.Text type="secondary">
           接入目录 · 依赖检查 · 真实取样 · 同步入口 &nbsp;|&nbsp; 跨数据集告警请到
-          <Typography.Link href="/data-system/alerts" style={{ marginLeft: 4 }}>异常中心</Typography.Link>
+          <Typography.Link href="/alerts" style={{ marginLeft: 4 }}>异常中心</Typography.Link>
         </Typography.Text>
       </Space>
 

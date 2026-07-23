@@ -296,7 +296,7 @@ export function DashboardPage() {
         <Typography.Text
           code
           style={{ cursor: 'pointer', color: '#1677ff' }}
-                onClick={() => navigate({ to: '/data-system/stocks/$symbol', params: { symbol: code } })}
+                onClick={() => navigate({ to: '/stocks/$symbol', params: { symbol: code } })}
         >
           {code}
         </Typography.Text>
@@ -310,7 +310,7 @@ export function DashboardPage() {
       render: (_: string, record: Quote) => (
         <Typography.Text
           style={{ cursor: 'pointer', color: '#1677ff' }}
-          onClick={() => navigate({ to: '/data-system/stocks/$symbol', params: { symbol: record.code } })}
+          onClick={() => navigate({ to: '/stocks/$symbol', params: { symbol: record.code } })}
         >
           {record.name}
         </Typography.Text>
@@ -368,7 +368,7 @@ export function DashboardPage() {
         <Typography.Text
           code
           style={{ cursor: 'pointer', color: '#1677ff' }}
-                onClick={() => navigate({ to: '/data-system/stocks/$symbol', params: { symbol: code } })}
+                onClick={() => navigate({ to: '/stocks/$symbol', params: { symbol: code } })}
         >
           {code}
         </Typography.Text>
@@ -382,7 +382,7 @@ export function DashboardPage() {
       render: (name: string, record: Quote) => (
         <Typography.Text
           style={{ cursor: 'pointer', color: '#1677ff' }}
-          onClick={() => navigate({ to: '/data-system/stocks/$symbol', params: { symbol: record.code } })}
+          onClick={() => navigate({ to: '/stocks/$symbol', params: { symbol: record.code } })}
         >
           {name}
         </Typography.Text>
@@ -675,9 +675,9 @@ export function DashboardPage() {
               <div className="dashboard-admin-actions">
                 <Button size="small" icon={<ApiOutlined />} onClick={() => navigate({ to: '/data-system/data-sources' })}>数据源</Button>
                 <Button size="small" icon={<SyncOutlined />} onClick={() => navigate({ to: '/data-system/pipeline' })}>数据链路</Button>
-                <Button size="small" icon={<CloudSyncOutlined />} onClick={() => navigate({ to: '/data-system/sync-tasks' })}>同步调度</Button>
-                <Button size="small" icon={<DatabaseOutlined />} onClick={() => navigate({ to: '/data-system/database' })}>数据库管理</Button>
-                <Button size="small" icon={<WarningOutlined />} onClick={() => navigate({ to: '/data-system/alerts' })}>异常中心</Button>
+                <Button size="small" icon={<CloudSyncOutlined />} onClick={() => navigate({ to: '/sync-tasks' })}>同步调度</Button>
+                <Button size="small" icon={<DatabaseOutlined />} onClick={() => navigate({ to: '/database' })}>数据库管理</Button>
+                <Button size="small" icon={<WarningOutlined />} onClick={() => navigate({ to: '/alerts' })}>异常中心</Button>
               </div>
             </Card>
 

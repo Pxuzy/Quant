@@ -175,7 +175,7 @@ const stocksRoute = createRoute({
 
 const stockDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/stocks/\$symbol'
+  path: '/stocks/$symbol',
   validateSearch: (search): StockDetailSearch => ({
     market: stringSearch(search.market),
   }),
@@ -231,12 +231,6 @@ const syncTasksRoute = createRoute({
     taskId: numberSearch(search.taskId),
   }),
   component: SyncTasksPage,
-});
-
-const newsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/news',
-  component: NewsPage,
 });
 
 const notFoundRoute = createRoute({

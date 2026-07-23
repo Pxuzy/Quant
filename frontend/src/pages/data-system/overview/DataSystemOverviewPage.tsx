@@ -180,14 +180,14 @@ export function DataSystemOverviewPage() {
         ? `最近失败任务 ${formatNumber(failedTaskCount)} 个，质量错误 ${formatNumber(overview?.reports_error ?? 0)} 条。`
         : '股票池、新闻汇总、数值数据、数据源管理、同步调度和数据库管理都处于可用状态，可以直接继续查看。';
 
-  const openStocks = () => void navigate({ to: '/data-system/stocks' });
+  const openStocks = () => void navigate({ to: '/stocks' });
   const openNumericSummary = () => void navigate({ to: '/data-system/numeric-summary' });
   const openSources = () => void navigate({ to: '/data-system/data-sources' });
-  const openDatabase = () => void navigate({ to: '/data-system/database' });
+  const openDatabase = () => void navigate({ to: '/database' });
 
   const openDailySync = () => {
     void navigate({
-      to: '/data-system/sync-tasks',
+      to: '/sync-tasks',
       search: {
         focus: hasDailyCoverageGap ? 'daily-bars-market-repair' : 'daily-bars',
         market: coverageSummary?.market ?? undefined,
